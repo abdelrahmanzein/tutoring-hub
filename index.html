@@ -214,7 +214,7 @@ function call(action, args, done, opts) {
   opts = opts || {};
   var key = action + '|' + JSON.stringify(args || {}), myView = VIEW, cached = CACHE[key];
   var cacheable = NO_CACHE.indexOf(action) < 0;
-  if (cacheable && cached) done(cached.data);
+  if (cacheable && cached) { hideSplash(); done(cached.data); }
   else if (!opts.part && NO_CACHE.indexOf(action) < 0) document.getElementById('main').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
   busy(1);
   google.script.run.withSuccessHandler(function (res) {
@@ -517,14 +517,6 @@ function showMoney() {
 // Remembered search, filter and sort choices for the Money list (kept while the app is open).
 var MF = { q: '', g: '', c: '', s: '', o: 'owed' };
 
-// Pulls new session rows from the Log Sheet right away.
-function importNow() {
-  call('importLogNow', {}, function (r) {
-    showMoney();
-    notice(r.added ? r.added + ' new entries imported from the Log Sheet.' + (r.notes.length ? ' ' + r.notes.join(' ') : '') : 'Nothing new in the Log Sheet.' + (r.notes.length ? ' ' + r.notes.join(' ') : ''));
-  });
-}
-
 // A <select> with [value, label] options.
 function sel(id, value, options) {
   return '<select id="' + id + '">' + options.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === value ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>';
@@ -640,7 +632,6 @@ function rateBox(studentCur) {
       document.getElementById('prate').style.display = 'block';
     }
   });
-}
 }
 
 // Works out the amount in the student's currency (converting with the rate if needed) and asks the server what it would cover.
@@ -806,7 +797,7 @@ var google = { script: { get run() {
     withSuccessHandler: function (f) { ok = f; return o; },
     withFailureHandler: function (f) { fail = f; return o; },
     api: function (token, action, args) {
-      fetch(EXEC_URL, { method: 'POST', body: JSON.stringify({ token: token, action: action, args: args }) })
+      fetch(EXEC_URL, { method: 'POST', credentials: 'omit', redirect: 'follow', body: JSON.stringify({ token: token, action: action, args: args }) })
         .then(function (r) { return r.json(); })
         .then(function (j) { if (j.ok) { ok(j.res); if (action === 'prefetch') saveCache(); } else fail(new Error(j.error)); })
         .catch(function (e) { fail(new Error('No connection to the app (' + e.message + '). Check the internet and tap Refresh.')); });
