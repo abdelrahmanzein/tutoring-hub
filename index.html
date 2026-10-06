@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html>
+<head>
+  
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tutoring Hub</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tutoring Hub">
+  <meta name="theme-color" content="#2457c5">
+  <style>
+  :root {
+    --bg:#f3f5f9; --card:#ffffff; --text:#18212e; --muted:#667385; --line:#e2e7ef;
+    --accent:#2457c5; --accent-soft:#e8eefb; --accent-text:#ffffff;
+    --warn:#b45309; --bad:#c2352b; --bad-soft:#fdecea; --good:#1f7a4d; --good-soft:#e6f4ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#10141b; --card:#1a2029; --text:#e8ecf2; --muted:#98a3b3; --line:#2a3340;
+      --accent:#7aa5ff; --accent-soft:#1f2b44; --accent-text:#0d1218;
+      --warn:#f0b050; --bad:#ff8a80; --bad-soft:#3a1f1e; --good:#6fd39f; --good-soft:#163024;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 -apple-system, system-ui, sans-serif; padding-bottom:76px; }
+
+  /* Header with a thin loading bar that runs while the app talks to the server */
+  header { position:sticky; top:0; background:var(--card); padding:12px 16px 10px; border-bottom:1px solid var(--line); z-index:5; }
+  header::after { content:''; position:absolute; left:0; bottom:-1px; height:3px; width:0; background:var(--accent); transition:width .2s; }
+  body.loading header::after { width:100%; animation:load 1.2s ease-in-out infinite; }
+  @keyframes load { 0% { left:0; width:0 } 50% { left:20%; width:60% } 100% { left:100%; width:0 } }
+  header .row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  h1 { font-size:19px; margin:0; color:var(--accent); }
+  .updated { color:var(--muted); font-size:13px; }
+
+  /* Buttons: filled = main action, outlined = secondary. All show a hand cursor and react when pressed. */
+  button { font:inherit; border:1px solid var(--accent); background:var(--card); color:var(--accent); border-radius:10px; padding:8px 14px; cursor:pointer; transition:background .15s, transform .05s; }
+  button:hover { background:var(--accent-soft); }
+  button:active { transform:scale(.97); }
+  button.primary { background:var(--accent); color:var(--accent-text); }
+  button.primary:hover { filter:brightness(1.08); }
+  button.small { padding:4px 10px; font-size:13px; border-color:var(--line); color:var(--muted); }
+  button.small:hover { color:var(--bad); border-color:var(--bad); background:var(--bad-soft); }
+  button:disabled { opacity:.55; cursor:wait; }
+
+  main { padding:12px 16px; max-width:720px; margin:0 auto; }
+
+  /* Bottom tab bar */
+  nav { position:fixed; bottom:0; left:0; right:0; display:flex; background:var(--card); border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+  nav button { flex:1; border:0; border-radius:0; background:none; padding:8px 2px 10px; font-size:12px; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:2px; }
+  nav button .ico { font-size:20px; filter:grayscale(1); opacity:.6; }
+  nav button.on { color:var(--accent); font-weight:600; }
+  nav button.on .ico { filter:none; opacity:1; }
+  nav button:hover { background:var(--accent-soft); }
+
+  input, select { font:inherit; width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--text); }
+  input:focus, select:focus { outline:2px solid var(--accent); border-color:transparent; }
+  select { cursor:pointer; }
+  .filters { display:flex; gap:8px; margin:8px 0 12px; }
+
+  /* Cards. A card you can tap has a hand cursor, lifts on hover and shows › on the right. */
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  .card[onclick] { cursor:pointer; transition:border-color .15s, box-shadow .15s, transform .05s; }
+  .card[onclick]:hover { border-color:var(--accent); box-shadow:0 2px 10px rgba(36,87,197,.12); }
+  .card[onclick]:active { transform:scale(.99); }
+  .item { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .item .right { margin-left:auto; display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; }
+  .item > div:first-child { flex:1; min-width:0; }
+  @media (max-width: 480px) {
+    .card.item { flex-wrap:wrap; }
+    .item .right { order:3; width:100%; justify-content:flex-start; margin-left:0; }
+    .card.item .chev { position:absolute; right:12px; top:14px; }
+    .card[onclick] { position:relative; padding-right:30px; }
+  }
+  .chev { color:var(--accent); font-size:22px; line-height:1; margin-left:4px; }
+  .sub { color:var(--muted); font-size:13px; }
+
+  /* Small status labels */
+  .tag { font-size:12px; border:1px solid var(--line); border-radius:999px; padding:2px 9px; color:var(--muted); white-space:nowrap; }
+  .tag.warn { color:var(--warn); border-color:var(--warn); }
+  .tag.owe { color:var(--bad); background:var(--bad-soft); border-color:transparent; font-weight:600; }
+  .tag.good { color:var(--good); background:var(--good-soft); border-color:transparent; }
+  .neg { color:var(--bad); font-weight:600; }
+  .pos { color:var(--good); font-weight:600; }
+
+  dl { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; margin:0; }
+  dt { color:var(--muted); font-size:14px; }
+  dd { margin:0; word-break:break-word; }
+  h2 { font-size:14px; margin:18px 0 6px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .error { color:var(--bad); padding:12px 0; }
+  .soon { color:var(--muted); text-align:center; padding:40px 0; }
+  a { color:var(--accent); }
+
+  /* Top of a page: a plain "‹ Back" link, then the page's actions side by side, equal width */
+  .back { border:0; background:none; padding:4px 0; color:var(--accent); font-weight:600; }
+  .back:hover { background:none; text-decoration:underline; }
+  .actions { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; margin:8px 0 4px; }
+  .actions button { width:100%; padding:11px 8px; }
+
+  /* A tappable number inside a card (e.g. "4 unpaid sessions ›") */
+  .link-row { display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding:8px 10px; border-radius:10px; background:var(--bad-soft); color:var(--bad); cursor:pointer; font-weight:600; }
+  .link-row:hover { filter:brightness(.97); }
+
+  /* Bottom sheet overlay for details */
+  .sheet-bg { position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:30; display:flex; align-items:flex-end; justify-content:center; }
+  .sheet { background:var(--card); width:100%; max-width:720px; max-height:80vh; overflow:auto; border-radius:16px 16px 0 0; padding:16px; box-shadow:0 -6px 24px rgba(0,0,0,.2); }
+  .sheet .head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .sheet .row { display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--line); }
+  .sheet .row:last-child { border-bottom:0; }
+
+  /* Currency marks: EGP payers orange, USD payers green (pill + coloured left edge on cards) */
+  .cur { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.03em; border-radius:6px; padding:1px 6px; vertical-align:1px; }
+  .cur.EGP { background:#ffedd5; color:#c2410c; }
+  .cur.USD { background:#dcfce7; color:#15803d; }
+  .card.cur-EGP { border-left:4px solid #f97316; }
+  .card.cur-USD { border-left:4px solid #22c55e; }
+  @media (prefers-color-scheme: dark) {
+    .cur.EGP { background:#43260f; color:#fdba74; }
+    .cur.USD { background:#123222; color:#86efac; }
+  }
+
+  .totals { display:grid; grid-template-columns:auto 1fr 1fr; gap:6px 12px; align-items:center; }
+  .totals > div:nth-child(3n+2), .totals > div:nth-child(3n) { text-align:right; }
+
+  /* Opening screen: logo while the first data loads */
+  #splash { position:fixed; inset:0; z-index:50; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; transition:opacity .35s; }
+  #splash.gone { opacity:0; pointer-events:none; }
+  .splash-name { font-size:22px; font-weight:700; color:var(--accent); letter-spacing:.01em; }
+  .splash-dots span { display:inline-block; width:8px; height:8px; margin:0 3px; border-radius:50%; background:var(--accent); animation:dot 1s infinite ease-in-out; }
+  .splash-dots span:nth-child(2) { animation-delay:.15s } .splash-dots span:nth-child(3) { animation-delay:.3s }
+  @keyframes dot { 0%,80%,100% { transform:scale(.5); opacity:.4 } 40% { transform:scale(1); opacity:1 } }
+
+  /* Grey placeholders shown for the split second before a screen's data arrives */
+  .skeleton { height:58px; border-radius:12px; margin-bottom:10px; background:linear-gradient(90deg, var(--line) 25%, var(--card) 50%, var(--line) 75%); background-size:200% 100%; animation:shimmer 1.2s infinite; }
+  @keyframes shimmer { from { background-position:200% 0 } to { background-position:-200% 0 } }
+</style>
+
+</head>
+<body>
+  <div id="splash">
+    <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true">
+      <rect x="2" y="2" width="80" height="80" rx="22" fill="#2457c5"/>
+      <path d="M42 20 L66 31 L42 42 L18 31 Z" fill="#fff"/>
+      <path d="M28 37 v11 c0 5 7 9 14 9 s14-4 14-9 v-11 l-14 6.5 Z" fill="#fff" opacity=".9"/>
+      <path d="M62 33 v14" stroke="#f97316" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="62" cy="49" r="3" fill="#f97316"/>
+    </svg>
+    <div class="splash-name">Tutoring Hub</div>
+    <div class="splash-dots"><span></span><span></span><span></span></div>
+  </div>
+  <header>
+    <div class="row">
+      <h1 id="title">Students</h1>
+      <div><span class="updated" id="updated"></span> <button id="refresh">Refresh</button></div>
+    </div>
+  </header>
+  <main id="main"></main>
+  <nav id="nav"></nav>
+  <script>
+// Page logic. Every screen loads live data when it opens and shows when it was fetched.
+var TOKEN = '', TABS = ['Today', 'To do', 'Students', 'Groups', 'Money', 'Settings'];
+var ICONS = { 'Today': '📅', 'To do': '✅', 'Students': '👥', 'Groups': '🧑‍🏫', 'Money': '💰', 'Settings': '⚙️' };
+var current = 'Students', fetchedAt = null, listCache = null, refreshView = null;
+
+// Starts the app: builds the tab bar and opens Students.
+function start(token) {
+  TOKEN = token;
+  var nav = document.getElementById('nav');
+  TABS.forEach(function (t) {
+    var b = document.createElement('button');
+    b.innerHTML = '<span class="ico">' + ICONS[t] + '</span>' + t; b.id = 'tab-' + t;
+    b.onclick = function () { open(t); };
+    nav.appendChild(b);
+  });
+  document.getElementById('refresh').onclick = function () { if (refreshView) refreshView(); };
+  setInterval(showAge, 30000);
+  open('Students');
+  prefetch();
+}
+
+// Switches tab.
+function open(tab) {
+  current = tab; newView();
+  TABS.forEach(function (t) { document.getElementById('tab-' + t).className = t === tab ? 'on' : ''; });
+  document.getElementById('title').textContent = tab;
+  if (tab === 'Students') return showStudents();
+  if (tab === 'Money') return showMoney();
+  if (tab === 'Today') return showToday();
+  refreshView = null; fetchedAt = null; showAge();
+  document.getElementById('main').innerHTML = '<div class="soon">' + tab + ' comes in a later stage.</div>';
+}
+
+// ---------- Talking to the server ----------
+// Screens open instantly from what the page already has (CACHE), then refresh in the background and redraw if
+// anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
+// server re-checks the live data before acting, so nothing is ever saved from stale numbers.
+var CACHE = {}, VIEW = 0, INFLIGHT = 0;
+var WRITES = ['logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var NO_CACHE = WRITES.concat(['previewPayment', 'rate', 'prefetch']);
+
+// Marks the start of a new screen; replies meant for an older screen are then ignored.
+function newView() { VIEW++; return VIEW; }
+
+// Shows/hides the thin loading bar at the top.
+function busy(delta) {
+  INFLIGHT = Math.max(0, INFLIGHT + delta);
+  document.body.classList.toggle('loading', INFLIGHT > 0);
+}
+
+// Calls the server. opts.form: draw once only (never redraw a form the user is typing in). opts.part: a piece of a screen.
+function call(action, args, done, opts) {
+  opts = opts || {};
+  var key = action + '|' + JSON.stringify(args || {}), myView = VIEW, cached = CACHE[key];
+  var cacheable = NO_CACHE.indexOf(action) < 0;
+  if (cacheable && cached) done(cached.data);
+  else if (!opts.part && NO_CACHE.indexOf(action) < 0) document.getElementById('main').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+  busy(1);
+  google.script.run.withSuccessHandler(function (res) {
+    busy(-1);
+    fetchedAt = new Date(res.fetchedAt); showAge();
+    if (WRITES.indexOf(action) >= 0) { CACHE = {}; prefetch(); }
+    hideSplash();
+    if (!cacheable) return done(res.data);
+    var changed = !cached || JSON.stringify(cached.data) !== JSON.stringify(res.data);
+    CACHE[key] = { data: res.data };
+    if (cached && (opts.form || !changed || myView !== VIEW)) return;
+    if (myView === VIEW || opts.part) done(res.data);
+  }).withFailureHandler(function (err) {
+    busy(-1); hideSplash();
+    document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
+    if (WRITES.indexOf(action) >= 0 || NO_CACHE.indexOf(action) >= 0) notice(err.message);
+    else document.getElementById('main').innerHTML = '<div class="error">' + esc(err.message) + '</div>';
+  }).api(TOKEN, action, args);
+}
+
+// Fades out the opening logo once the first screen has data (or after 8 seconds at most).
+function hideSplash() {
+  var el = document.getElementById('splash');
+  if (!el || el.classList.contains('gone')) return;
+  el.classList.add('gone');
+  setTimeout(function () { el.remove(); }, 400);
+}
+setTimeout(hideSplash, 8000);
+
+// Loads every screen's data in one go (in the background) so moving around is instant.
+function prefetch() {
+  busy(1);
+  google.script.run.withSuccessHandler(function (res) {
+    busy(-1);
+    var d = res.data;
+    CACHE['students|{}'] = { data: d.students };
+    CACHE['money|{}'] = { data: d.money };
+    Object.keys(d.details).forEach(function (id) { CACHE['student|' + JSON.stringify({ id: id })] = { data: d.details[id] }; });
+    Object.keys(d.moneyStudents).forEach(function (id) { CACHE['moneyStudent|' + JSON.stringify({ id: id })] = { data: d.moneyStudents[id] }; });
+  }).withFailureHandler(function () { busy(-1); }).api(TOKEN, 'prefetch', {});
+}
+
+// Disables a button and shows "Saving…" so it can't be pressed twice.
+function hold(btn, label) {
+  if (!btn) return;
+  btn.disabled = true; btn.textContent = label || 'Saving…';
+}
+
+// "updated 3 min ago" in the header.
+function showAge() {
+  var el = document.getElementById('updated');
+  if (!fetchedAt) { el.textContent = ''; return; }
+  var min = Math.round((Date.now() - fetchedAt.getTime()) / 60000);
+  el.textContent = min < 1 ? 'updated just now' : 'updated ' + min + ' min ago';
+}
+
+// Shows a message bar at the top of the page (alert() does not work inside Apps Script pages).
+function notice(msg) {
+  var el = document.getElementById('notice');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'notice';
+    el.style.cssText = 'position:fixed;top:60px;left:16px;right:16px;z-index:20;background:var(--card);border:1px solid var(--warn);color:var(--text);border-radius:12px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+    el.onclick = function () { el.style.display = 'none'; };
+    document.body.appendChild(el);
+  }
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(function () { el.style.display = 'none'; }, 8000);
+}
+
+// 2026-10-06 -> 06/10/2026 (dates are shown day/month/year everywhere).
+function fmtDate(v) {
+  var m = String(v == null ? '' : v).match(/^(\d{4})-(\d{2})-(\d{2})( \d{2}:\d{2})?$/);
+  return m ? m[3] + '/' + m[2] + '/' + m[1] + (m[4] || '') : v;
+}
+
+// Opens a bottom sheet with a title and HTML content; tap outside or Close to dismiss.
+function sheet(title, html) {
+  var bg = document.createElement('div');
+  bg.className = 'sheet-bg';
+  bg.innerHTML = '<div class="sheet"><div class="head"><b>' + esc(title) + '</b><button class="small" id="sheet-close">Close</button></div>' + html + '</div>';
+  bg.onclick = function (e) { if (e.target === bg || e.target.id === 'sheet-close') bg.remove(); };
+  document.body.appendChild(bg);
+}
+
+// Escapes text before it goes into the page.
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; });
+}
+
+// ---------- Students ----------
+function showStudents() {
+  newView();
+  refreshView = showStudents;
+  document.getElementById('title').textContent = 'Students';
+  call('students', {}, function (data) { listCache = data; drawList(); });
+}
+
+// Search box, group filter and the list.
+function drawList() {
+  var d = listCache, main = document.getElementById('main');
+  main.innerHTML = '<input id="q" placeholder="Search name (English or Arabic)">' +
+    '<div class="filters"><select id="g"><option value="">All groups</option>' +
+    d.groups.map(function (g) { return '<option>' + esc(g) + '</option>'; }).join('') +
+    '</select><select id="s"><option value="">Any status</option><option>Active</option><option>Alumni</option><option>Left</option><option>Trial</option></select></div>' +
+    '<div id="list"></div>';
+  ['q', 'g', 's'].forEach(function (id) { document.getElementById(id).oninput = fillList; });
+  fillList();
+}
+
+// Draws the rows that match the search and filters.
+function fillList() {
+  var q = document.getElementById('q').value.toLowerCase(), g = document.getElementById('g').value, s = document.getElementById('s').value;
+  var rows = listCache.students.filter(function (x) {
+    return (!q || (x.name + ' ' + x.arabic).toLowerCase().indexOf(q) >= 0) && (!g || x.group === g) && (!s || x.status === s);
+  });
+  document.getElementById('list').innerHTML = rows.map(function (x) {
+    return '<div class="card item" onclick="showStudent(\'' + esc(x.id) + '\')"><div><div>' + esc(x.name) + '</div>' +
+      '<div class="sub">' + esc(x.group || 'No group') + ' · ' + esc(x.paymentType) + '</div></div>' +
+      '<div class="right"><span class="tag' + (x.status === 'Active' ? ' good' : ' warn') + '">' + esc(x.status) + '</span></div><span class="chev">›</span></div>';
+  }).join('') || '<div class="soon">No students match.</div>';
+}
+
+// One student's page.
+function showStudent(id) {
+  newView();
+  currentId = id;
+  refreshView = function () { showStudent(id); };
+  call('student', { id: id }, function (d) {
+    var i = d.info, main = document.getElementById('main');
+    var rows = [
+      ['Group', (d.memberships.filter(function (m) { return !m['Until']; }).map(function (m) { return m['Group'] + (m['Since'] ? ' (since ' + fmtDate(m['Since']) + ')' : ''); })).join(', ') || '-'],
+      ['Course', i['Course'] + ' ' + i['Level'] + ' · batch ' + i['Batch']],
+      ['School', i['School'] || '-'], ['Country', i['Country']],
+      ['Rate', i['Rate'] + ' ' + i['Currency'] + ' (locked)'], ['Payment', i['Payment type']],
+      ['Billing contact', i['Billing contact']],
+      ['Parent', (i['Parent name'] || '-') + (i['Parent relation'] ? ' (' + i['Parent relation'] + ')' : '')],
+      ['Parent WhatsApp', wa(i['Parent WhatsApp'])], ['Student WhatsApp', wa(i['Student WhatsApp'])],
+      ['Language', i['Message language']], ['Notes', i['Notes'] || '-']
+    ];
+    main.innerHTML = '<button class="back" onclick="showStudents()">‹ Students</button><div class="actions"><button class="primary" onclick="editStudent(\'' + esc(id) + '\')">Edit student</button></div>' +
+      '<h2 style="margin-top:12px">' + esc(i['First name'] + ' ' + i['Last name']) + ' · ' + esc(i['Arabic first name'] + ' ' + i['Arabic last name']) + '</h2>' +
+      '<div class="card"><dl>' + rows.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + (r[0].indexOf('WhatsApp') >= 0 ? r[1] : esc(r[1])) + '</dd>'; }).join('') + '</dl></div>' +
+      '<h2>Accounts (Meet names, IDs, uploads)</h2><div class="card">' +
+      (d.accounts.map(function (a) {
+        return '<div class="item"><div>' + esc(a['Value']) + '<div class="sub">' + esc(a['Type']) + (a['Whose'] ? ' · ' + esc(a['Whose']) : '') + '</div></div>' +
+          (a['Confirmed'] === true ? '' : '<span class="tag warn">not confirmed</span>') + '</div>';
+      }).join('<hr style="border:0;border-top:1px solid var(--line)">') || 'None yet') + '</div>' +
+      '<div class="filters"><select id="at"><option>Upload account</option><option>Meet name</option><option>Meet ID</option><option>Log Sheet name</option><option>Old name</option></select>' +
+      '<input id="av" placeholder="New value"><button onclick="hold(this,\'Adding…\');addAcc(\'' + esc(id) + '\')">Add</button></div>' +
+      '<div class="sub" style="color:var(--muted);font-size:13px;margin:4px 0">' +
+      '<b>Upload account</b>: the Google email that uploads this student\'s homework to Drive (used to know who submitted). ' +
+      '<b>Meet name</b>: the name shown when they join Google Meet (used for attendance). ' +
+      '<b>Meet ID</b>: Google\'s permanent ID of the joining account (most reliable for attendance). ' +
+      '<b>Log Sheet name</b>: exactly how this student is spelled in the old Log Sheet (used to import the money history). ' +
+      '<b>Old name</b>: an earlier spelling of the student\'s name in old records.</div>' +
+      '<h2>Changes</h2><div id="hist" class="card">Loading...</div>';
+    call('studentHistory', { id: id }, drawHistory, { part: true });
+  });
+}
+
+// Adds an account to the student, then reloads the page.
+function addAcc(id) {
+  var type = document.getElementById('at').value, value = document.getElementById('av').value;
+  call('addAccount', { id: id, type: type, value: value }, function () { showStudent(id); });
+}
+
+// Lists recent changes with an Undo button where possible.
+function drawHistory(rows) {
+  document.getElementById('hist').innerHTML = rows.map(function (h) {
+    return '<div class="item"><div>' + esc(h['Field']) + ': ' + esc(fmtDate(h['Old'])) + ' → ' + esc(fmtDate(h['New'])) +
+      '<div class="sub">' + esc(h['Action']) + ' · ' + esc(fmtDate(h['Time'])) + ' · ' + esc(h['Who or source']) + '</div></div>' +
+      (h.canUndo ? '<button onclick="undoEdit(' + h.rowNumber + ')">Undo</button>' : '') + '</div>';
+  }).join('<hr style="border:0;border-top:1px solid var(--line)">') || 'No changes yet.';
+}
+
+// Undoes one change, then reloads.
+function undoEdit(rowNumber) {
+  var id = currentId;
+  call('undoStudentEdit', { rowNumber: rowNumber }, function (r) {
+    showStudent(id);
+    if (r.conflict) notice('That value was changed again since. Nothing undone.');
+  });
+}
+
+var currentId = '', moneyConfirmed = false;
+var EDIT_FIELDS = [
+  ['First name'], ['Last name'], ['Arabic first name'], ['Arabic last name'],
+  ['Gender', ['M', 'F']], ['School'], ['Country'], ['Course', ['AA', 'AI']], ['Level', ['SL', 'HL']], ['Batch', null, 'number'],
+  ['Status', ['Active', 'Trial', 'Alumni', 'Left']], ['Status date', null, 'date'], ['Status reason'],
+  ['Rate', null, 'number'], ['Currency', ['EGP', 'USD']],
+  ['Payment type', ['EGP, every 4 sessions', 'USD rate paid as EGP, every 4 sessions', 'USD in 8-session blocks']],
+  ['Billing contact', ['Parent', 'Student']], ['Parent name'], ['Parent relation'], ['Parent WhatsApp'], ['Student WhatsApp'],
+  ['Message language', ['AR', 'EN']], ['Notes']
+];
+
+// Edit form: loads the latest values, saves only what changed, and asks for a reason.
+function editStudent(id) {
+  newView();
+  currentId = id;
+  call('student', { id: id }, function (d) {
+    var i = d.info;
+    document.getElementById('main').innerHTML = '<button class="back" onclick="showStudent(\'' + esc(id) + '\')">‹ Cancel</button><h2>Edit ' + esc(i['First name']) + '</h2><div class="card" id="form"></div>' +
+      '<input id="reason" placeholder="Reason (optional, kept in the change log)" style="margin:10px 0">' +
+      '<button class="primary" onclick="hold(this);saveStudent(\'' + esc(id) + '\')">Save</button>';
+    document.getElementById('form').innerHTML = EDIT_FIELDS.map(function (f) {
+      var v = i[f[0]] == null ? '' : i[f[0]], input;
+      if (f[1]) {
+        var opts = f[1].slice(); if (opts.indexOf(String(v)) < 0) opts.unshift(String(v));
+        input = '<select data-f="' + f[0] + '" data-seen="' + esc(v) + '">' + opts.map(function (o) { return '<option' + (o === String(v) ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
+      } else if (f[2] === 'date') {
+        input = '<input type="date" data-f="' + f[0] + '" data-seen="' + esc(v) + '" value="' + esc(v) + '">';
+      } else if (f[2] === 'number') {
+        input = '<input type="number" inputmode="numeric" ' + (f[0] === 'Batch' ? 'min="2020" max="2100" step="1" ' : 'min="0" step="any" ') + 'data-f="' + f[0] + '" data-seen="' + esc(v) + '" value="' + esc(v) + '">';
+      } else input = '<input data-f="' + f[0] + '" data-seen="' + esc(v) + '" value="' + esc(v) + '">';
+      return '<div style="margin-bottom:8px"><div class="sub" style="color:var(--muted);font-size:13px">' + f[0] + '</div>' + input + '</div>';
+    }).join('');
+  }, { form: true });
+}
+
+// Sends only the fields that changed. If someone changed them meanwhile, shows the new values instead.
+function saveStudent(id) {
+  var changes = {}, seen = {};
+  document.querySelectorAll('#form [data-f]').forEach(function (el) {
+    if (el.value !== el.getAttribute('data-seen')) { changes[el.getAttribute('data-f')] = el.value; seen[el.getAttribute('data-f')] = el.getAttribute('data-seen'); }
+  });
+  if (!Object.keys(changes).length) return showStudent(id);
+  var money = ['Rate', 'Currency', 'Payment type', 'Region'].filter(function (f) { return changes[f] !== undefined; });
+  if (money.length && !moneyConfirmed) {
+    moneyConfirmed = true;
+    return notice('This changes money settings (' + money.join(', ') + '). Existing sessions are not re-priced. Tap Save again to confirm.');
+  }
+  moneyConfirmed = false;
+  call('updateStudent', { id: id, changes: changes, seen: seen, reason: document.getElementById('reason').value }, function (r) {
+    if (r.conflict) { editStudent(id); return notice('Changed elsewhere since you opened it: ' + r.fields.join(', ') + '. Showing the latest values.'); }
+    showStudent(id);
+  });
+}
+
+// WhatsApp link for a phone number.
+function wa(phone) {
+  var digits = String(phone || '').replace(/[^0-9]/g, '');
+  return digits ? '<a href="https://wa.me/' + digits + '" target="_blank">' + esc(phone) + '</a>' : '-';
+}
+</script>
+
+  <script>
+// ---------- Money ----------
+var moneyCache = null, lastMoneyStudent = null;
+
+// Sheet listing a student's unpaid sessions (oldest first) with what is left on each.
+function showUnpaid(cur) {
+  var p = lastMoneyStudent.positions[cur];
+  sheet(lastMoneyStudent.student.name + ' · unpaid sessions', p.unpaid.map(function (u) {
+    return '<div class="row"><span>' + fmtDate(u.date) + ' · ' + esc(u.description) + '</span><b class="neg">' + amt(u.left, cur) + '</b></div>';
+  }).join('') + '<div class="row"><b>Total owed</b><b class="neg">' + amt(p.owed, cur) + '</b></div>');
+}
+
+// Today as yyyy-mm-dd for date inputs.
+function today() {
+  var d = new Date();
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+
+// Red bar shown when the app is pointed at the test copy of the database.
+function testBar(on) {
+  return on ? '<div class="card" style="border-color:var(--warn);color:var(--warn)">TEST COPY of the database: nothing here is real.</div>' : '';
+}
+
+// "900 EGP" style amounts.
+function amt(n, cur) { return Number(n).toLocaleString('en-GB', { maximumFractionDigits: 2 }) + ' ' + cur; }
+
+// Money home: totals and who owes what.
+function showMoney() {
+  newView();
+  refreshView = showMoney;
+  document.getElementById('title').textContent = 'Money';
+  call('money', {}, function (d) {
+    moneyCache = d;
+    var t = d.totals;
+    var groups = {};
+    d.students.forEach(function (s) { if (s.group) groups[s.group] = 1; });
+    document.getElementById('main').innerHTML = testBar(d.testMode) +
+      '<div class="card totals"><div></div><div><span class="cur EGP">EGP</span></div><div><span class="cur USD">USD</span></div>' +
+      '<div class="sub">Owed to you</div><div class="neg">' + amt(t.EGP.owed, '') + '</div><div class="neg">' + amt(t.USD.owed, '') + '</div>' +
+      '<div class="sub">Held as credit</div><div class="pos">' + amt(t.EGP.credit, '') + '</div><div class="pos">' + amt(t.USD.credit, '') + '</div></div>' +
+      '<input id="mq" placeholder="Search student" value="' + esc(MF.q) + '">' +
+      '<div class="filters">' +
+      sel('mg', MF.g, [['', 'All groups']].concat(Object.keys(groups).sort().map(function (g) { return [g, g]; }))) +
+      sel('mc', MF.c, [['', 'EGP + USD'], ['EGP', 'EGP payers'], ['USD', 'USD payers']]) + '</div><div class="filters">' +
+      sel('ms', MF.s, [['', 'Everyone'], ['owes', 'Owes money'], ['credit', 'Has credit'], ['settled', 'Settled']]) +
+      sel('mo', MF.o, [['owed', 'Sort: most sessions owed'], ['name', 'Sort: name A–Z'], ['oldest', 'Sort: oldest last payment'], ['group', 'Sort: group']]) + '</div>' +
+      '<div id="mlist"></div>';
+    ['mq', 'mg', 'mc', 'ms', 'mo'].forEach(function (id) {
+      document.getElementById(id).oninput = function () { MF[id.slice(1)] = this.value; drawMoneyList(); };
+    });
+    drawMoneyList();
+  });
+}
+
+// Remembered search, filter and sort choices for the Money list (kept while the app is open).
+var MF = { q: '', g: '', c: '', s: '', o: 'owed' };
+
+// Pulls new session rows from the Log Sheet right away.
+function importNow() {
+  call('importLogNow', {}, function (r) {
+    showMoney();
+    notice(r.added ? r.added + ' new entries imported from the Log Sheet.' + (r.notes.length ? ' ' + r.notes.join(' ') : '') : 'Nothing new in the Log Sheet.' + (r.notes.length ? ' ' + r.notes.join(' ') : ''));
+  });
+}
+
+// A <select> with [value, label] options.
+function sel(id, value, options) {
+  return '<select id="' + id + '">' + options.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === value ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>';
+}
+
+// Draws the Money list with the current search, filters and sort.
+function drawMoneyList() {
+  var q = MF.q.toLowerCase();
+  var rows = moneyCache.students.filter(function (s) {
+    var owes = Object.keys(s.money).some(function (c) { return s.money[c].owed; });
+    var credit = Object.keys(s.money).some(function (c) { return s.money[c].credit; });
+    var state = owes ? 'owes' : credit ? 'credit' : 'settled';
+    return (!q || s.name.toLowerCase().indexOf(q) >= 0) && (!MF.g || s.group === MF.g) && (!MF.c || s.currency === MF.c) && (!MF.s || state === MF.s);
+  });
+  var lastOf = function (s) {
+    return Object.keys(s.money).map(function (c) { return s.money[c].lastPayment; }).filter(Boolean)
+      .sort(function (a, b) { return String(b.date).localeCompare(a.date); })[0];
+  };
+  rows.sort(function (a, b) {
+    if (MF.o === 'name') return a.name.localeCompare(b.name);
+    if (MF.o === 'group') return String(a.group).localeCompare(String(b.group)) || a.name.localeCompare(b.name);
+    if (MF.o === 'oldest') return String((lastOf(a) || {}).date || '').localeCompare(String((lastOf(b) || {}).date || ''));
+    return owedScore(b) - owedScore(a) || a.name.localeCompare(b.name);
+  });
+  document.getElementById('mlist').innerHTML = '<div class="sub" style="margin:0 0 6px">' + rows.length + ' student' + (rows.length === 1 ? '' : 's') + '</div>' + rows.map(function (s) {
+    var lines = Object.keys(s.money).map(function (c) {
+      var m = s.money[c];
+      if (m.owed) return '<span class="tag owe">owes ' + amt(m.owed, c) + ' · ' + m.sessionsOwed + ' session' + (m.sessionsOwed === 1 ? '' : 's') + '</span>';
+      if (m.credit) return '<span class="tag good">credit ' + amt(m.credit, c) + '</span>';
+      return '';
+    }).join(' ');
+    var last = lastOf(s);
+    return '<div class="card item cur-' + esc(s.currency) + '" onclick="showMoneyStudent(\'' + esc(s.id) + '\')"><div><div><span class="cur ' + esc(s.currency) + '">' + esc(s.currency) + '</span> ' + esc(s.name) + '</div>' +
+      '<div class="sub">' + esc(s.group || '') + (last ? ' · last paid ' + fmtDate(last.date) : ' · no payments yet') + '</div></div><div class="right">' + (lines || '<span class="tag">settled</span>') + '</div><span class="chev">›</span></div>';
+  }).join('') || '<div class="soon">No students match.</div>';
+}
+
+// Sort key: bigger debt first (EGP and USD roughly comparable by sessions owed).
+function owedScore(s) {
+  return Object.keys(s.money).reduce(function (n, c) { return n + s.money[c].sessionsOwed; }, 0);
+}
+
+// One student's money page.
+function showMoneyStudent(id) {
+  newView();
+  refreshView = function () { showMoneyStudent(id); };
+  call('moneyStudent', { id: id }, function (d) {
+    var st = d.student;
+    lastMoneyStudent = d;
+    var pos = Object.keys(d.positions).map(function (c) {
+      var p = d.positions[c];
+      return '<div class="card"><b>' + c + '</b><dl><dt>Balance</dt><dd>' + amt(p.balance, c) + '</dd><dt>Owed</dt><dd>' + amt(p.owed, c) + '</dd><dt>Credit</dt><dd>' + amt(p.credit, c) + '</dd></dl>' +
+        (p.unpaid.length ? '<div class="link-row" onclick="showUnpaid(\'' + c + '\')"><span>' + p.unpaid.length + ' unpaid session' + (p.unpaid.length > 1 ? 's' : '') + '</span><span>›</span></div>' : '') + '</div>';
+    }).join('') || '<div class="card">No money entries yet.</div>';
+    document.getElementById('main').innerHTML = testBar(d.testMode) + '<button class="back" onclick="showMoney()">‹ Money</button>' +
+      '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="adjustForm(\'' + esc(id) + '\')">Waive / correct / refund</button></div>' +
+      '<h2 style="margin-top:12px"><span class="cur ' + esc(st.currency) + '">' + esc(st.currency) + '</span> ' + esc(st.name) + ' · ' + esc(st.paymentType) + '</h2>' + pos +
+      '<h2>Ledger</h2><div class="card">' + d.entries.map(function (e) {
+        var gone = !!e['Deleted'];
+        return '<div class="item" style="' + (gone ? 'opacity:.5;text-decoration:line-through' : '') + '"><div>' + esc(fmtDate(e['Date'])) + ' · ' + esc(e['Type']) + '<div class="sub">' + esc(e['Description']) + (e['Reference'] ? ' · ' + esc(e['Reference']) : '') + (e['Rate used'] ? ' · ' + esc(e['EGP equivalent']) + ' EGP at ' + esc(e['Rate used']) : '') + (Number(e['Bank fee']) ? ' · arrived ' + esc(e['Amount received']) + ', fee ' + esc(e['Bank fee']) : '') + '</div></div>' +
+          '<div style="text-align:right"><div class="' + (e['Amount'] < 0 ? 'neg' : 'pos') + '">' + amt(e['Amount'], e['Currency']) + '</div><button class="small" onclick="toggleEntry(\'' + esc(e['Entry ID']) + '\',' + (gone ? 'false' : 'true') + ',\'' + esc(id) + '\')">' + (gone ? 'Restore' : 'Delete') + '</button></div></div>' +
+          '<hr style="border:0;border-top:1px solid var(--line)">';
+      }).slice(0, 60).join('') + '</div>';
+  });
+}
+
+// Delete or restore an entry, with an in-page confirmation (second tap).
+var pendingToggle = '';
+function toggleEntry(entryId, deleted, studentId) {
+  if (deleted && pendingToggle !== entryId) {
+    pendingToggle = entryId;
+    return notice('Deleting ' + entryId + ' re-opens whatever it covered (a deleted payment makes sessions unpaid again). Tap Delete again to confirm.');
+  }
+  pendingToggle = '';
+  call('setEntryDeleted', { entryId: entryId, deleted: deleted }, function () { showMoneyStudent(studentId); });
+}
+
+// Record payment form.
+function paymentForm(id) {
+  newView();
+  call('moneyStudent', { id: id }, function (d) {
+    var st = d.student;
+    document.getElementById('main').innerHTML = testBar(d.testMode) + '<button class="back" onclick="showMoneyStudent(\'' + esc(id) + '\')">‹ Cancel</button><h2>Record payment · ' + esc(st.name) + '</h2>' +
+      '<div class="card">' +
+      '<div class="sub">Amount the family sent</div><input id="pa" type="number" step="any" min="0" inputmode="decimal">' +
+      '<div class="sub" style="margin-top:8px">Currency</div><select id="pc" onchange="rateBox()"><option>EGP</option><option>USD</option></select>' +
+      '<div id="rb"></div>' +
+      '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer"><input type="checkbox" id="short" style="width:auto" onchange="document.getElementById(\'arr\').style.display=this.checked?\'block\':\'none\'"> Arrived short in my bank (fees deducted)</label>' +
+      '<div id="arr" style="display:none"><div class="sub" style="margin-top:8px">Amount that actually arrived</div><input id="parr" type="number" step="any" min="0" inputmode="decimal"></div>' +
+      '<div class="sub" style="margin-top:8px">Date</div><input id="pd" type="date" value="' + today() + '">' +
+      '<div class="sub" style="margin-top:8px">Note (optional)</div><input id="pn"></div>' +
+      '<button class="primary" style="margin-top:10px" onclick="checkPayment(\'' + esc(id) + '\',\'' + esc(st.currency) + '\')">Check</button><div id="pv"></div>';
+    document.getElementById('pc').value = /paid as EGP/i.test(st.paymentType) ? 'EGP' : st.currency;
+    rateBox(st.currency);
+  }, { form: true });
+}
+
+// Shows the rate box when the money arrives in a different currency from the student's rate currency.
+function rateBox(studentCur) {
+  window.studentCur = studentCur || window.studentCur;
+  var c = document.getElementById('pc').value, box = document.getElementById('rb');
+  if (c === window.studentCur) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="sub" id="rhint" style="margin-top:8px">Getting today\'s reference rate…</div>' +
+    '<input id="prate" type="number" step="any" inputmode="decimal" style="display:none;margin-top:6px" placeholder="EGP per $1">';
+  call('rate', {}, function (r) {
+    window.refRate = r.rate;
+    var hint = document.getElementById('rhint');
+    if (r.rate) {
+      document.getElementById('prate').value = r.rate;
+      hint.innerHTML = 'Converted at today\'s reference rate (' + r.rate + ' EGP per $1). <a href="#" onclick="document.getElementById(\'prate\').style.display=\'block\';return false">Use another rate</a>';
+    } else {
+      hint.textContent = 'Could not get the reference rate. Type the rate:';
+      document.getElementById('prate').style.display = 'block';
+    }
+  });
+}
+}
+
+// Works out the amount in the student's currency (converting with the rate if needed) and asks the server what it would cover.
+function checkPayment(id, studentCur) {
+  var received = Number(document.getElementById('pa').value), cur = document.getElementById('pc').value, rate = 0, amount = received;
+  if (!(received > 0)) return notice('Enter the amount received.');
+  if (cur !== studentCur) {
+    rate = Number(document.getElementById('prate').value);
+    if (!(rate > 0)) return notice('Enter the rate.');
+    amount = studentCur === 'USD' ? Math.round(received / rate * 100) / 100 : Math.round(received * rate * 100) / 100;
+  }
+  var args = { id: id, amount: amount, currency: studentCur, date: document.getElementById('pd').value, rate: rate || '', egpReceived: cur === 'EGP' && cur !== studentCur ? received : '' };
+  var arrived = document.getElementById('short').checked ? Number(document.getElementById('parr').value) : received;
+  if (!(arrived > 0) || arrived > received) return notice('Enter the amount that arrived (less than or equal to what was sent).');
+  var fee = Math.round((received - arrived) * 100) / 100;
+  call('previewPayment', args, function (p) {
+    document.getElementById('pv').innerHTML = '<div class="card">' +
+      (cur !== studentCur
+        ? (p.rounding
+          ? '<div>' + amt(received, cur) + ' → <b>' + amt(p.credited, studentCur) + '</b> credited</div><div class="sub">That is ' + p.impliedRate + ' EGP per $1 (reference ' + rate + ', ' + pctDiff(p.impliedRate, rate) + '): close enough, so the sessions are settled exactly.</div>'
+          : '<div>' + amt(received, cur) + ' at ' + rate + ' = <b>' + amt(p.credited, studentCur) + '</b> credited</div>' +
+            '<div class="tag warn">Not a whole number of sessions at this rate: the difference stays on the account.</div>')
+        : '<div><b>' + amt(amount, studentCur) + '</b></div>') +
+      (fee ? '<div class="sub">Arrived ' + amt(arrived, cur) + ': bank fee ' + amt(fee, cur) + ' (you absorb it; the family is credited in full)</div>' : '') +
+      '<div class="sub">Balance ' + amt(p.before, studentCur) + ' → ' + amt(p.after, studentCur) + '</div>' +
+      '<div>Covers: ' + (p.covers.length ? p.covers.map(function (c) { return esc(c); }).join(', ') : 'no whole session') + '</div>' +
+      (p.creditAfter ? '<div>Credit left after: ' + amt(p.creditAfter, studentCur) + '</div>' : '') +
+      (p.owedAfter ? '<div>Still owed: ' + amt(p.owedAfter, studentCur) + ' (' + p.sessionsStillUnpaid + ' sessions)</div>' : '') +
+      '</div><button class="primary" onclick=\'hold(this);savePayment(' + JSON.stringify(Object.assign({}, args, {
+        note: document.getElementById('pn').value, receivedCurrency: cur, sentAmount: received, arrivedAmount: arrived, bankFee: fee,
+        expectedBalance: p.before })) + ')\'>Confirm and save</button>';
+  });
+}
+
+// "+0.1%" style difference between two rates.
+function pctDiff(a, b) { var d = Math.round((a - b) / b * 1000) / 10; return (d >= 0 ? '+' : '') + d + '%'; }
+
+// Saves the payment. If the balance changed in the meantime the new numbers are shown and nothing is saved.
+function savePayment(args) {
+  call('recordPayment', args, function (r) {
+    if (r.changed) { notice('The balance changed since you checked (' + amt(r.now.before, args.currency) + '). Check again.'); return checkPayment(args.id, args.currency); }
+    showMoneyStudent(args.id); notice('Payment saved (' + r.saved + ').');
+  });
+}
+
+// Adjustment or refund form.
+function adjustForm(id) {
+  newView();
+  call('moneyStudent', { id: id }, function (d) {
+    document.getElementById('main').innerHTML = testBar(d.testMode) + '<button class="back" onclick="showMoneyStudent(\'' + esc(id) + '\')">‹ Cancel</button><h2>Waive, correct or refund · ' + esc(d.student.name) + '</h2>' +
+      '<div class="card sub" style="font-size:14px">Use this only when the balance must change <b>without</b> a normal payment:<br>' +
+      '• <b>Waive</b>: forgive an amount (e.g. a discount, or a session you decide not to charge). Enter it as a <b>plus</b> amount.<br>' +
+      '• <b>Correct</b>: fix a wrong balance (e.g. a mistake carried from the old sheet). Plus lowers what they owe, minus adds to it.<br>' +
+      '• <b>Refund</b>: money you paid back to the family (e.g. unused credit when a student leaves).<br>' +
+      'To cancel one session completely, it is simpler to delete its charge in the ledger.</div>' +
+      '<div class="card"><div class="sub">What is it?</div><select id="at2"><option value="Adjustment">Waive or correct</option><option value="Refund">Refund (money paid back)</option></select>' +
+      '<div class="sub" style="margin-top:8px">Amount</div><input id="aa" type="number" step="any" inputmode="decimal">' +
+      '<div class="sub" style="margin-top:8px">Currency</div><select id="ac"><option>EGP</option><option>USD</option></select>' +
+      '<div class="sub" style="margin-top:8px">Date</div><input id="ad" type="date" value="' + today() + '">' +
+      '<div class="sub" style="margin-top:8px">Reason (required, kept in the ledger)</div><input id="ar"></div>' +
+      '<button class="primary" style="margin-top:10px" onclick="hold(this);saveAdjust(\'' + esc(id) + '\')">Save</button>';
+    document.getElementById('ac').value = d.student.currency;
+  }, { form: true });
+}
+
+// Saves the adjustment.
+function saveAdjust(id) {
+  call('addAdjustment', { id: id, type: document.getElementById('at2').value, amount: document.getElementById('aa').value, currency: document.getElementById('ac').value,
+    date: document.getElementById('ad').value, reason: document.getElementById('ar').value }, function (r) { showMoneyStudent(id); notice('Saved (' + r.saved + ').'); });
+}
+</script>
+
+  <script>
+// ---------- Today: log a session by hand (until the calendar/Meet stage) ----------
+var sessData = null, sessRows = [];
+
+// Today screen: the "Log a session" button and the latest logged sessions with Undo.
+function showToday() {
+  newView();
+  refreshView = showToday;
+  document.getElementById('title').textContent = 'Today';
+  call('sessionForm', {}, function (d) {
+    sessData = d;
+    document.getElementById('main').innerHTML =
+      '<div class="actions"><button class="primary" onclick="sessionForm()">＋ Log a session</button></div>' +
+      '<h2>Recently logged</h2>' + (d.recent.length ? d.recent.map(function (r) {
+        var undone = r['Status'] === 'Undone';
+        return '<div class="card item" style="' + (undone ? 'opacity:.5' : '') + '"><div><div>' + esc(fmtDate(r['Date'])) + ' · ' + esc(r['Group']) + '</div>' +
+          '<div class="sub">' + esc(r['Title']) + ' · ' + esc(r['Status']) + '</div></div>' +
+          (undone ? '' : '<div class="right"><button class="small" onclick="undoSess(\'' + esc(r['Session ID']) + '\')">Undo</button></div>') + '</div>';
+      }).join('') : '<div class="card sub">No sessions logged in the app yet.</div>') +
+      '<div class="card sub" style="margin-top:12px">The calendar and Meet will fill this in automatically in the Sessions stage. Until then, log each session here.</div>';
+  });
+}
+
+// Undo with a second tap to confirm.
+var pendingUndo = '';
+function undoSess(id) {
+  if (pendingUndo !== id) { pendingUndo = id; return notice('Undo removes this session\'s charges and attendance. Tap Undo again to confirm.'); }
+  pendingUndo = '';
+  call('undoSession', { sessionId: id }, function () { showToday(); notice('Session undone.'); });
+}
+
+// The form: group, date, title, then one line per student in that group on that date.
+function sessionForm() {
+  newView();
+  var d = sessData;
+  document.getElementById('main').innerHTML = '<button class="back" onclick="showToday()">‹ Cancel</button><h2>Log a session</h2>' +
+    '<div class="card"><div class="sub">Group</div>' + sel('sg', '', [['', 'Pick a group']].concat(d.groups.map(function (g) { return [g, g]; }))) +
+    '<div class="sub" style="margin-top:8px">Date</div><input id="sd" type="date" value="' + today() + '">' +
+    '<div class="sub" style="margin-top:8px">What was it</div><input id="st" list="stl" value="Group Session"><datalist id="stl"><option>Group Session</option><option>Recorded Session</option><option>Quiz Session</option><option>1-on-1 Session</option></datalist></div>' +
+    '<div id="srows"></div>';
+  document.getElementById('sg').onchange = fillSessionRows;
+  document.getElementById('sd').onchange = fillSessionRows;
+}
+
+// True if a membership covers the date.
+function inGroupOn(m, group, date) {
+  return m.group === group && (!m.since || m.since <= date) && (!m.until || m.until >= date);
+}
+
+// Builds the student lines for the chosen group and date.
+function fillSessionRows() {
+  var g = document.getElementById('sg').value, date = document.getElementById('sd').value;
+  if (!g) { document.getElementById('srows').innerHTML = ''; return; }
+  sessRows = sessData.people.filter(function (p) { return p.memberships.some(function (m) { return inGroupOn(m, g, date); }); })
+    .map(function (p) { return { id: p.id, name: p.name, currency: p.currency, amount: p.rate, status: 'Attended', visiting: false }; });
+  drawSessionRows();
+}
+
+// Draws the student lines (status + amount) and the save button.
+function drawSessionRows() {
+  var others = sessData.people.filter(function (p) { return !sessRows.some(function (r) { return r.id === p.id; }); });
+  document.getElementById('srows').innerHTML = '<h2>' + sessRows.length + ' students</h2>' + sessRows.map(function (r, i) {
+    return '<div class="card cur-' + esc(r.currency) + '"><div><span class="cur ' + esc(r.currency) + '">' + esc(r.currency) + '</span> ' + esc(r.name) + (r.visiting ? ' <span class="tag">visiting</span>' : '') + '</div>' +
+      '<div class="filters" style="margin:8px 0 0">' +
+      '<select onchange="sessRows[' + i + '].status=this.value">' + ['Attended', 'Absent', 'Not charged'].map(function (s) {
+        return '<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + (s === 'Absent' ? 'Absent (charged)' : s) + '</option>';
+      }).join('') + '</select>' +
+      '<input type="number" step="any" inputmode="decimal" value="' + esc(r.amount) + '" onchange="sessRows[' + i + '].amount=this.value" style="max-width:120px"></div></div>';
+  }).join('') +
+    '<div class="filters">' + sel('sadd', '', [['', '＋ Add a visiting student']].concat(others.map(function (p) { return [p.id, p.name]; }))) + '</div>' +
+    '<button class="primary" style="width:100%;margin-top:6px" onclick="hold(this);saveSession()">Save session and charges</button>';
+  document.getElementById('sadd').onchange = function () {
+    var p = sessData.people.filter(function (x) { return x.id === this.value; }, this)[0];
+    if (p) { sessRows.push({ id: p.id, name: p.name, currency: p.currency, amount: p.rate, status: 'Attended', visiting: true }); drawSessionRows(); }
+  };
+}
+
+// Saves the session; the server refuses a second log of the same group and date.
+function saveSession() {
+  var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value, rows: sessRows };
+  call('logSession', args, function (r) { showToday(); notice('Logged ' + r.sessionId + ': ' + r.charged + ' charged.'); });
+}
+</script>
+
+  <script>// Front page on GitHub Pages: talks to the Apps Script web app with fetch, but keeps the same
+// google.script.run calls the screens already use, so the screens are shared with the Apps Script version.
+var EXEC_URL = 'https://script.google.com/macros/s/AKfycbyCLTCfTmk_UHXW6_aSQ28cSyYRWWiUpFdx4Tsa5epjAviwggqbnqIvu89apC2YxQdz/exec';
+var google = { script: { get run() {
+  var ok = function () {}, fail = function () {};
+  var o = {
+    withSuccessHandler: function (f) { ok = f; return o; },
+    withFailureHandler: function (f) { fail = f; return o; },
+    api: function (token, action, args) {
+      fetch(EXEC_URL, { method: 'POST', body: JSON.stringify({ token: token, action: action, args: args }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { if (j.ok) { ok(j.res); if (action === 'prefetch') saveCache(); } else fail(new Error(j.error)); })
+        .catch(function (e) { fail(new Error('No connection to the app (' + e.message + '). Check the internet and tap Refresh.')); });
+    }
+  };
+  return o;
+} } };
+
+// Keeps the last loaded data on this device, so the app opens with it instantly and refreshes in the background.
+function saveCache() {
+  setTimeout(function () { try { localStorage.setItem('th_cache', JSON.stringify(CACHE)); } catch (e) { /* storage full or blocked */ } }, 0);
+}
+function loadCache() {
+  try { var c = JSON.parse(localStorage.getItem('th_cache') || 'null'); if (c) CACHE = c; } catch (e) { /* ignore */ }
+}
+
+// The secret token comes once in the link (#t=...), is kept on this device, and removed from the address bar.
+function boot() {
+  var m = location.hash.match(/t=([0-9a-f]+)/);
+  if (m) { try { localStorage.setItem('th_token', m[1]); } catch (e) {} history.replaceState(null, '', location.pathname); }
+  var token = ''; try { token = localStorage.getItem('th_token') || ''; } catch (e) {}
+  if (!token) {
+    document.getElementById('splash').innerHTML = '<div class="splash-name">Tutoring Hub</div><div class="sub" style="max-width:280px;text-align:center">Open your private setup link once on this device to sign in.</div>';
+    return;
+  }
+  loadCache();
+  start(token);
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+
+boot();</script>
+</body>
+</html>
