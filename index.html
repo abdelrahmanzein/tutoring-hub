@@ -252,6 +252,7 @@ function prefetch() {
     var d = res.data;
     CACHE['students|{}'] = { data: d.students };
     CACHE['money|{}'] = { data: d.money };
+    CACHE['sessionForm|{}'] = { data: d.sessionForm };
     Object.keys(d.details).forEach(function (id) { CACHE['student|' + JSON.stringify({ id: id })] = { data: d.details[id] }; });
     Object.keys(d.moneyStudents).forEach(function (id) { CACHE['moneyStudent|' + JSON.stringify({ id: id })] = { data: d.moneyStudents[id] }; });
   }).withFailureHandler(function () { busy(-1); }).api(TOKEN, 'prefetch', {});
