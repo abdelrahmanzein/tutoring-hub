@@ -788,7 +788,7 @@ function showProfile(id) {
       '<h2>Money</h2>' + money +
       '<div class="actions" style="margin-top:0"><button class="small" onclick="adjustForm(\'' + esc(id) + '\')">Waive / correct / refund</button></div>' +
       '<div class="card" id="ledger">' + ledgerRows(entries.slice(0, 10), id) +
-      (entries.length > 10 ? '<button class="small" style="margin-top:8px" onclick="document.getElementById(\'ledger\').innerHTML = ledgerRows(lastMoneyStudent.entries, \'' + esc(id) + '\')">Show all ' + entries.length + ' entries</button>' : '') + '</div>' +
+      ((m.entryCount || entries.length) > 10 ? '<button class="small" style="margin-top:8px" onclick="document.getElementById(\'ledger\').innerHTML = ledgerRows(lastMoneyStudent.entries, \'' + esc(id) + '\')">Show all ' + (m.entryCount || entries.length) + ' entries</button>' : '') + '</div>' +
       '<h2>Info</h2><div class="card"><dl>' + info.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + (r[0].indexOf('WhatsApp') >= 0 ? r[1] : esc(r[1])) + '</dd>'; }).join('') + '</dl></div>' +
       '<h2>Accounts</h2><div class="card">' + (p.detail.accounts.map(function (a) {
         return '<div class="item"><div>' + esc(a['Value']) + '<div class="sub">' + esc(a['Type']) + (a['Whose'] ? ' · ' + esc(a['Whose']) : '') + '</div></div>' +
