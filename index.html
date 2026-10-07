@@ -172,6 +172,8 @@
   .sess-title { font-size:17px; font-weight:700; }
   .chip.hw-ok { border-color:var(--good); } .chip.hw-late { border-color:#d97706; } .chip.hw-miss { border-color:var(--bad); background:var(--bad-soft); }
   .chip.hw-wait { border-style:dashed; }
+  .note { background:#fff7e6; border:1px solid #f5c26b; border-radius:10px; padding:8px 10px; margin:6px 0; font-size:14px; }
+  @media (prefers-color-scheme: dark) { .note { background:#3a2c12; border-color:#8a6420; } }
 
   /* Grey placeholders shown for the split second before a screen's data arrives */
   .skeleton { height:58px; border-radius:12px; margin-bottom:10px; background:linear-gradient(90deg, var(--line) 25%, var(--card) 50%, var(--line) 75%); background-size:200% 100%; animation:shimmer 1.2s infinite; }
@@ -201,8 +203,8 @@
   <nav id="nav"></nav>
   <script>
 // Page logic. Every screen loads live data when it opens and shows when it was fetched.
-var TOKEN = '', TABS = ['Today', 'To do', 'Students', 'Groups', 'Income', 'Settings'];
-var ICONS = { 'Today': '📅', 'To do': '✅', 'Students': '👥', 'Groups': '🧑‍🏫', 'Income': '📈', 'Settings': '⚙️' };
+var TOKEN = '', TABS = ['Sessions', 'To do', 'Students', 'Groups', 'Income', 'Settings'];
+var ICONS = { 'Sessions': '📅', 'To do': '✅', 'Students': '👥', 'Groups': '🧑‍🏫', 'Income': '📈', 'Settings': '⚙️' };
 var current = 'Students', fetchedAt = null, listCache = null, refreshView = null;
 
 // Starts the app: builds the tab bar and opens Students.
@@ -230,7 +232,7 @@ function open(tab) {
   document.getElementById('title').textContent = tab;
   if (tab === 'Students') return showStudents();
   if (tab === 'Income') return showIncome();
-  if (tab === 'Today') return showToday();
+  if (tab === 'Sessions') return showToday();
   refreshView = null; fetchedAt = null; showAge();
   document.getElementById('main').innerHTML = '<div class="soon">' + tab + ' comes in a later stage.</div>';
 }
@@ -240,7 +242,7 @@ function open(tab) {
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var NO_CACHE = WRITES.concat(['previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
@@ -729,6 +731,7 @@ function showStudents() {
     d.students.forEach(function (s) { byId[s.id] = s; });
     var recent = recentIds().filter(function (id) { return byId[id]; });
     document.getElementById('main').innerHTML = testBar(d.testMode) +
+      '<div class="actions" style="margin-top:0"><button class="primary" onclick="newStudentForm()">＋ New student</button></div>' +
       '<input id="rq" placeholder="Search name (English or Arabic)" value="' + esc(RF.q) + '">' +
       '<div class="chips">' + chip('money', 'owes', 'Owes money') + chip('money', 'credit', 'Has credit') +
       chip('cur', 'EGP', '<span class="cur EGP">EGP</span>') + chip('cur', 'USD', '<span class="cur USD">USD</span>') + '</div>' +
@@ -796,6 +799,60 @@ function drawRoster() {
       '<div class="sub">' + esc(s.group || 'No group') + (last ? ' · last paid ' + fmtDate(last.date) : ' · no payments yet') + '</div></div>' +
       '<div class="right">' + (tags || '<span class="tag">settled</span>') + '</div><span class="chev">›</span></div>';
   }).join('') || '<div class="soon">No students match.</div>';
+}
+
+// New student form: everything needed to join a group, with the rate taken from the Rates tab (editable) and
+// optional trial session(s) to charge now that they continue.
+function newStudentForm() {
+  newView();
+  document.getElementById('title').textContent = 'Students';
+  call('newStudentForm', {}, function (f) {
+    var field = function (id, label, input) { return '<div class="sub" style="margin-top:8px">' + label + '</div>' + (input || '<input id="' + id + '">'); };
+    document.getElementById('main').innerHTML = '<button class="back" onclick="showStudents()">‹ Cancel</button><h2>New student</h2>' +
+      '<div class="card"><b>Student</b>' + field('nf', 'First name') + field('nl', 'Last name') + field('naf', 'Arabic first name') + field('nal', 'Arabic last name') +
+      field('ng', 'Gender', sel('ng', '', [['', '–'], ['F', 'F'], ['M', 'M']])) + field('nsch', 'School') +
+      field('nc', 'Country', '<input id="nc" list="ncl"><datalist id="ncl">' + f.countries.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</datalist>') +
+      field('nsw', 'Student WhatsApp (with country code)') + field('nlang', 'Message language', sel('nlang', 'AR', [['AR', 'Arabic + English'], ['EN', 'English']])) + '</div>' +
+      '<div class="card"><b>Group and money</b>' + field('ngr', 'Group', sel('ngr', '', [['', 'Pick a group']].concat(f.groups.map(function (g) { return [g.group, g.group]; })))) +
+      field('nsince', 'In the group since (first session, e.g. the trial)', '<input id="nsince" type="date" value="' + today() + '">') +
+      field('npt', 'Payment type', sel('npt', '', f.paymentTypes.map(function (p) { return [p, p]; }))) +
+      field('nrate', 'Rate per session (from the Rates tab; change only if agreed otherwise)', '<div class="filters" style="margin:0"><input id="nrate" type="number" step="any"><select id="ncur"><option>EGP</option><option>USD</option></select></div>') +
+      field('ntrial', 'Trial session to charge (optional; the trial is charged once they continue)', '<input id="ntrial" type="date">') +
+      field('nbill', 'Billing contact', sel('nbill', 'Parent', [['Parent', 'Parent'], ['Student', 'Student']])) + '</div>' +
+      '<div class="card"><b>Parent</b>' + field('npn', 'Parent name') + field('npr', 'Relation', '<input id="npr" list="nprl"><datalist id="nprl"><option>Mother</option><option>Father</option></datalist>') +
+      field('npw', 'Parent WhatsApp (with country code)') + '</div>' +
+      '<div class="card"><b>Accounts (optional, can be added later)</b>' + field('nmeet', 'Meet name') + field('nup', 'Upload account (email)') + field('nnotes', 'Notes') + '</div>' +
+      '<button class="primary" style="width:100%;margin:6px 0 16px" onclick="hold(this);saveNewStudent(false)">Add student</button>';
+    var setRate = function () {
+      var g = f.groups.filter(function (x) { return x.group === document.getElementById('ngr').value; })[0];
+      var region = document.getElementById('nc').value.trim().toLowerCase() === 'egypt' ? 'Egypt' : 'Abroad';
+      var r = g && f.rates.filter(function (x) { return x.batch === g.batch && x.region === region && Number(x.rate) > 0; })[0];
+      if (r) { document.getElementById('nrate').value = r.rate; document.getElementById('ncur').value = r.currency; }
+      else if (g) { document.getElementById('nrate').value = ''; notice('No rate for batch ' + g.batch + ' (' + region + ') in the Rates tab yet: type it here.'); }
+      document.getElementById('npt').value = region === 'Egypt' ? 'EGP, every 4 sessions' : 'USD in 8-session blocks';
+    };
+    document.getElementById('ngr').onchange = setRate;
+    document.getElementById('nc').onchange = setRate;
+  }, { form: true });
+}
+
+// Sends the new student; if someone with the same name exists (or existed), shows them first and asks again.
+function saveNewStudent(confirmSimilar) {
+  var v = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  var args = { first: v('nf'), last: v('nl'), arabicFirst: v('naf'), arabicLast: v('nal'), gender: v('ng'), school: v('nsch'), country: v('nc'),
+    studentWhatsApp: v('nsw'), language: v('nlang'), group: v('ngr'), since: v('nsince'), paymentType: v('npt'), rate: v('nrate'), currency: v('ncur'),
+    trialDates: v('ntrial') ? [v('ntrial')] : [], billing: v('nbill'), parentName: v('npn'), parentRelation: v('npr'), parentWhatsApp: v('npw'),
+    meetName: v('nmeet'), uploadAccount: v('nup'), notes: v('nnotes'), confirmSimilar: confirmSimilar };
+  call('addStudent', args, function (r) {
+    if (r.similar) {
+      document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; b.textContent = 'Add student'; });
+      sheet('Same name found', '<div class="sub" style="margin-bottom:8px">Check this isn\'t a returning or duplicate student:</div>' +
+        r.similar.map(function (x) { return '<div class="row"><span>' + esc(x) + '</span></div>'; }).join('') +
+        '<button class="primary" style="width:100%;margin-top:10px" onclick="this.closest(\'.sheet-bg\').remove();saveNewStudent(true)">It\'s a new student: add anyway</button>');
+      return;
+    }
+    showProfile(r.added); notice('Added. They are in the group from ' + fmtDate(args.since) + '.');
+  });
 }
 
 // Old entry point: the student page is now the profile.
@@ -874,25 +931,18 @@ var sessData = null, sessRows = [];
 function showToday() {
   newView();
   refreshView = showToday;
-  document.getElementById('title').textContent = 'Today';
+  document.getElementById('title').textContent = 'Sessions';
   call('week', {}, function (week) {
     call('sessionForm', {}, function (d) {
       sessData = d;
       var byDay = {};
       week.forEach(function (s) { (byDay[s.day] = byDay[s.day] || []).push(s); });
       var days = Object.keys(byDay).sort();
-      var legend = '<div class="sub" style="margin:2px 0 6px">Homework: ✅ on time · ⏰ late · ❌ missing · ⏳ not yet (due 11:59 PM the night before). Tap a name to open the student.</div>';
+      WEEK = week;
+      var legend = '<div class="sub" style="margin:2px 0 6px">Homework: ✅ on time · ⏰ late · ❌ missing · ⏳ not yet. Past papers: ✅ added something since last session · ❌ nothing new. Tap a name to open the student.</div>';
       document.getElementById('main').innerHTML = legend +
         (days.length ? days.map(function (day) {
-          return '<h2>' + dayLabel(day) + '</h2>' + byDay[day].map(function (s) {
-            return '<div class="card"><div class="item"><div class="sess-title">' + esc(s.group) + '</div>' +
-              '<span class="tag ' + STATUS_TAG[s.status] + '">' + esc(s.status) + '</span></div>' +
-              '<div class="sub">' + esc(s.start) + '–' + esc(s.end) + (s.homework ? ' · homework: ' + esc(s.homework.title) + ', due ' + esc(fmtDate(s.homework.due)) : '') + '</div>' +
-              '<div class="chips">' + (s.students.map(function (p) {
-                return '<button class="chip hw-' + (HW_CLASS[p.hw] || 'none') + '" onclick="showProfile(\'' + esc(p.id) + '\')">' +
-                  (HW_ICON[p.hw] ? HW_ICON[p.hw] + ' ' : '') + esc(p.name) + '</button>';
-              }).join('') || '<span class="sub">No students</span>') + '</div></div>';
-          }).join('');
+          return '<h2>' + dayLabel(day) + '</h2>' + byDay[day].map(function (s) { return sessionCard(s); }).join('');
         }).join('') : '<div class="card sub">No sessions in the Tutoring calendar for the next 7 days.</div>') +
         (d.source === 'App'
           ? '<div class="actions"><button class="primary" onclick="sessionForm()">＋ Log a session</button></div>'
@@ -902,9 +952,45 @@ function showToday() {
   });
 }
 
+var WEEK = [];
+
+// One session card: group, time, homework or past papers, a note left last time, student chips, and the actions.
+function sessionCard(s) {
+  var i = WEEK.indexOf(s);
+  return '<div class="card"><div class="item"><div class="sess-title">' + esc(s.group) + '</div>' +
+    '<span class="tag ' + STATUS_TAG[s.status] + '">' + esc(s.status) + '</span></div>' +
+    '<div class="sub">' + esc(s.start) + '–' + esc(s.end) + ' (Cairo)</div>' +
+    (s.homework ? '<div class="sub">Homework: ' + esc(s.homework.title) + ' · due ' + esc(dueLabel(s.homework.due)) + '</div>' : '') +
+    (s.pastPapers ? '<div class="sub">Past papers (' + s.pastPapers.total + ' in the sheet) · <a href="' + esc(s.pastPapers.link) + '" target="_blank">open follow-up sheet</a></div>' : '') +
+    (s.note ? '<div class="note">📌 Note from ' + esc(fmtDate(s.note.from)) + ': ' + esc(s.note.text) + '</div>' : '') +
+    '<div class="chips">' + (s.students.map(function (p) {
+      return '<button class="chip hw-' + (HW_CLASS[p.hw] || 'none') + '" title="' + esc(p.detail || p.hw || '') + '" onclick="showProfile(\'' + esc(p.id) + '\')">' +
+        (HW_ICON[p.hw] ? HW_ICON[p.hw] + ' ' : '') + esc(p.name) + (p.detail ? ' <span class="sub">' + esc(p.detail) + '</span>' : '') + '</button>';
+    }).join('') || '<span class="sub">No students</span>') + '</div>' +
+    '<div class="actions">' +
+    (s.reminder ? '<button onclick="sendReminder(' + i + ')">💬 Send reminder</button>' : '') +
+    (s.status === 'Logged' || s.status === 'Did not happen' ? '' :
+      '<button class="primary"' + (s.canLog ? '' : ' disabled title="Available once the session starts"') + ' onclick="sessionForm(' + i + ')">' + (s.canLog ? 'Log session' : 'Log session (after it starts)') + '</button>') +
+    '</div></div>';
+}
+
+// Opens WhatsApp with the reminder ready; you pick the group chat.
+function sendReminder(i) {
+  window.open('https://wa.me/?text=' + encodeURIComponent(WEEK[i].reminder), '_blank');
+}
+
+// "2026-10-08 23:59" -> "Thu 8 Oct, 11:59 PM".
+function dueLabel(v) {
+  var m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return v;
+  var d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()] + ' ' + d.getDate() + ' ' +
+    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()] + ', 11:59 PM';
+}
+
 // Homework status on a student chip (live from Drive when the screen opens).
-var HW_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Not yet': '⏳' };
-var HW_CLASS = { 'On time': 'ok', 'Late': 'late', 'Missing': 'miss', 'Not yet': 'wait' };
+var HW_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Not yet': '⏳', 'Added': '✅', 'Nothing new': '❌' };
+var HW_CLASS = { 'On time': 'ok', 'Late': 'late', 'Missing': 'miss', 'Not yet': 'wait', 'Added': 'ok', 'Nothing new': 'miss' };
 
 // Colour of each session status label.
 var STATUS_TAG = { 'Upcoming': '', 'In progress': 'warn', 'Needs review': 'owe', 'Logged': 'good', 'Did not happen': '' };
@@ -936,17 +1022,20 @@ function undoSess(id) {
   call('undoSession', { sessionId: id }, function () { showToday(); notice('Session undone.'); });
 }
 
-// The form: group, date, title, then one line per student in that group on that date.
-function sessionForm() {
+// The log form, opened from a session card (group and date filled in): who attended, amounts, and a note for next time.
+function sessionForm(i) {
+  if (sessData.source !== 'App') return notice('Sessions are still logged through the old script until the switch-over. After it, this button logs the session here.');
   newView();
-  var d = sessData;
-  document.getElementById('main').innerHTML = '<button class="back" onclick="showToday()">‹ Cancel</button><h2>Log a session</h2>' +
-    '<div class="card"><div class="sub">Group</div>' + sel('sg', '', [['', 'Pick a group']].concat(d.groups.map(function (g) { return [g, g]; }))) +
-    '<div class="sub" style="margin-top:8px">Date</div><input id="sd" type="date" value="' + today() + '">' +
-    '<div class="sub" style="margin-top:8px">What was it</div><input id="st" list="stl" value="Group Session"><datalist id="stl"><option>Group Session</option><option>Recorded Session</option><option>Quiz Session</option><option>1-on-1 Session</option></datalist></div>' +
+  var d = sessData, s = typeof i === 'number' ? WEEK[i] : null;
+  document.getElementById('main').innerHTML = '<button class="back" onclick="showToday()">‹ Cancel</button><h2>Log ' + (s ? esc(s.group) + ' · ' + esc(fmtDate(s.day)) : 'a session') + '</h2>' +
+    '<div class="card"><div class="sub">Group</div>' + sel('sg', s ? s.group : '', [['', 'Pick a group']].concat(d.groups.map(function (g) { return [g, g]; }))) +
+    '<div class="sub" style="margin-top:8px">Date</div><input id="sd" type="date" value="' + (s ? s.day : today()) + '">' +
+    '<div class="sub" style="margin-top:8px">What was it</div><input id="st" list="stl" value="Group Session"><datalist id="stl"><option>Group Session</option><option>Recorded Session</option><option>Quiz Session</option><option>1-on-1 Session</option></datalist>' +
+    '<div class="sub" style="margin-top:8px">Note for next session (shows on its card)</div><textarea id="sn" rows="2" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)"></textarea></div>' +
     '<div id="srows"></div>';
   document.getElementById('sg').onchange = fillSessionRows;
   document.getElementById('sd').onchange = fillSessionRows;
+  if (s) fillSessionRows();
 }
 
 // True if a membership covers the date.
@@ -984,7 +1073,8 @@ function drawSessionRows() {
 
 // Saves the session; the server refuses a second log of the same group and date.
 function saveSession() {
-  var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value, rows: sessRows };
+  var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value,
+    noteNext: document.getElementById('sn').value, rows: sessRows };
   call('logSession', args, function (r) { showToday(); notice('Logged ' + r.sessionId + ': ' + r.charged + ' charged.'); });
 }
 </script>
