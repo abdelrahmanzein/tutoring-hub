@@ -471,6 +471,9 @@ function showIncome() {
       d.groups.map(function (g) {
         return '<tr><td>' + esc(g.group) + '</td><td>' + both(g.thisMonthEGP, g.thisMonthUSD) + '</td><td>' + both(g.last3EGP, g.last3USD) + '</td></tr>';
       }).join('') + '</table></div>' +
+      '<h2>Every year (all students, current and former)</h2><div class="card" style="overflow-x:auto"><table class="tbl"><tr><th>Year</th><th>Received EGP</th><th>Received USD</th><th>Earned EGP</th><th>Earned USD</th></tr>' +
+      d.years.map(function (y) { return '<tr><td>' + y.year + '</td><td>' + amt(y.receivedEGP, '') + '</td><td>' + amt(y.receivedUSD, '') + '</td><td>' + amt(y.earnedEGP, '') + '</td><td>' + amt(y.earnedUSD, '') + '</td></tr>'; }).join('') +
+      '</table></div>' +
       '<h2>Every month</h2><div class="card" style="overflow-x:auto"><table class="tbl"><tr><th>Month</th><th>Received EGP</th><th>Received USD</th><th>Earned EGP</th><th>Earned USD</th><th>Fees</th></tr>' +
       d.months.slice().reverse().map(function (m) {
         return '<tr><td>' + monthName(m.month) + '</td><td>' + amt(m.receivedEGP, '') + '</td><td>' + amt(m.receivedUSD, '') + '</td><td>' + amt(m.earnedEGP, '') + '</td><td>' + amt(m.earnedUSD, '') + '</td><td>' +
