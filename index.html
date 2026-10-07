@@ -205,9 +205,9 @@
 // Page logic. Every screen loads live data when it opens and shows when it was fetched.
 var TOKEN = '', TABS = ['Sessions', 'To do', 'Students', 'Groups', 'Income', 'Settings'];
 var ICONS = { 'Sessions': '📅', 'To do': '✅', 'Students': '👥', 'Groups': '🧑‍🏫', 'Income': '📈', 'Settings': '⚙️' };
-var current = 'Students', fetchedAt = null, listCache = null, refreshView = null;
+var current = 'Sessions', fetchedAt = null, listCache = null, refreshView = null;
 
-// Starts the app: builds the tab bar and opens Students.
+// Starts the app: builds the tab bar and opens Sessions.
 function start(token) {
   TOKEN = token;
   var nav = document.getElementById('nav');
@@ -221,7 +221,7 @@ function start(token) {
   document.getElementById('refresh').onclick = function () { FRESH_UNTIL = Date.now() + 4000; if (refreshView) refreshView(); prefetch(true); };
   setInterval(showAge, 30000);
   setTimeout(hideSplash, 8000);
-  openTab('Students');
+  openTab('Sessions');
   prefetch();
 }
 
