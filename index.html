@@ -235,6 +235,7 @@ function openTab(tab) {
   if (tab === 'Income') return showIncome();
   if (tab === 'Sessions') return showToday();
   if (tab === 'Groups') return showGroups();
+  if (tab === 'To do') return showTodo();
   refreshView = null; fetchedAt = null; showAge();
   document.getElementById('main').innerHTML = '<div class="soon">' + tab + ' comes in a later stage.</div>';
 }
@@ -244,8 +245,8 @@ function openTab(tab) {
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
-var NO_CACHE = WRITES.concat(['joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
+var WRITES = ['assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var NO_CACHE = WRITES.concat(['todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
 function newView() { VIEW++; return VIEW; }
@@ -923,6 +924,33 @@ function saveNewStudent(confirmSimilar) {
   });
 }
 
+// The student's recent homework; tap one to set it by hand.
+var HW_LIST = [];
+function homeworkCard(list, id) {
+  HW_LIST = list;
+  return '<h2>Homework</h2><div class="card">' + (list.map(function (h, i) {
+    return '<div class="item" style="cursor:pointer" onclick="hwEdit(' + i + ',\'' + esc(id) + '\')"><span>' + esc(h.number) + '. ' + esc(h.title) +
+      '<div class="sub">due ' + esc(fmtDate(String(h.due).slice(0, 10))) + (h.manual ? ' · ✎ set by hand' : '') + '</div></span>' +
+      '<span class="chip hw-' + (HW_CLASS[hwKey(h.status)] || 'none') + '">' + (HW_ICON[hwKey(h.status)] || '') + ' ' + esc(h.status) + (h.status === 'Late' && h.daysLate ? ' ' + h.daysLate + 'd' : '') + '</span></div>';
+  }).join('') || '<div class="sub">No homework recorded yet.</div>') + '</div>';
+}
+function hwKey(s) { return s === 'Not due yet' ? 'Not yet' : s; }
+
+// Sets one homework by hand (with a reason), or hands it back to the scan.
+function hwEdit(i, id) {
+  var h = HW_LIST[i];
+  sheet(h.number + '. ' + h.title, (h.file ? '<div class="sub"><a href="' + esc(h.file) + '" target="_blank">Open the uploaded file</a></div>' : '') +
+    '<div class="sub" style="margin-top:8px">Status</div>' + sel('hws', h.status, [['On time', 'On time'], ['Late', 'Late'], ['Missing', 'Missing'], ['Excused', 'Excused']]) +
+    '<div class="sub" style="margin-top:8px">Reason (e.g. sent on WhatsApp, used a sibling\'s account)</div><input id="hwr">' +
+    '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);hwSave(' + i + ',\'' + esc(id) + '\',false)">Save</button>' +
+    (h.manual ? '<button style="width:100%;margin-top:8px" onclick="hold(this);hwSave(' + i + ',\'' + esc(id) + '\',true)">Undo: let the scan decide</button>' : ''));
+}
+function hwSave(i, id, clear) {
+  var h = HW_LIST[i];
+  call('setHomework', { assignmentId: h.assignmentId, id: id, status: clear ? '' : document.getElementById('hws').value, reason: clear ? '' : document.getElementById('hwr').value },
+    function () { var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove(); showProfile(id); notice('Saved.'); });
+}
+
 // Old entry point: the student page is now the profile.
 function showStudent(id) { showProfile(id); }
 
@@ -963,6 +991,7 @@ function showProfile(id) {
       '<button class="secondary" style="margin:0 0 10px" onclick="adjustForm(\'' + esc(id) + '\')">✎ Waive, correct or refund</button>' +
       '<div class="card" id="ledger">' + ledgerRows(entries.slice(0, 10), id) +
       ((m.entryCount || entries.length) > 10 ? '<button class="small" style="margin-top:8px" onclick="document.getElementById(\'ledger\').innerHTML = ledgerRows(lastMoneyStudent.entries, \'' + esc(id) + '\')">Show all ' + (m.entryCount || entries.length) + ' entries</button>' : '') + '</div>' +
+      (p.homework ? homeworkCard(p.homework, id) : '') +
       '<h2>Info</h2><div class="card"><dl>' + info.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + (r[0].indexOf('WhatsApp') >= 0 ? r[1] : esc(r[1])) + '</dd>'; }).join('') + '</dl></div>' +
       '<h2>Accounts</h2><div class="card">' + (p.detail.accounts.map(function (a) {
         return '<div class="item"><div>' + esc(a['Value']) + '<div class="sub">' + esc(a['Type']) + (a['Whose'] ? ' · ' + esc(a['Whose']) : '') + '</div></div>' +
@@ -1345,6 +1374,59 @@ function moveIt(i) {
   var m = GROUP.members[i], name = GROUP.group['Group'], to = document.getElementById('mvg' + i).value;
   if (!to) { document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; b.textContent = 'Move'; }); return notice('Pick the new group.'); }
   call('moveStudent', { id: m.id, group: name, to: to, from: document.getElementById('mvd' + i).value }, function () { showGroup(name); notice(m.name + ' moved to ' + to + '.'); });
+}
+</script>
+
+  <script>
+// ---------- To do: sessions to log, missing homework, joining forms, unmatched uploads ----------
+var TODO = null;
+
+function showTodo() {
+  newView();
+  refreshView = showTodo;
+  document.getElementById('title').textContent = 'To do';
+  call('todo', {}, function (d) {
+    TODO = d;
+    var parts = [];
+    if (d.toLog.length) parts.push('<h2>Sessions to log</h2>' + d.toLog.map(function (s) {
+      return '<div class="card nav-row" onclick="logFromTodo(\'' + esc(s.sessionId) + '\')"><span><b>' + esc(s.group) + '</b><div class="sub">' + esc(fmtDate(s.day)) + ' · ' + esc(s.start) + '</div></span><span class="tag owe">Log ›</span></div>';
+    }).join(''));
+    if (d.joins.length) parts.push('<h2>Joining forms to review</h2>' + d.joins.map(function (j, i) {
+      return '<div class="card nav-row" onclick="newStudentForm(TODO.joins[' + i + '])"><span><b>' + esc(j.name) + '</b><div class="sub">' + esc(j.group) + ' · filled ' + esc(fmtDate(j.filledAt)) + '</div></span><span>Review ›</span></div>';
+    }).join(''));
+    if (d.homework.length) parts.push('<h2>Homework</h2>' + d.homework.map(function (h) {
+      var chip = function (p, cls, txt) { return '<button class="chip hw-' + cls + '" onclick="showProfile(\'' + esc(p.id) + '\')">' + txt + ' ' + esc(p.name) + (p.daysLate ? ' <span class="sub">' + p.daysLate + 'd</span>' : '') + '</button>'; };
+      return '<div class="card"><b>' + esc(h.group) + '</b><div class="sub">' + esc(h.title) + ' · was due ' + esc(fmtDate(String(h.due).slice(0, 10))) + '</div><div class="chips">' +
+        h.missing.map(function (p) { return chip(p, 'miss', '❌'); }).join('') + h.late.map(function (p) { return chip(p, 'late', '⏰'); }).join('') + '</div></div>';
+    }).join(''));
+    if (d.uploads.length) parts.push('<h2>Who uploaded this?</h2>' + d.uploads.map(function (u, i) {
+      return '<div class="card"><div><b>' + esc(u.owner || 'unknown account') + '</b></div><div class="sub">' + esc(u.assignment) + ' · <a href="' + esc(u.url) + '" target="_blank">' + esc(u.file) + '</a> · ' + esc(u.created) + '</div>' +
+        (u.owner ? '<div class="filters" style="margin:6px 0 0">' + sel('up' + i, '', [['', 'Pick the student']].concat(d.people.map(function (p) { return [p.id, p.name]; }))) +
+          '<button onclick="hold(this);assignUpload(' + i + ')">Save</button></div>' : '') + '</div>';
+    }).join(''));
+    document.getElementById('main').innerHTML = (parts.join('') || '<div class="card sub">Nothing waiting. 🎉</div>') +
+      '<div class="card sub" style="margin-top:14px">Homework is checked every night at 00:30' + (d.scannedAt ? ' (last: ' + esc(fmtDate(d.scannedAt.slice(0, 10))) + ' ' + esc(new Date(d.scannedAt).toTimeString().slice(0, 5)) + ')' : '') + '.' +
+      '<div class="actions"><button onclick="hold(this,\'Checking Drive…\');scanNow()">Check homework now</button></div></div>';
+  });
+}
+
+// Opens the log form for a session from the list (finds it among the loaded week, else a blank form for it).
+function logFromTodo(sessionId) {
+  var s = TODO.toLog.filter(function (x) { return x.sessionId === sessionId; })[0];
+  var i = WEEK.map(function (w) { return w.sessionId; }).indexOf(sessionId);
+  if (i < 0) { WEEK.push({ sessionId: s.sessionId, group: s.group, day: s.day, eventId: s.eventId }); i = WEEK.length - 1; }
+  var go = function () { sessionForm(i); };
+  if (sessData) go(); else call('sessionForm', {}, function (d) { sessData = d; go(); }, { part: true });
+}
+
+function scanNow() {
+  call('scanHomework', {}, function (r) { showTodo(); notice(r.report.split('\n').slice(0, 3).join(' · ')); });
+}
+
+function assignUpload(i) {
+  var u = TODO.uploads[i], id = document.getElementById('up' + i).value;
+  if (!id) return notice('Pick the student first.');
+  call('assignUpload', { id: id, owner: u.owner }, function () { showTodo(); notice(u.owner + ' saved; homework re-checked.'); });
 }
 </script>
 
