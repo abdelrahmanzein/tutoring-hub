@@ -815,7 +815,7 @@ function newStudentForm(join) {
     var groupOpts = [['', 'Pick a group']].concat(f.groups.map(function (g) { return [g.group, g.group]; }));
     document.getElementById('main').innerHTML = '<button class="back" onclick="showStudents()">‹ Cancel</button><h2>New student</h2>' +
       (join ? '<div class="card sub">From ' + esc(join.answers.parentName) + '\'s joining form (' + esc(fmtDate(join.filledAt)) + '). Check everything, set the payment type and rate, then add.</div>' :
-      '<div class="card"><b>Send the parent a joining form</b><div class="sub">They fill in names (English and Arabic), school, country, phone numbers and the Google account. You set these:</div>' +
+      '<div class="card"><b>Send the parent a joining form</b><div class="sub">They fill in names (English and Arabic), school, country and phone numbers (<a href="' + JOIN_PREVIEW + '" target="_blank">see what they see</a>). The payment type follows the country; the Google account is learnt from Meet. You set these:</div>' +
         field('jg', 'Group', sel('jg', '', groupOpts)) +
         field('js', 'In the group since (first session, e.g. the trial)', '<input id="js" type="date" value="' + today() + '">') +
         field('jt', 'Trial session to charge (optional)', '<input id="jt" type="date">') +
@@ -849,7 +849,7 @@ function newStudentForm(join) {
       var a = join.answers, put = function (id, v) { var el = document.getElementById(id); if (el && v) el.value = v; };
       put('nf', a.first); put('nl', a.last); put('naf', a.arabicFirst); put('nal', a.arabicLast); put('ng', a.gender); put('nsch', a.school);
       put('nc', a.country); put('nsw', a.studentWhatsApp); put('nlang', a.language); put('ngr', join.group); put('nsince', join.since);
-      put('ntrial', join.trialDate); put('npn', a.parentName); put('npr', a.parentRelation); put('npw', a.parentWhatsApp); put('nup', a.studentEmail);
+      put('ntrial', join.trialDate); put('npn', a.parentName); put('npr', a.parentRelation); put('npw', a.parentWhatsApp);
       put('nnotes', a.city ? 'City: ' + a.city : '');
       JOIN_KEY = join.key;
       setRate();
@@ -858,6 +858,7 @@ function newStudentForm(join) {
 }
 
 var JOIN_KEY = '', JOINS = [];
+var JOIN_PREVIEW = 'https://script.google.com/macros/s/AKfycbyCLTCfTmk_UHXW6_aSQ28cSyYRWWiUpFdx4Tsa5epjAviwggqbnqIvu89apC2YxQdz/exec?join=preview';
 
 // Creates a joining form and shows the link and the message to send.
 function createJoin() {
@@ -1157,8 +1158,8 @@ function drawMeetBox() {
   box.innerHTML = '<div class="card"><div class="sub">From Meet: first student let in at ' + esc(String(m.firstAdmitted).slice(11)) +
     (m.hasTranscript ? ' · participation suggested from the transcript' : ' · no transcript, so pick participation yourself') + '. Change anything below.</div>' +
     m.unknown.map(function (u, k) {
-      return '<div class="item" style="margin-top:8px"><div><b>Who is this?</b> ' + esc(u.name) + '</div></div><div class="filters" style="margin:6px 0 0">' +
-        sel('wk' + k, '', [['', 'Pick the student']].concat(sessData.people.map(function (p) { return [p.id, p.name]; }))) +
+      return '<div class="item" style="margin-top:8px"><div><b>Who is this?</b> ' + esc(u.name) + (u.suggest ? '<div class="sub">Probably ' + esc(u.suggestName) + ' (the only one without a Meet account yet)</div>' : '') + '</div></div><div class="filters" style="margin:6px 0 0">' +
+        sel('wk' + k, u.suggest || '', [['', 'Pick the student']].concat(sessData.people.map(function (p) { return [p.id, p.name]; }))) +
         '<button onclick="hold(this);assignWho(' + k + ')">Save</button></div>';
     }).join('') + '</div>';
 }
