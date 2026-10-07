@@ -153,6 +153,15 @@
   .tbl td { padding:6px; border-bottom:1px solid var(--line); white-space:nowrap; }
   .tbl tr:last-child td { border-bottom:0; }
 
+  /* Roster chips, recent students, profile header, collapsible sections */
+  .chips, .recent { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; align-items:center; }
+  .chip { border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:999px; padding:5px 12px; font-size:14px; }
+  .chip.on { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  .profile-head { margin:8px 0 4px; }
+  .pname { font-size:21px; font-weight:700; }
+  .parabic { font-size:17px; color:var(--muted); margin:2px 0 4px; }
+  details.card summary { cursor:pointer; color:var(--accent); font-weight:600; }
+
   /* Grey placeholders shown for the split second before a screen's data arrives */
   .skeleton { height:58px; border-radius:12px; margin-bottom:10px; background:linear-gradient(90deg, var(--line) 25%, var(--card) 50%, var(--line) 75%); background-size:200% 100%; animation:shimmer 1.2s infinite; }
   @keyframes shimmer { from { background-position:200% 0 } to { background-position:-200% 0 } }
@@ -181,8 +190,8 @@
   <nav id="nav"></nav>
   <script>
 // Page logic. Every screen loads live data when it opens and shows when it was fetched.
-var TOKEN = '', TABS = ['Today', 'To do', 'Students', 'Groups', 'Money', 'Settings'];
-var ICONS = { 'Today': '📅', 'To do': '✅', 'Students': '👥', 'Groups': '🧑‍🏫', 'Money': '💰', 'Settings': '⚙️' };
+var TOKEN = '', TABS = ['Today', 'To do', 'Students', 'Groups', 'Income', 'Settings'];
+var ICONS = { 'Today': '📅', 'To do': '✅', 'Students': '👥', 'Groups': '🧑‍🏫', 'Income': '📈', 'Settings': '⚙️' };
 var current = 'Students', fetchedAt = null, listCache = null, refreshView = null;
 
 // Starts the app: builds the tab bar and opens Students.
@@ -208,7 +217,7 @@ function open(tab) {
   TABS.forEach(function (t) { document.getElementById('tab-' + t).className = t === tab ? 'on' : ''; });
   document.getElementById('title').textContent = tab;
   if (tab === 'Students') return showStudents();
-  if (tab === 'Money') return showMoney();
+  if (tab === 'Income') return showIncome();
   if (tab === 'Today') return showToday();
   refreshView = null; fetchedAt = null; showAge();
   document.getElementById('main').innerHTML = '<div class="soon">' + tab + ' comes in a later stage.</div>';
@@ -220,7 +229,7 @@ function open(tab) {
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0;
 var WRITES = ['logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
-var NO_CACHE = WRITES.concat(['previewPayment', 'rate', 'prefetch']);
+var NO_CACHE = WRITES.concat(['previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
 function newView() { VIEW++; return VIEW; }
@@ -271,11 +280,13 @@ function prefetch() {
   google.script.run.withSuccessHandler(function (res) {
     busy(-1);
     var d = res.data;
-    CACHE['students|{}'] = { data: d.students };
     CACHE['money|{}'] = { data: d.money };
     CACHE['sessionForm|{}'] = { data: d.sessionForm };
-    Object.keys(d.details).forEach(function (id) { CACHE['student|' + JSON.stringify({ id: id })] = { data: d.details[id] }; });
-    Object.keys(d.moneyStudents).forEach(function (id) { CACHE['moneyStudent|' + JSON.stringify({ id: id })] = { data: d.moneyStudents[id] }; });
+    Object.keys(d.profiles).forEach(function (id) {
+      CACHE['profile|' + JSON.stringify({ id: id })] = { data: d.profiles[id] };
+      CACHE['student|' + JSON.stringify({ id: id })] = { data: d.profiles[id].detail };
+      CACHE['moneyStudent|' + JSON.stringify({ id: id })] = { data: d.profiles[id].money };
+    });
   }).withFailureHandler(function () { busy(-1); }).api(TOKEN, 'prefetch', {});
 }
 
@@ -324,77 +335,6 @@ function sheet(title, html) {
 // Escapes text before it goes into the page.
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; });
-}
-
-// ---------- Students ----------
-function showStudents() {
-  newView();
-  refreshView = showStudents;
-  document.getElementById('title').textContent = 'Students';
-  call('students', {}, function (data) { listCache = data; drawList(); });
-}
-
-// Search box, group filter and the list.
-function drawList() {
-  var d = listCache, main = document.getElementById('main');
-  main.innerHTML = '<input id="q" placeholder="Search name (English or Arabic)">' +
-    '<div class="filters"><select id="g"><option value="">All groups</option>' +
-    d.groups.map(function (g) { return '<option>' + esc(g) + '</option>'; }).join('') +
-    '</select><select id="s"><option value="">Any status</option><option>Active</option><option>Alumni</option><option>Left</option><option>Trial</option></select></div>' +
-    '<div id="list"></div>';
-  ['q', 'g', 's'].forEach(function (id) { document.getElementById(id).oninput = fillList; });
-  fillList();
-}
-
-// Draws the rows that match the search and filters.
-function fillList() {
-  var q = document.getElementById('q').value.toLowerCase(), g = document.getElementById('g').value, s = document.getElementById('s').value;
-  var rows = listCache.students.filter(function (x) {
-    return (!q || (x.name + ' ' + x.arabic).toLowerCase().indexOf(q) >= 0) && (!g || x.group === g) && (!s || x.status === s);
-  });
-  document.getElementById('list').innerHTML = rows.map(function (x) {
-    return '<div class="card item" onclick="showStudent(\'' + esc(x.id) + '\')"><div><div>' + esc(x.name) + '</div>' +
-      '<div class="sub">' + esc(x.group || 'No group') + ' · ' + esc(x.paymentType) + '</div></div>' +
-      '<div class="right"><span class="tag' + (x.status === 'Active' ? ' good' : ' warn') + '">' + esc(x.status) + '</span></div><span class="chev">›</span></div>';
-  }).join('') || '<div class="soon">No students match.</div>';
-}
-
-// One student's page.
-function showStudent(id) {
-  newView();
-  currentId = id;
-  refreshView = function () { showStudent(id); };
-  call('student', { id: id }, function (d) {
-    var i = d.info, main = document.getElementById('main');
-    var rows = [
-      ['Group', (d.memberships.filter(function (m) { return !m['Until']; }).map(function (m) { return m['Group'] + (m['Since'] ? ' (since ' + fmtDate(m['Since']) + ')' : ''); })).join(', ') || '-'],
-      ['Course', i['Course'] + ' ' + i['Level'] + ' · batch ' + i['Batch']],
-      ['School', i['School'] || '-'], ['Country', i['Country']],
-      ['Rate', i['Rate'] + ' ' + i['Currency'] + ' (locked)'], ['Payment', i['Payment type']],
-      ['Billing contact', i['Billing contact']],
-      ['Parent', (i['Parent name'] || '-') + (i['Parent relation'] ? ' (' + i['Parent relation'] + ')' : '')],
-      ['Parent WhatsApp', wa(i['Parent WhatsApp'])], ['Student WhatsApp', wa(i['Student WhatsApp'])],
-      ['Language', i['Message language']], ['Notes', i['Notes'] || '-']
-    ];
-    main.innerHTML = '<button class="back" onclick="showStudents()">‹ Students</button><div class="actions"><button class="primary" onclick="editStudent(\'' + esc(id) + '\')">Edit student</button></div>' +
-      '<h2 style="margin-top:12px">' + esc(i['First name'] + ' ' + i['Last name']) + ' · ' + esc(i['Arabic first name'] + ' ' + i['Arabic last name']) + '</h2>' +
-      '<div class="card"><dl>' + rows.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + (r[0].indexOf('WhatsApp') >= 0 ? r[1] : esc(r[1])) + '</dd>'; }).join('') + '</dl></div>' +
-      '<h2>Accounts (Meet names, IDs, uploads)</h2><div class="card">' +
-      (d.accounts.map(function (a) {
-        return '<div class="item"><div>' + esc(a['Value']) + '<div class="sub">' + esc(a['Type']) + (a['Whose'] ? ' · ' + esc(a['Whose']) : '') + '</div></div>' +
-          (a['Confirmed'] === true ? '' : '<span class="tag warn">not confirmed</span>') + '</div>';
-      }).join('<hr style="border:0;border-top:1px solid var(--line)">') || 'None yet') + '</div>' +
-      '<div class="filters"><select id="at"><option>Upload account</option><option>Meet name</option><option>Meet ID</option><option>Log Sheet name</option><option>Old name</option></select>' +
-      '<input id="av" placeholder="New value"><button onclick="hold(this,\'Adding…\');addAcc(\'' + esc(id) + '\')">Add</button></div>' +
-      '<div class="sub" style="color:var(--muted);font-size:13px;margin:4px 0">' +
-      '<b>Upload account</b>: the Google email that uploads this student\'s homework to Drive (used to know who submitted). ' +
-      '<b>Meet name</b>: the name shown when they join Google Meet (used for attendance). ' +
-      '<b>Meet ID</b>: Google\'s permanent ID of the joining account (most reliable for attendance). ' +
-      '<b>Log Sheet name</b>: exactly how this student is spelled in the old Log Sheet (used to import the money history). ' +
-      '<b>Old name</b>: an earlier spelling of the student\'s name in old records.</div>' +
-      '<h2>Changes</h2><div id="hist" class="card">Loading...</div>';
-    call('studentHistory', { id: id }, drawHistory, { part: true });
-  });
 }
 
 // Adds an account to the student, then reloads the page.
@@ -508,55 +448,22 @@ function testBar(on) {
 // "900 EGP" style amounts.
 function amt(n, cur) { return Number(n).toLocaleString('en-GB', { maximumFractionDigits: 2 }) + ' ' + cur; }
 
-// Money home: totals and who owes what.
-function showMoney() {
-  newView();
-  refreshView = showMoney;
-  document.getElementById('title').textContent = 'Money';
-  call('money', {}, function (d) {
-    moneyCache = d;
-    var t = d.totals;
-    var groups = {};
-    d.students.forEach(function (s) { if (s.group) groups[s.group] = 1; });
-    document.getElementById('main').innerHTML = testBar(d.testMode) + moneySwitch('students') +
-      '<div class="card totals"><div></div><div><span class="cur EGP">EGP</span></div><div><span class="cur USD">USD</span></div>' +
-      '<div class="sub">Owed to you</div><div class="neg">' + amt(t.EGP.owed, '') + '</div><div class="neg">' + amt(t.USD.owed, '') + '</div>' +
-      '<div class="sub">Held as credit</div><div class="pos">' + amt(t.EGP.credit, '') + '</div><div class="pos">' + amt(t.USD.credit, '') + '</div></div>' +
-      '<input id="mq" placeholder="Search student" value="' + esc(MF.q) + '">' +
-      '<div class="filters">' +
-      sel('mg', MF.g, [['', 'All groups']].concat(Object.keys(groups).sort().map(function (g) { return [g, g]; }))) +
-      sel('mc', MF.c, [['', 'EGP + USD'], ['EGP', 'EGP payers'], ['USD', 'USD payers']]) + '</div><div class="filters">' +
-      sel('ms', MF.s, [['', 'Everyone'], ['owes', 'Owes money'], ['credit', 'Has credit'], ['settled', 'Settled']]) +
-      sel('mo', MF.o, [['owed', 'Sort: most sessions owed'], ['name', 'Sort: name A–Z'], ['oldest', 'Sort: oldest last payment'], ['group', 'Sort: group']]) + '</div>' +
-      '<div id="mlist"></div>';
-    ['mq', 'mg', 'mc', 'ms', 'mo'].forEach(function (id) {
-      document.getElementById(id).oninput = function () { MF[id.slice(1)] = this.value; drawMoneyList(); };
-    });
-    drawMoneyList();
-  });
-}
-
-// "Students | Income" switch at the top of Money.
-function moneySwitch(on) {
-  return '<div class="seg"><button class="' + (on === 'students' ? 'on' : '') + '" onclick="showMoney()">Students</button>' +
-    '<button class="' + (on === 'income' ? 'on' : '') + '" onclick="showIncome()">Income</button></div>';
-}
-
 // Income dashboard: this month's numbers, 12-month bars per currency, per group, and a table of every month.
 function showIncome() {
   newView();
   refreshView = showIncome;
+  document.getElementById('title').textContent = 'Income';
   call('income', {}, function (d) {
     var cur = d.months[d.months.length - 1], egpTotal = d.rate ? Math.round(cur.receivedEGP + cur.receivedUSD * d.rate) : null;
     var tile = function (label, value, sub) { return '<div class="tile"><div class="sub">' + label + '</div><div class="big">' + value + '</div>' + (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>'; };
-    document.getElementById('main').innerHTML = moneySwitch('income') +
+    document.getElementById('main').innerHTML =
       '<h2>' + monthName(cur.month, true) + ' so far</h2><div class="tiles">' +
       tile('Received <span class="cur EGP">EGP</span>', amt(cur.receivedEGP, ''), cur.feesEGP ? 'bank fees ' + amt(cur.feesEGP, '') : '') +
       tile('Received <span class="cur USD">USD</span>', amt(cur.receivedUSD, ''), cur.feesUSD ? 'bank fees ' + amt(cur.feesUSD, '') : 'after any bank fees') +
       tile('Earned (sessions held)', amt(cur.earnedEGP, 'EGP'), amt(cur.earnedUSD, 'USD') + ' · ' + cur.sessions + ' charges') +
       (egpTotal !== null ? tile('All received, in EGP', amt(egpTotal, ''), 'USD at today\'s ' + d.rate) : '') +
       '</div><div class="tiles">' +
-      tile('Outstanding (owed to you)', amt(d.outstanding.EGP.owed, 'EGP'), amt(d.outstanding.USD.owed, 'USD')) +
+      '<div class="tile" style="cursor:pointer" onclick="goRoster({ s: \'owes\' })"><div class="sub">Outstanding (owed to you) ›</div><div class="big">' + amt(d.outstanding.EGP.owed, 'EGP') + '</div><div class="sub">' + amt(d.outstanding.USD.owed, 'USD') + ' · tap to see who</div></div>' +
       tile('Next 4 weeks (estimate)', amt(d.forecast.EGP, 'EGP'), amt(d.forecast.USD, 'USD') + ' · at the last 4 weeks\' pace') +
       '</div>' +
       '<h2>Received per month</h2>' + barChart(d.months, 'receivedEGP', 'EGP') + barChart(d.months, 'receivedUSD', 'USD') +
@@ -600,44 +507,9 @@ function barChart(months, key, cur) {
     }).join('') + '</div></div>';
 }
 
-// Remembered search, filter and sort choices for the Money list (kept while the app is open).
-var MF = { q: '', g: '', c: '', s: '', o: 'owed' };
-
 // A <select> with [value, label] options.
 function sel(id, value, options) {
   return '<select id="' + id + '">' + options.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === value ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>';
-}
-
-// Draws the Money list with the current search, filters and sort.
-function drawMoneyList() {
-  var q = MF.q.toLowerCase();
-  var rows = moneyCache.students.filter(function (s) {
-    var owes = Object.keys(s.money).some(function (c) { return s.money[c].owed; });
-    var credit = Object.keys(s.money).some(function (c) { return s.money[c].credit; });
-    var state = owes ? 'owes' : credit ? 'credit' : 'settled';
-    return (!q || s.name.toLowerCase().indexOf(q) >= 0) && (!MF.g || s.group === MF.g) && (!MF.c || s.currency === MF.c) && (!MF.s || state === MF.s);
-  });
-  var lastOf = function (s) {
-    return Object.keys(s.money).map(function (c) { return s.money[c].lastPayment; }).filter(Boolean)
-      .sort(function (a, b) { return String(b.date).localeCompare(a.date); })[0];
-  };
-  rows.sort(function (a, b) {
-    if (MF.o === 'name') return a.name.localeCompare(b.name);
-    if (MF.o === 'group') return String(a.group).localeCompare(String(b.group)) || a.name.localeCompare(b.name);
-    if (MF.o === 'oldest') return String((lastOf(a) || {}).date || '').localeCompare(String((lastOf(b) || {}).date || ''));
-    return owedScore(b) - owedScore(a) || a.name.localeCompare(b.name);
-  });
-  document.getElementById('mlist').innerHTML = '<div class="sub" style="margin:0 0 6px">' + rows.length + ' student' + (rows.length === 1 ? '' : 's') + '</div>' + rows.map(function (s) {
-    var lines = Object.keys(s.money).map(function (c) {
-      var m = s.money[c];
-      if (m.owed) return '<span class="tag owe">owes ' + amt(m.owed, c) + ' · ' + m.sessionsOwed + ' session' + (m.sessionsOwed === 1 ? '' : 's') + '</span>';
-      if (m.credit) return '<span class="tag good">credit ' + amt(m.credit, c) + '</span>';
-      return '';
-    }).join(' ');
-    var last = lastOf(s);
-    return '<div class="card item cur-' + esc(s.currency) + '" onclick="showMoneyStudent(\'' + esc(s.id) + '\')"><div><div><span class="cur ' + esc(s.currency) + '">' + esc(s.currency) + '</span> ' + esc(s.name) + '</div>' +
-      '<div class="sub">' + esc(s.group || '') + (last ? ' · last paid ' + fmtDate(last.date) : ' · no payments yet') + '</div></div><div class="right">' + (lines || '<span class="tag">settled</span>') + '</div><span class="chev">›</span></div>';
-  }).join('') || '<div class="soon">No students match.</div>';
 }
 
 // Sort key: bigger debt first (EGP and USD roughly comparable by sessions owed).
@@ -645,29 +517,8 @@ function owedScore(s) {
   return Object.keys(s.money).reduce(function (n, c) { return n + s.money[c].sessionsOwed; }, 0);
 }
 
-// One student's money page.
-function showMoneyStudent(id) {
-  newView();
-  refreshView = function () { showMoneyStudent(id); };
-  call('moneyStudent', { id: id }, function (d) {
-    var st = d.student;
-    lastMoneyStudent = d;
-    var pos = Object.keys(d.positions).map(function (c) {
-      var p = d.positions[c];
-      return '<div class="card"><b>' + c + '</b><dl><dt>Balance</dt><dd>' + amt(p.balance, c) + '</dd><dt>Owed</dt><dd>' + amt(p.owed, c) + '</dd><dt>Credit</dt><dd>' + amt(p.credit, c) + '</dd></dl>' +
-        (p.unpaid.length ? '<div class="link-row" onclick="showUnpaid(\'' + c + '\')"><span>' + p.unpaid.length + ' unpaid session' + (p.unpaid.length > 1 ? 's' : '') + '</span><span>›</span></div>' : '') + '</div>';
-    }).join('') || '<div class="card">No money entries yet.</div>';
-    document.getElementById('main').innerHTML = testBar(d.testMode) + '<button class="back" onclick="showMoney()">‹ Money</button>' +
-      '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="adjustForm(\'' + esc(id) + '\')">Waive / correct / refund</button></div>' +
-      '<h2 style="margin-top:12px"><span class="cur ' + esc(st.currency) + '">' + esc(st.currency) + '</span> ' + esc(st.name) + ' · ' + esc(st.paymentType) + '</h2>' + pos +
-      '<h2>Ledger</h2><div class="card">' + d.entries.map(function (e) {
-        var gone = !!e['Deleted'];
-        return '<div class="item" style="' + (gone ? 'opacity:.5;text-decoration:line-through' : '') + '"><div>' + esc(fmtDate(e['Date'])) + ' · ' + esc(e['Type']) + '<div class="sub">' + esc(e['Description']) + (e['Reference'] ? ' · ' + esc(e['Reference']) : '') + (e['Rate used'] ? ' · ' + esc(e['EGP equivalent']) + ' EGP at ' + esc(e['Rate used']) : '') + (Number(e['Bank fee']) ? ' · arrived ' + esc(e['Amount received']) + ', fee ' + esc(e['Bank fee']) : '') + '</div></div>' +
-          '<div style="text-align:right"><div class="' + (e['Amount'] < 0 ? 'neg' : 'pos') + '">' + amt(e['Amount'], e['Currency']) + '</div><button class="small" onclick="toggleEntry(\'' + esc(e['Entry ID']) + '\',' + (gone ? 'false' : 'true') + ',\'' + esc(id) + '\')">' + (gone ? 'Restore' : 'Delete') + '</button></div></div>' +
-          '<hr style="border:0;border-top:1px solid var(--line)">';
-      }).slice(0, 60).join('') + '</div>';
-  });
-}
+// Old entry points now open the merged profile.
+function showMoneyStudent(id) { showProfile(id); }
 
 // Delete or restore an entry, with an in-page confirmation (second tap).
 var pendingToggle = '';
@@ -787,6 +638,179 @@ function adjustForm(id) {
 function saveAdjust(id) {
   call('addAdjustment', { id: id, type: document.getElementById('at2').value, amount: document.getElementById('aa').value, currency: document.getElementById('ac').value,
     date: document.getElementById('ad').value, reason: document.getElementById('ar').value }, function (r) { showMoneyStudent(id); notice('Saved (' + r.saved + ').'); });
+}
+</script>
+
+  <script>
+// ---------- Students: one roster for everyone, one profile per student ----------
+var RF = { q: '', g: '', money: '', cur: '', o: 'owed' };     // roster search, filters and sort (remembered on this device)
+try { var savedRF = JSON.parse(localStorage.getItem('th_roster') || 'null'); if (savedRF) RF = savedRF; } catch (e) { /* ignore */ }
+var rosterData = null;
+
+// Keeps the roster choices for next time.
+function saveRF() { try { localStorage.setItem('th_roster', JSON.stringify(RF)); } catch (e) { /* ignore */ } }
+
+// Recently opened students (newest first, up to 5).
+function recentIds() { try { return JSON.parse(localStorage.getItem('th_recent') || '[]'); } catch (e) { return []; } }
+function rememberRecent(id) {
+  var list = recentIds().filter(function (x) { return x !== id; });
+  list.unshift(id);
+  try { localStorage.setItem('th_recent', JSON.stringify(list.slice(0, 5))); } catch (e) { /* ignore */ }
+}
+
+// Opens the roster with some filters set (e.g. from Income: who owes).
+function goRoster(filters) {
+  RF.q = ''; RF.g = ''; RF.money = filters.s === 'owes' ? 'owes' : (filters.s || ''); RF.cur = filters.c || '';
+  saveRF();
+  open('Students');
+}
+
+// The roster screen.
+function showStudents() {
+  newView();
+  refreshView = showStudents;
+  document.getElementById('title').textContent = 'Students';
+  call('money', {}, function (d) {
+    rosterData = d;
+    var groups = {};
+    d.students.forEach(function (s) { if (s.group) groups[s.group] = 1; });
+    var chip = function (key, value, label) {
+      return '<button class="chip' + (RF[key] === value ? ' on' : '') + '" onclick="toggleChip(\'' + key + '\',\'' + value + '\')">' + label + '</button>';
+    };
+    var byId = {};
+    d.students.forEach(function (s) { byId[s.id] = s; });
+    var recent = recentIds().filter(function (id) { return byId[id]; });
+    document.getElementById('main').innerHTML = testBar(d.testMode) +
+      '<input id="rq" placeholder="Search name (English or Arabic)" value="' + esc(RF.q) + '">' +
+      '<div class="chips">' + chip('money', 'owes', 'Owes money') + chip('money', 'credit', 'Has credit') +
+      chip('cur', 'EGP', '<span class="cur EGP">EGP</span>') + chip('cur', 'USD', '<span class="cur USD">USD</span>') + '</div>' +
+      '<div class="filters">' + sel('rg', RF.g, [['', 'All groups']].concat(Object.keys(groups).sort().map(function (g) { return [g, g]; }))) +
+      sel('ro', RF.o, [['owed', 'Most sessions owed'], ['name', 'Name A–Z'], ['oldest', 'Oldest last payment'], ['group', 'Group']]) + '</div>' +
+      (recent.length ? '<div class="recent"><span class="sub">Recent:</span> ' + recent.map(function (id) {
+        return '<button class="chip" onclick="showProfile(\'' + esc(id) + '\')">' + esc(byId[id].name.split(' ')[0] + ' ' + (byId[id].name.split(' ')[1] || '').slice(0, 1)) + '</button>';
+      }).join('') + '</div>' : '') +
+      '<div id="rlist"></div>';
+    document.getElementById('rq').oninput = function () { RF.q = this.value; saveRF(); drawRoster(); };
+    document.getElementById('rg').onchange = function () { RF.g = this.value; saveRF(); drawRoster(); };
+    document.getElementById('ro').onchange = function () { RF.o = this.value; saveRF(); drawRoster(); };
+    drawRoster();
+  });
+}
+
+// Turns a filter chip on or off (chips in the same row exclude each other).
+function toggleChip(key, value) {
+  RF[key] = RF[key] === value ? '' : value;
+  saveRF();
+  showStudents();
+}
+
+// The money state of a roster row: 'owes', 'credit' or 'settled'.
+function moneyState(s) {
+  var ks = Object.keys(s.money);
+  if (ks.some(function (c) { return s.money[c].owed; })) return 'owes';
+  if (ks.some(function (c) { return s.money[c].credit; })) return 'credit';
+  return 'settled';
+}
+
+// The newest payment of a roster row, if any.
+function lastPaid(s) {
+  return Object.keys(s.money).map(function (c) { return s.money[c].lastPayment; }).filter(Boolean)
+    .sort(function (a, b) { return String(b.date).localeCompare(a.date); })[0];
+}
+
+// Draws the roster cards that match the search, chips and group, in the chosen order.
+function drawRoster() {
+  var q = RF.q.toLowerCase();
+  var rows = rosterData.students.filter(function (s) {
+    return (!q || (s.name + ' ' + (s.arabic || '')).toLowerCase().indexOf(q) >= 0) && (!RF.g || s.group === RF.g) &&
+      (!RF.cur || s.currency === RF.cur) && (!RF.money || moneyState(s) === RF.money);
+  });
+  rows.sort(function (a, b) {
+    if (RF.o === 'name') return a.name.localeCompare(b.name);
+    if (RF.o === 'group') return String(a.group).localeCompare(String(b.group)) || a.name.localeCompare(b.name);
+    if (RF.o === 'oldest') return String((lastPaid(a) || {}).date || '').localeCompare(String((lastPaid(b) || {}).date || ''));
+    return owedScore(b) - owedScore(a) || a.name.localeCompare(b.name);
+  });
+  document.getElementById('rlist').innerHTML = '<div class="sub" style="margin:0 0 6px">' + rows.length + ' student' + (rows.length === 1 ? '' : 's') + '</div>' + rows.map(function (s) {
+    var tags = Object.keys(s.money).map(function (c) {
+      var m = s.money[c];
+      if (m.owed) return '<span class="tag owe">owes ' + amt(m.owed, c) + ' · ' + m.sessionsOwed + ' session' + (m.sessionsOwed === 1 ? '' : 's') + '</span>';
+      if (m.credit) return '<span class="tag good">credit ' + amt(m.credit, c) + '</span>';
+      return '';
+    }).join(' ');
+    var last = lastPaid(s);
+    return '<div class="card item cur-' + esc(s.currency) + '" onclick="showProfile(\'' + esc(s.id) + '\')"><div><div><span class="cur ' + esc(s.currency) + '">' + esc(s.currency) + '</span> ' + esc(s.name) +
+      (s.status !== 'Active' ? ' <span class="tag warn">' + esc(s.status) + '</span>' : '') + '</div>' +
+      '<div class="sub">' + esc(s.group || 'No group') + (last ? ' · last paid ' + fmtDate(last.date) : ' · no payments yet') + '</div></div>' +
+      '<div class="right">' + (tags || '<span class="tag">settled</span>') + '</div><span class="chev">›</span></div>';
+  }).join('') || '<div class="soon">No students match.</div>';
+}
+
+// Old entry point: the student page is now the profile.
+function showStudent(id) { showProfile(id); }
+
+// One student's profile: header with actions, Money, Info, and the change history at the bottom.
+function showProfile(id) {
+  newView();
+  currentId = id;
+  rememberRecent(id);
+  refreshView = function () { showProfile(id); };
+  document.getElementById('title').textContent = 'Students';
+  call('profile', { id: id }, function (p) {
+    var i = p.detail.info, m = p.money, st = m.student;
+    lastMoneyStudent = m;
+    var group = p.detail.memberships.filter(function (x) { return !x['Until']; })
+      .map(function (x) { return x['Group'] + (x['Since'] ? ' (since ' + fmtDate(x['Since']) + ')' : ''); }).join(', ') || 'No group';
+    var money = Object.keys(m.positions).map(function (c) {
+      var ps = m.positions[c];
+      return '<div class="card"><div class="item"><b><span class="cur ' + c + '">' + c + '</span></b>' +
+        (ps.owed ? '<span class="tag owe">owes ' + amt(ps.owed, c) + '</span>' : ps.credit ? '<span class="tag good">credit ' + amt(ps.credit, c) + '</span>' : '<span class="tag">settled</span>') + '</div>' +
+        '<dl style="margin-top:6px"><dt>Balance</dt><dd>' + amt(ps.balance, c) + '</dd></dl>' +
+        (ps.unpaid.length ? '<div class="link-row" onclick="showUnpaid(\'' + c + '\')"><span>' + ps.unpaid.length + ' unpaid session' + (ps.unpaid.length > 1 ? 's' : '') + '</span><span>›</span></div>' : '') + '</div>';
+    }).join('') || '<div class="card sub">No money entries yet.</div>';
+    var entries = m.entries;
+    var info = [
+      ['Course', i['Course'] + ' ' + i['Level'] + ' · batch ' + i['Batch']], ['School', i['School'] || '-'], ['Country', i['Country']],
+      ['Rate', i['Rate'] + ' ' + i['Currency'] + ' (locked)'], ['Payment', i['Payment type']], ['Billing contact', i['Billing contact']],
+      ['Parent', (i['Parent name'] || '-') + (i['Parent relation'] ? ' (' + i['Parent relation'] + ')' : '')],
+      ['Parent WhatsApp', wa(i['Parent WhatsApp'])], ['Student WhatsApp', wa(i['Student WhatsApp'])],
+      ['Language', i['Message language']], ['Status', i['Status'] + (i['Status date'] ? ' since ' + fmtDate(i['Status date']) : '')], ['Notes', i['Notes'] || '-']
+    ];
+    document.getElementById('main').innerHTML = testBar(m.testMode) +
+      '<button class="back" onclick="showStudents()">‹ Students</button>' +
+      '<div class="profile-head"><div class="pname"><span class="cur ' + esc(st.currency) + '">' + esc(st.currency) + '</span> ' + esc(st.name) + '</div>' +
+      '<div class="parabic">' + esc(i['Arabic first name'] + ' ' + i['Arabic last name']) + '</div>' +
+      '<div class="sub">' + esc(group) + ' · ' + esc(st.paymentType) + '</div></div>' +
+      '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button></div>' +
+      '<h2>Money</h2>' + money +
+      '<div class="actions" style="margin-top:0"><button class="small" onclick="adjustForm(\'' + esc(id) + '\')">Waive / correct / refund</button></div>' +
+      '<div class="card" id="ledger">' + ledgerRows(entries.slice(0, 10), id) +
+      (entries.length > 10 ? '<button class="small" style="margin-top:8px" onclick="document.getElementById(\'ledger\').innerHTML = ledgerRows(lastMoneyStudent.entries, \'' + esc(id) + '\')">Show all ' + entries.length + ' entries</button>' : '') + '</div>' +
+      '<h2>Info</h2><div class="card"><dl>' + info.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + (r[0].indexOf('WhatsApp') >= 0 ? r[1] : esc(r[1])) + '</dd>'; }).join('') + '</dl></div>' +
+      '<h2>Accounts</h2><div class="card">' + (p.detail.accounts.map(function (a) {
+        return '<div class="item"><div>' + esc(a['Value']) + '<div class="sub">' + esc(a['Type']) + (a['Whose'] ? ' · ' + esc(a['Whose']) : '') + '</div></div>' +
+          (a['Confirmed'] === true ? '' : '<span class="tag warn">not confirmed</span>') + '</div>';
+      }).join('<hr style="border:0;border-top:1px solid var(--line)">') || 'None yet') + '</div>' +
+      '<div class="filters"><select id="at"><option>Upload account</option><option>Meet name</option><option>Meet ID</option><option>Log Sheet name</option><option>Old name</option></select>' +
+      '<input id="av" placeholder="New value"><button onclick="hold(this,\'Adding…\');addAcc(\'' + esc(id) + '\')">Add</button></div>' +
+      '<details class="card"><summary>What are these accounts?</summary><div class="sub" style="margin-top:6px">' +
+      '<b>Upload account</b>: the Google email that uploads homework (used to know who submitted). <b>Meet name</b>: the name shown in Google Meet. ' +
+      '<b>Meet ID</b>: Google\'s permanent ID of the joining account. <b>Log Sheet name</b>: exact spelling in the old Log Sheet. <b>Old name</b>: an earlier spelling.</div></details>' +
+      '<details class="card" ontoggle="if (this.open) call(\'studentHistory\', { id: \'' + esc(id) + '\' }, drawHistory, { part: true })"><summary>Change history</summary><div id="hist" style="margin-top:6px">Loading…</div></details>';
+  });
+}
+
+// Ledger lines (newest first) with Delete / Restore.
+function ledgerRows(list, id) {
+  return list.map(function (e) {
+    var gone = !!e['Deleted'];
+    return '<div class="item" style="' + (gone ? 'opacity:.5;text-decoration:line-through' : '') + '"><div>' + esc(fmtDate(e['Date'])) + ' · ' + esc(e['Type']) +
+      '<div class="sub">' + esc(e['Description']) + (e['Rate used'] ? ' · ' + esc(e['EGP equivalent']) + ' EGP at ' + esc(e['Rate used']) : '') +
+      (Number(e['Bank fee']) ? ' · arrived ' + esc(e['Amount received']) + ', fee ' + esc(e['Bank fee']) : '') + '</div></div>' +
+      '<div style="text-align:right"><div class="' + (e['Amount'] < 0 ? 'neg' : 'pos') + '">' + amt(e['Amount'], e['Currency']) + '</div>' +
+      '<button class="small" onclick="toggleEntry(\'' + esc(e['Entry ID']) + '\',' + (gone ? 'false' : 'true') + ',\'' + esc(id) + '\')">' + (gone ? 'Restore' : 'Delete') + '</button></div></div>' +
+      '<hr style="border:0;border-top:1px solid var(--line)">';
+  }).join('');
 }
 </script>
 
