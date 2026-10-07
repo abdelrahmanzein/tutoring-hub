@@ -302,13 +302,15 @@ function prefetch(fresh) {
     var at = Date.now();
     CACHE['money|{}'] = { data: d.money, at: at };
     CACHE['sessionForm|{}'] = { data: d.sessionForm, at: at };
+    CACHE['week|{}'] = { data: d.week, at: at };
+    CACHE['newStudentForm|{}'] = { data: d.newStudentForm, at: at };
     Object.keys(d.profiles).forEach(function (id) {
       CACHE['profile|' + JSON.stringify({ id: id })] = { data: d.profiles[id], at: 0 };     // profiles still fetch the full ledger once
       CACHE['student|' + JSON.stringify({ id: id })] = { data: d.profiles[id].detail, at: at };
       CACHE['moneyStudent|' + JSON.stringify({ id: id })] = { data: d.profiles[id].money, at: at };
     });
     // Then warm Income and the week's sessions (with live homework) too, quietly.
-    ['income', 'week'].forEach(function (a) {
+    ['income', 'weekLive'].forEach(function (a) {
       google.script.run.withSuccessHandler(function (r) { CACHE[a + '|{}'] = { data: r.data, at: Date.now() }; })
         .withFailureHandler(function () {}).api(TOKEN, a, fresh ? { fresh: true } : {});
     });
@@ -933,16 +935,25 @@ function showToday() {
   refreshView = showToday;
   document.getElementById('title').textContent = 'Sessions';
   call('week', {}, function (week) {
+    // Homework, past papers and reminders arrive a moment later (they read Drive) and are merged into the cards.
+    call('weekLive', {}, function (live) {
+      WEEK.forEach(function (s) { var x = live[s.sessionId]; if (x) { s.homework = x.homework; s.pastPapers = x.pastPapers; s.reminder = x.reminder; s.students = x.students; } });
+      redrawSessionCards();
+    }, { part: true });
     call('sessionForm', {}, function (d) {
       sessData = d;
       var byDay = {};
       week.forEach(function (s) { (byDay[s.day] = byDay[s.day] || []).push(s); });
       var days = Object.keys(byDay).sort();
-      WEEK = week;
-      var legend = '<div class="sub" style="margin:2px 0 6px">Homework: ✅ on time · ⏰ late · ❌ missing · ⏳ not yet. Past papers: ✅ added something since last session · ❌ nothing new. Tap a name to open the student.</div>';
+      // Keep anything already merged from the live part, then show the cards.
+      var prev = {};
+      WEEK.forEach(function (s) { prev[s.sessionId] = s; });
+      WEEK = week.map(function (s) { var p = prev[s.sessionId]; return p && p.homework !== undefined && !s.reminder ? Object.assign({}, s, { homework: p.homework, pastPapers: p.pastPapers, reminder: p.reminder, students: p.students }) : s; });
+      week = WEEK;
+      var legend = '<div class="sub" style="margin:2px 0 6px">Homework: ✅ on time · ⏰ late · ❌ missing · ⏳ not yet. Past papers: ❓ number of questions not answered yet. Tap a name to open the student.</div>';
       document.getElementById('main').innerHTML = legend +
         (days.length ? days.map(function (day) {
-          return '<h2>' + dayLabel(day) + '</h2>' + byDay[day].map(function (s) { return sessionCard(s); }).join('');
+          return '<h2>' + dayLabel(day) + '</h2><div class="day-cards" data-day="' + day + '">' + byDay[day].map(function (s) { return sessionCard(s); }).join('') + '</div>';
         }).join('') : '<div class="card sub">No sessions in the Tutoring calendar for the next 7 days.</div>') +
         (d.source === 'App'
           ? '<div class="actions"><button class="primary" onclick="sessionForm()">＋ Log a session</button></div>'
@@ -961,17 +972,24 @@ function sessionCard(s) {
     '<span class="tag ' + STATUS_TAG[s.status] + '">' + esc(s.status) + '</span></div>' +
     '<div class="sub">' + esc(s.start) + '–' + esc(s.end) + ' (Cairo)</div>' +
     (s.homework ? '<div class="sub">Homework: ' + esc(s.homework.title) + ' · due ' + esc(dueLabel(s.homework.due)) + '</div>' : '') +
-    (s.pastPapers ? '<div class="sub">Past papers (' + s.pastPapers.total + ' in the sheet) · <a href="' + esc(s.pastPapers.link) + '" target="_blank">open follow-up sheet</a></div>' : '') +
+    (s.pastPapers ? '<div class="sub">Past papers · <a href="' + esc(s.pastPapers.link) + '" target="_blank">open follow-up sheet</a></div>' : '') +
     (s.note ? '<div class="note">📌 Note from ' + esc(fmtDate(s.note.from)) + ': ' + esc(s.note.text) + '</div>' : '') +
     '<div class="chips">' + (s.students.map(function (p) {
       return '<button class="chip hw-' + (HW_CLASS[p.hw] || 'none') + '" title="' + esc(p.detail || p.hw || '') + '" onclick="showProfile(\'' + esc(p.id) + '\')">' +
         (HW_ICON[p.hw] ? HW_ICON[p.hw] + ' ' : '') + esc(p.name) + (p.detail ? ' <span class="sub">' + esc(p.detail) + '</span>' : '') + '</button>';
     }).join('') || '<span class="sub">No students</span>') + '</div>' +
     '<div class="actions">' +
-    (s.reminder ? '<button onclick="sendReminder(' + i + ')">💬 Send reminder</button>' : '') +
+    (s.reminder ? '<button onclick="sendReminder(' + i + ')">💬 Send reminder</button>' : s.upcoming ? '<button disabled>💬 Preparing reminder…</button>' : '') +
     (s.status === 'Logged' || s.status === 'Did not happen' ? '' :
-      '<button class="primary"' + (s.canLog ? '' : ' disabled title="Available once the session starts"') + ' onclick="sessionForm(' + i + ')">' + (s.canLog ? 'Log session' : 'Log session (after it starts)') + '</button>') +
+      '<button class="primary"' + (s.canLog ? '' : ' disabled') + ' onclick="sessionForm(' + i + ')">Log session</button>') +
     '</div></div>';
+}
+
+// Redraws just the session cards (after the live homework/past-papers part arrives).
+function redrawSessionCards() {
+  document.querySelectorAll('.day-cards').forEach(function (box) {
+    box.innerHTML = WEEK.filter(function (s) { return s.day === box.getAttribute('data-day'); }).map(sessionCard).join('');
+  });
 }
 
 // Opens WhatsApp with the reminder ready; you pick the group chat.
@@ -989,8 +1007,8 @@ function dueLabel(v) {
 }
 
 // Homework status on a student chip (live from Drive when the screen opens).
-var HW_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Not yet': '⏳', 'Added': '✅', 'Nothing new': '❌' };
-var HW_CLASS = { 'On time': 'ok', 'Late': 'late', 'Missing': 'miss', 'Not yet': 'wait', 'Added': 'ok', 'Nothing new': 'miss' };
+var HW_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Not yet': '⏳', 'Open questions': '❓', 'No open questions': '✅' };
+var HW_CLASS = { 'On time': 'ok', 'Late': 'late', 'Missing': 'miss', 'Not yet': 'wait', 'Open questions': 'late', 'No open questions': 'ok' };
 
 // Colour of each session status label.
 var STATUS_TAG = { 'Upcoming': '', 'In progress': 'warn', 'Needs review': 'owe', 'Logged': 'good', 'Did not happen': '' };
