@@ -894,10 +894,18 @@ var google = { script: { get run() {
     withSuccessHandler: function (f) { ok = f; return o; },
     withFailureHandler: function (f) { fail = f; return o; },
     api: function (token, action, args) {
-      fetch(EXEC_URL, { method: 'POST', credentials: 'omit', redirect: 'follow', body: JSON.stringify({ token: token, action: action, args: args }) })
-        .then(function (r) { return r.json(); })
-        .then(function (j) { if (j.ok) { ok(j.res); if (action === 'prefetch') saveCache(); } else fail(new Error(j.error)); })
-        .catch(function (e) { fail(new Error('No connection to the app (' + e.message + '). Check the internet and tap Refresh.')); });
+      // Google sometimes answers with an error page (cold start); one quiet retry fixes almost all of them.
+      // Saves are retried too: the server re-checks the balance first, so a retried payment can't be saved twice.
+      var attempt = function (n) {
+        fetch(EXEC_URL, { method: 'POST', credentials: 'omit', redirect: 'follow', body: JSON.stringify({ token: token, action: action, args: args }) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) { if (j.ok) { ok(j.res); if (action === 'prefetch') saveCache(); } else fail(new Error(j.error)); })
+          .catch(function (e) {
+            if (n < 2) return setTimeout(function () { attempt(n + 1); }, 1500);
+            fail(new Error('No connection to the app (' + e.message + '). Check the internet and tap Refresh.'));
+          });
+      };
+      attempt(1);
     }
   };
   return o;
