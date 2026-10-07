@@ -168,6 +168,11 @@
   /* A secondary action that still reads clearly as a button */
   button.secondary { width:100%; padding:11px; border:1px solid var(--accent); color:var(--accent); background:var(--card); font-weight:600; }
 
+  /* Today: session title and homework-coloured student chips */
+  .sess-title { font-size:17px; font-weight:700; }
+  .chip.hw-ok { border-color:var(--good); } .chip.hw-late { border-color:#d97706; } .chip.hw-miss { border-color:var(--bad); background:var(--bad-soft); }
+  .chip.hw-wait { border-style:dashed; }
+
   /* Grey placeholders shown for the split second before a screen's data arrives */
   .skeleton { height:58px; border-radius:12px; margin-bottom:10px; background:linear-gradient(90deg, var(--line) 25%, var(--card) 50%, var(--line) 75%); background-size:200% 100%; animation:shimmer 1.2s infinite; }
   @keyframes shimmer { from { background-position:200% 0 } to { background-position:-200% 0 } }
@@ -875,12 +880,17 @@ function showToday() {
       var byDay = {};
       week.forEach(function (s) { (byDay[s.day] = byDay[s.day] || []).push(s); });
       var days = Object.keys(byDay).sort();
-      document.getElementById('main').innerHTML =
+      var legend = '<div class="sub" style="margin:2px 0 6px">Homework: ✅ on time · ⏰ late · ❌ missing · ⏳ not yet (due 11:59 PM the night before). Tap a name to open the student.</div>';
+      document.getElementById('main').innerHTML = legend +
         (days.length ? days.map(function (day) {
           return '<h2>' + dayLabel(day) + '</h2>' + byDay[day].map(function (s) {
-            return '<div class="card item"><div><div><b>' + esc(s.start) + '</b>–' + esc(s.end) + ' · ' + esc(s.group) + '</div>' +
-              '<div class="sub">' + esc(s.students.join(', ') || 'No students') + '</div></div>' +
-              '<div class="right"><span class="tag ' + STATUS_TAG[s.status] + '">' + esc(s.status) + '</span></div></div>';
+            return '<div class="card"><div class="item"><div class="sess-title">' + esc(s.group) + '</div>' +
+              '<span class="tag ' + STATUS_TAG[s.status] + '">' + esc(s.status) + '</span></div>' +
+              '<div class="sub">' + esc(s.start) + '–' + esc(s.end) + (s.homework ? ' · homework: ' + esc(s.homework.title) + ', due ' + esc(fmtDate(s.homework.due)) : '') + '</div>' +
+              '<div class="chips">' + (s.students.map(function (p) {
+                return '<button class="chip hw-' + (HW_CLASS[p.hw] || 'none') + '" onclick="showProfile(\'' + esc(p.id) + '\')">' +
+                  (HW_ICON[p.hw] ? HW_ICON[p.hw] + ' ' : '') + esc(p.name) + '</button>';
+              }).join('') || '<span class="sub">No students</span>') + '</div></div>';
           }).join('');
         }).join('') : '<div class="card sub">No sessions in the Tutoring calendar for the next 7 days.</div>') +
         (d.source === 'App'
@@ -890,6 +900,10 @@ function showToday() {
     }, { part: true });
   });
 }
+
+// Homework status on a student chip (live from Drive when the screen opens).
+var HW_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Not yet': '⏳' };
+var HW_CLASS = { 'On time': 'ok', 'Late': 'late', 'Missing': 'miss', 'Not yet': 'wait' };
 
 // Colour of each session status label.
 var STATUS_TAG = { 'Upcoming': '', 'In progress': 'warn', 'Needs review': 'owe', 'Logged': 'good', 'Did not happen': '' };
