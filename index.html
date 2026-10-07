@@ -240,6 +240,11 @@ function openTab(tab) {
   document.getElementById('main').innerHTML = '<div class="soon">' + tab + ' comes in a later stage.</div>';
 }
 
+// Where a student page's Back button goes: the list you came from (Students, a group, Sessions or To do).
+var BACK = { label: 'Students', tab: 'Students', fn: function () { showStudents(); } };
+function setBack(label, tab, fn) { BACK = { label: label, tab: tab, fn: fn }; }
+function goBack() { BACK.fn(); }
+
 // ---------- Talking to the server ----------
 // Screens open instantly from what the page already has (CACHE), then refresh in the background and redraw if
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
@@ -251,41 +256,82 @@ var NO_CACHE = WRITES.concat(['todo', 'joinList', 'meetDraft', 'previewPayment',
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
 function newView() { VIEW++; return VIEW; }
 
-// Shows/hides the thin loading bar at the top.
+// Shows/hides the thin loading bar at the top. Only for things you're waiting for (a screen with nothing to show
+// yet, or a save); quiet background refreshes never show it.
 function busy(delta) {
   INFLIGHT = Math.max(0, INFLIGHT + delta);
   document.body.classList.toggle('loading', INFLIGHT > 0);
+}
+
+// Google's server answers slowly (and sometimes not at all) when it gets many requests at once, so requests go
+// out at most two at a time: what you're waiting for first, background refreshes after.
+var RUNNING = 0, QUEUE = [];
+function send(job, urgent) {
+  if (urgent) QUEUE.unshift(job); else QUEUE.push(job);
+  pump();
+}
+function pump() {
+  while (RUNNING < 2 && QUEUE.length) {
+    var job = QUEUE.shift();
+    RUNNING++;
+    job(function () { RUNNING--; setTimeout(pump, 0); });
+  }
+}
+
+// Saves the data cache on this device (a moment later, so it never slows a screen down).
+var SAVE_T = null;
+function persist() {
+  clearTimeout(SAVE_T);
+  SAVE_T = setTimeout(function () { if (typeof saveCache === 'function') saveCache(); }, 1500);
 }
 
 // Calls the server. opts.form: draw once only (never redraw a form the user is typing in). opts.part: a piece of a screen.
 function call(action, args, done, opts) {
   opts = opts || {};
   var key = action + '|' + JSON.stringify(args || {}), myView = VIEW, cached = CACHE[key];
-  var cacheable = NO_CACHE.indexOf(action) < 0, fresh = Date.now() < FRESH_UNTIL;
+  var cacheable = NO_CACHE.indexOf(action) < 0, fresh = Date.now() < FRESH_UNTIL, isWrite = WRITES.indexOf(action) >= 0;
+  var shown = false;
   if (cacheable && cached) {
-    hideSplash(); done(cached.data);
-    // Data younger than a minute is not asked for again (saves are always checked live on the server anyway).
-    if (!fresh && cached.at && Date.now() - cached.at < 60000) return;
+    hideSplash(); done(cached.data); shown = true;
+    // Data younger than two minutes is not asked for again (saves are always checked live on the server anyway).
+    if (!fresh && cached.at && Date.now() - cached.at < 120000) return;
   }
-  else if (!opts.part && NO_CACHE.indexOf(action) < 0) document.getElementById('main').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+  else if (!opts.part && cacheable) document.getElementById('main').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
   if (fresh && cacheable) args = Object.assign({}, args, { fresh: true });
-  busy(1);
-  google.script.run.withSuccessHandler(function (res) {
-    busy(-1);
-    fetchedAt = new Date(res.fetchedAt); showAge();
-    if (WRITES.indexOf(action) >= 0) { CACHE = {}; prefetch(); }
-    hideSplash();
-    if (!cacheable) return done(res.data);
-    var changed = !cached || JSON.stringify(cached.data) !== JSON.stringify(res.data);
-    CACHE[key] = { data: res.data, at: Date.now() };
-    if (cached && (opts.form || !changed || myView !== VIEW)) return;
-    if (myView === VIEW || opts.part) done(res.data);
-  }).withFailureHandler(function (err) {
-    busy(-1); hideSplash();
-    document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
-    if (WRITES.indexOf(action) >= 0 || NO_CACHE.indexOf(action) >= 0) notice(err.message);
-    else document.getElementById('main').innerHTML = '<div class="error">' + esc(err.message) + '</div>';
-  }).api(TOKEN, action, args);
+  var waiting = !shown;                       // you're looking at a skeleton, a form waiting, or a save
+  send(function (finish) {
+    if (waiting) busy(1);
+    if (shown) setRefreshing(true);
+    google.script.run.withSuccessHandler(function (res) {
+      if (waiting) busy(-1); if (shown) setRefreshing(false); finish();
+      fetchedAt = new Date(res.fetchedAt); showAge(false);
+      if (isWrite) staleAll();
+      hideSplash();
+      if (!cacheable) return done(res.data);
+      var changed = !cached || JSON.stringify(cached.data) !== JSON.stringify(res.data);
+      CACHE[key] = { data: res.data, at: Date.now() }; persist();
+      if (cached && (opts.form || !changed || myView !== VIEW)) return;
+      if (myView === VIEW || opts.part) done(res.data);
+    }).withFailureHandler(function (err) {
+      if (waiting) busy(-1); if (shown) setRefreshing(false); finish(); hideSplash();
+      document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
+      if (shown) return showAge(true);                                  // keep what's on screen; the header says it couldn't refresh
+      if (isWrite || !cacheable || opts.part) notice(err.message);
+      else if (myView === VIEW) document.getElementById('main').innerHTML = '<div class="error">' + esc(err.message) + '</div>';
+    }).api(TOKEN, action, args);
+  }, waiting);
+}
+
+// After a save, every screen's data is marked old (shown at once, refreshed in the background when opened).
+function staleAll() {
+  Object.keys(CACHE).forEach(function (k) { CACHE[k].at = 0; });
+}
+
+// "updating…" in the header while a screen refreshes quietly.
+var REFRESHING = 0;
+function setRefreshing(on) {
+  REFRESHING = Math.max(0, REFRESHING + (on ? 1 : -1));
+  showAge();
 }
 
 // Fades out the opening logo once the first screen has data (or after 8 seconds at most).
@@ -296,28 +342,33 @@ function hideSplash() {
   setTimeout(function () { el.remove(); }, 400);
 }
 
-// Loads every screen's data in one go (in the background) so moving around is instant.
+// Loads every screen's data in one go, in the background, so moving around is instant. Skipped if done in the
+// last 10 minutes (Refresh forces it).
 function prefetch(fresh) {
-  busy(1);
-  google.script.run.withSuccessHandler(function (res) {
-    busy(-1);
-    var d = res.data;
-    var at = Date.now();
-    CACHE['money|{}'] = { data: d.money, at: at };
-    CACHE['sessionForm|{}'] = { data: d.sessionForm, at: at };
-    CACHE['week|{}'] = { data: d.week, at: at };
-    CACHE['newStudentForm|{}'] = { data: d.newStudentForm, at: at };
-    Object.keys(d.profiles).forEach(function (id) {
-      CACHE['profile|' + JSON.stringify({ id: id })] = { data: d.profiles[id], at: 0 };     // profiles still fetch the full ledger once
-      CACHE['student|' + JSON.stringify({ id: id })] = { data: d.profiles[id].detail, at: at };
-      CACHE['moneyStudent|' + JSON.stringify({ id: id })] = { data: d.profiles[id].money, at: at };
-    });
-    // Then warm Income and the week's sessions (with live homework) too, quietly.
-    ['income', 'weekLive'].forEach(function (a) {
-      google.script.run.withSuccessHandler(function (r) { CACHE[a + '|{}'] = { data: r.data, at: Date.now() }; })
-        .withFailureHandler(function () {}).api(TOKEN, a, fresh ? { fresh: true } : {});
-    });
-  }).withFailureHandler(function () { busy(-1); }).api(TOKEN, 'prefetch', fresh ? { fresh: true } : {});
+  var last = 0; try { last = Number(localStorage.getItem('th_prefetched') || 0); } catch (e) {}
+  if (!fresh && Date.now() - last < 600000) return;
+  send(function (finish) {
+    google.script.run.withSuccessHandler(function (res) {
+      finish();
+      var d = res.data, at = Date.now();
+      try { localStorage.setItem('th_prefetched', String(at)); } catch (e) {}
+      CACHE['money|{}'] = { data: d.money, at: at };
+      CACHE['sessionForm|{}'] = { data: d.sessionForm, at: at };
+      CACHE['week|{}'] = { data: d.week, at: at };
+      CACHE['newStudentForm|{}'] = { data: d.newStudentForm, at: at };
+      Object.keys(d.profiles).forEach(function (id) {
+        CACHE['profile|' + JSON.stringify({ id: id })] = { data: d.profiles[id], at: 0 };     // profiles still fetch the full ledger once
+      });
+      persist();
+      // Then warm Income and the sessions' homework part, quietly.
+      ['income', 'weekLive', 'groups'].forEach(function (a) {
+        send(function (fin) {
+          google.script.run.withSuccessHandler(function (r) { fin(); CACHE[a + '|{}'] = { data: r.data, at: Date.now() }; persist(); })
+            .withFailureHandler(function () { fin(); }).api(TOKEN, a, fresh ? { fresh: true } : {});
+        });
+      });
+    }).withFailureHandler(function () { finish(); }).api(TOKEN, 'prefetch', fresh ? { fresh: true } : {});
+  });
 }
 
 // Disables a button and shows "Saving…" so it can't be pressed twice.
@@ -326,9 +377,13 @@ function hold(btn, label) {
   btn.disabled = true; btn.textContent = label || 'Saving…';
 }
 
-// "updated 3 min ago" in the header.
-function showAge() {
+// "updated 3 min ago" in the header ("updating…" while refreshing; "couldn't refresh" after a failed try).
+var REFRESH_FAILED = false;
+function showAge(failed) {
+  if (failed !== undefined) REFRESH_FAILED = failed;
   var el = document.getElementById('updated');
+  if (REFRESHING) { el.textContent = 'updating…'; return; }
+  if (REFRESH_FAILED) { el.textContent = 'couldn\'t refresh, tap Refresh'; return; }
   if (!fetchedAt) { el.textContent = ''; return; }
   var min = Math.round((Date.now() - fetchedAt.getTime()) / 60000);
   el.textContent = min < 1 ? 'updated just now' : 'updated ' + min + ' min ago';
@@ -722,6 +777,7 @@ function goRoster(filters) {
 
 // The roster screen.
 function showStudents() {
+  setBack('Students', 'Students', showStudents);
   newView();
   refreshView = showStudents;
   document.getElementById('title').textContent = 'Students';
@@ -951,6 +1007,25 @@ function hwSave(i, id, clear) {
     function () { var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove(); showProfile(id); notice('Saved.'); });
 }
 
+// Moves the student to another group from their page (the same as Move on the group page).
+function moveFromProfile(id) {
+  var p = CACHE['profile|' + JSON.stringify({ id: id })], cur = p && p.data.detail.memberships.filter(function (x) { return !x['Until']; })[0];
+  if (!cur) return notice('This student has no current group.');
+  call('newStudentForm', {}, function (f) {
+    sheet('Move to another group', '<div class="sub">Now in ' + esc(cur['Group']) + '. Their history there stays.</div>' +
+      '<div class="sub" style="margin-top:8px">New group</div>' + sel('pmg', '', [['', 'Pick a group']].concat(f.groups.filter(function (g) { return g.group !== cur['Group']; }).map(function (g) { return [g.group, g.group]; }))) +
+      '<div class="sub" style="margin-top:8px">First session in the new group</div><input id="pmd" type="date" value="' + today() + '">' +
+      '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);moveFromProfileSave(\'' + esc(id) + '\',\'' + esc(cur['Group']) + '\')">Move</button>');
+  }, { form: true });
+}
+function moveFromProfileSave(id, from) {
+  var to = document.getElementById('pmg').value;
+  if (!to) return notice('Pick the new group.');
+  call('moveStudent', { id: id, group: from, to: to, from: document.getElementById('pmd').value }, function () {
+    var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove(); showProfile(id); notice('Moved to ' + to + '.');
+  });
+}
+
 // Old entry point: the student page is now the profile.
 function showStudent(id) { showProfile(id); }
 
@@ -960,7 +1035,7 @@ function showProfile(id) {
   currentId = id;
   rememberRecent(id);
   refreshView = function () { showProfile(id); };
-  document.getElementById('title').textContent = 'Students';
+  document.getElementById('title').textContent = BACK.tab;
   call('profile', { id: id }, function (p) {
     var i = p.detail.info, m = p.money, st = m.student;
     lastMoneyStudent = m;
@@ -982,11 +1057,11 @@ function showProfile(id) {
       ['Language', i['Message language']], ['Status', i['Status'] + (i['Status date'] ? ' since ' + fmtDate(i['Status date']) : '')], ['Notes', i['Notes'] || '-']
     ];
     document.getElementById('main').innerHTML = testBar(m.testMode) +
-      '<button class="back" onclick="showStudents()">‹ Students</button>' +
+      '<button class="back" onclick="goBack()">‹ ' + esc(BACK.label) + '</button>' +
       '<div class="profile-head"><div class="pname"><span class="cur ' + esc(st.currency) + '">' + esc(st.currency) + '</span> ' + esc(st.name) + '</div>' +
       '<div class="parabic">' + esc(i['Arabic first name'] + ' ' + i['Arabic last name']) + '</div>' +
       '<div class="sub">' + esc(group) + ' · ' + esc(st.paymentType) + '</div></div>' +
-      '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button></div>' +
+      '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button><button onclick="moveFromProfile(\'' + esc(id) + '\')">Move group</button></div>' +
       '<h2>Money</h2>' + money +
       '<button class="secondary" style="margin:0 0 10px" onclick="adjustForm(\'' + esc(id) + '\')">✎ Waive, correct or refund</button>' +
       '<div class="card" id="ledger">' + ledgerRows(entries.slice(0, 10), id) +
@@ -1027,6 +1102,7 @@ var sessData = null, sessRows = [];
 // Today screen: today's sessions and the next 6 days' from the Tutoring calendar, with their status.
 function showToday() {
   newView();
+  setBack('Sessions', 'Sessions', showToday);
   refreshView = showToday;
   document.getElementById('title').textContent = 'Sessions';
   call('week', {}, function (week) {
@@ -1292,6 +1368,7 @@ var GROUP = null;
 // One group's page.
 function showGroup(name) {
   newView();
+  setBack(name, 'Groups', function () { showGroup(name); });
   refreshView = function () { showGroup(name); };
   document.getElementById('title').textContent = 'Groups';
   call('group', { group: name }, function (d) {
@@ -1305,26 +1382,30 @@ function showGroup(name) {
         (d.folder ? '<button onclick="window.open(\'' + esc(d.folder) + '\',\'_blank\')">📁 Assignments</button>' : '') +
         (g['WhatsApp link'] ? '<button onclick="window.open(\'' + esc(g['WhatsApp link']) + '\',\'_blank\')">💬 WhatsApp group</button>' : '') +
         '</div></div>' +
-      '<div class="card"><b>Homework mode</b>' + (d.pastPapersLink
-        ? '<div class="sub">Past papers: progress and questions come from the follow-up sheet; reminders ask them to tick papers and add questions.</div>' +
-          '<div class="actions"><button onclick="window.open(\'' + esc(d.pastPapersLink) + '\',\'_blank\')">Open follow-up sheet</button>' +
-          '<button class="secondary" onclick="ppOff()">Back to homework folders</button></div>'
-        : '<div class="sub">Homework folders ("N. Title" in the Assignments folder).</div><div class="actions"><button onclick="ppForm()">Switch to past papers…</button></div>') +
-        '<div id="ppbox"></div></div>' +
       '<h2>' + d.members.length + ' students</h2>' + d.members.map(function (m, i) {
         return '<div class="card"><div class="item"><div class="nav-row" style="flex:1" onclick="showProfile(\'' + esc(m.id) + '\')"><span><b>' + esc(m.name) + '</b>' +
-          '<div class="sub">' + esc(m.country || '') + (m.since ? ' · since ' + esc(fmtDate(m.since)) : '') + (m.role && m.role !== 'Member' ? ' · ' + esc(m.role) : '') + '</div></span><span>›</span></div>' +
+          '<div class="sub">' + esc(m.country || '') + ' · since ' + (m.since ? esc(fmtDate(m.since)) : '?') + (m.role && m.role !== 'Member' ? ' · ' + esc(m.role) : '') + '</div></span><span>›</span></div>' +
           '<button class="small" style="width:auto;flex:none" onclick="moveForm(' + i + ')">Move</button></div><div id="mv' + i + '"></div></div>';
       }).join('') +
-      '<h2>Recent sessions</h2><div class="card">' + (d.sessions.map(function (s) {
-        return '<div class="item"><span>' + esc(fmtDate(s.date)) + (s.title ? ' · ' + esc(s.title) : '') + '</span><span class="tag ' + (s.status === 'Logged' ? 'good' : '') + '">' + esc(s.status) + '</span></div>';
-      }).join('') || '<div class="sub">None yet.</div>') + '</div>' +
+      '<h2>Recent sessions</h2>' + sessionsTable(d) +
       '<div class="card"><b>Details</b>' +
         '<div class="sub" style="margin-top:8px">Status</div>' + sel('gst', paused ? 'Paused' : 'Active', [['Active', 'Active'], ['Paused', 'Paused (off Sessions and reminders, no charges)']]) +
         '<div class="sub" style="margin-top:8px">WhatsApp group link</div><input id="gwa" value="' + esc(g['WhatsApp link'] || '') + '">' +
         '<div class="sub" style="margin-top:8px">Notes</div><input id="gno" value="' + esc(g['Notes'] || '') + '">' +
-        '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);saveGroup()">Save</button></div>';
+        '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);saveGroup()">Save</button>' +
+        '<div class="sub" style="margin-top:14px">Homework: ' + (d.pastPapersLink ? 'past papers (<a href="' + esc(d.pastPapersLink) + '" target="_blank">follow-up sheet</a>) · <a href="#" onclick="ppOff();return false">back to homework folders</a>'
+          : 'homework folders · <a href="#" onclick="ppForm();return false">switch to past papers</a>') + '</div><div id="ppbox"></div></div>';
   });
+}
+
+// Students × the last sessions: ✅ present, ⏰ late (minutes), ❌ absent. Scrolls sideways.
+function sessionsTable(d) {
+  if (!d.sessions.length) return '<div class="card sub">None yet.</div>';
+  var mark = function (v) { return !v ? '–' : v === 'P' ? '✅' : v === 'A' ? '❌' : '⏰ ' + v.slice(1) + "'"; };
+  return table(['Student'].concat(d.sessions.map(function (s) { return esc(fmtDate(s.date).slice(0, 5)) + (s.status !== 'Logged' ? '<div class="sub">' + esc(s.status) + '</div>' : ''); })),
+    d.members.map(function (m) {
+      return ['<b>' + esc(m.name.split(' ')[0]) + '</b>'].concat(d.sessions.map(function (s) { return mark(d.attendance[s.id + '|' + m.id]); }));
+    }).concat([['<span class="sub">Title</span>'].concat(d.sessions.map(function (s) { return '<span class="sub">' + esc(String(s.title || '').slice(0, 28)) + '</span>'; }))]));
 }
 
 // Saves status, WhatsApp link and notes.
@@ -1383,6 +1464,7 @@ var TODO = null;
 
 function showTodo() {
   newView();
+  setBack('To do', 'To do', showTodo);
   refreshView = showTodo;
   document.getElementById('title').textContent = 'To do';
   call('todo', {}, function (d) {
@@ -1448,7 +1530,7 @@ var google = { script: { get run() {
           .then(function (r) { return r.json(); })
           .then(function (j) {
             // Hand the answer over outside this promise, so a drawing problem on the page is never reported as "no connection".
-            setTimeout(function () { if (j.ok) { ok(j.res); if (action === 'prefetch') saveCache(); } else fail(new Error(j.error)); }, 0);
+            setTimeout(function () { if (j.ok) ok(j.res); else fail(new Error(j.error)); }, 0);
           })
           .catch(function (e) {
             if (n < 2 && retry) return setTimeout(function () { attempt(n + 1); }, 1500);
