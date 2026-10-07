@@ -214,19 +214,19 @@ function start(token) {
   TABS.forEach(function (t) {
     var b = document.createElement('button');
     b.innerHTML = '<span class="ico">' + ICONS[t] + '</span>' + t; b.id = 'tab-' + t;
-    b.onclick = function () { open(t); };
+    b.onclick = function () { openTab(t); };
     nav.appendChild(b);
   });
   // Refresh asks the server for fresh data (skipping its 2-minute cache) for the screen and the background preload.
   document.getElementById('refresh').onclick = function () { FRESH_UNTIL = Date.now() + 4000; if (refreshView) refreshView(); prefetch(true); };
   setInterval(showAge, 30000);
   setTimeout(hideSplash, 8000);
-  open('Students');
+  openTab('Students');
   prefetch();
 }
 
 // Switches tab.
-function open(tab) {
+function openTab(tab) {
   current = tab; newView();
   TABS.forEach(function (t) { document.getElementById('tab-' + t).className = t === tab ? 'on' : ''; });
   document.getElementById('title').textContent = tab;
@@ -714,7 +714,7 @@ function rememberRecent(id) {
 function goRoster(filters) {
   RF.q = ''; RF.g = ''; RF.money = filters.s === 'owes' ? 'owes' : (filters.s || ''); RF.cur = filters.c || '';
   saveRF();
-  open('Students');
+  openTab('Students');
 }
 
 // The roster screen.
