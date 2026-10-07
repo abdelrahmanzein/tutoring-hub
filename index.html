@@ -717,7 +717,10 @@ function showToday() {
   call('sessionForm', {}, function (d) {
     sessData = d;
     document.getElementById('main').innerHTML =
-      '<div class="actions"><button class="primary" onclick="sessionForm()">＋ Log a session</button></div>' +
+      (d.source === 'App'
+        ? '<div class="actions"><button class="primary" onclick="sessionForm()">＋ Log a session</button></div>'
+        : '<div class="card sub" style="font-size:14px">Sessions still come from the old script and Log Sheet (new rows are imported every night at 11:30 PM). ' +
+          'Log sessions there until you switch over.<div class="actions"><button onclick="hold(this,\'Importing…\');importNow()">Import new sessions now</button></div></div>') +
       '<h2>Recently logged</h2>' + (d.recent.length ? d.recent.map(function (r) {
         var undone = r['Status'] === 'Undone';
         return '<div class="card item" style="' + (undone ? 'opacity:.5' : '') + '"><div><div>' + esc(fmtDate(r['Date'])) + ' · ' + esc(r['Group']) + '</div>' +
@@ -725,6 +728,14 @@ function showToday() {
           (undone ? '' : '<div class="right"><button class="small" onclick="undoSess(\'' + esc(r['Session ID']) + '\')">Undo</button></div>') + '</div>';
       }).join('') : '<div class="card sub">No sessions logged in the app yet.</div>') +
       '<div class="card sub" style="margin-top:12px">The calendar and Meet will fill this in automatically in the Sessions stage. Until then, log each session here.</div>';
+  });
+}
+
+// Pulls new session rows from the Log Sheet right away.
+function importNow() {
+  call('importLogNow', {}, function (r) {
+    showToday();
+    notice((r.added ? r.added + ' new entries imported from the Log Sheet.' : 'Nothing new in the Log Sheet.') + (r.notes.length ? ' ' + r.notes.join(' ') : ''));
   });
 }
 
