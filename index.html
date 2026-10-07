@@ -132,6 +132,27 @@
   .splash-dots span:nth-child(2) { animation-delay:.15s } .splash-dots span:nth-child(3) { animation-delay:.3s }
   @keyframes dot { 0%,80%,100% { transform:scale(.5); opacity:.4 } 40% { transform:scale(1); opacity:1 } }
 
+  /* Money: Students | Income switch */
+  .seg { display:flex; background:var(--line); border-radius:10px; padding:3px; margin-bottom:10px; }
+  .seg button { flex:1; border:0; background:none; color:var(--muted); padding:8px; border-radius:8px; }
+  .seg button.on { background:var(--card); color:var(--accent); font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+
+  /* Income: number tiles, bar charts, tables */
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px; margin-bottom:8px; }
+  .tile { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+  .tile .big { font-size:22px; font-weight:700; margin:2px 0; }
+  .bars { display:flex; align-items:flex-end; gap:2px; height:150px; margin-top:8px; }
+  .bar-col { flex:1; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; cursor:pointer; }
+  .bar { width:70%; max-width:26px; border-radius:4px 4px 0 0; }
+  .bar.EGP { background:#f97316; } .bar.USD { background:#22c55e; }
+  .bar-col:hover .bar { filter:brightness(1.1); }
+  .bar-val { font-size:10px; color:var(--muted); min-height:14px; white-space:nowrap; }
+  .bar-lbl { font-size:11px; color:var(--muted); margin-top:3px; border-top:1px solid var(--line); width:100%; text-align:center; padding-top:2px; }
+  .tbl { width:100%; border-collapse:collapse; font-size:14px; }
+  .tbl th { text-align:left; color:var(--muted); font-weight:600; font-size:12px; padding:4px 6px; border-bottom:1px solid var(--line); }
+  .tbl td { padding:6px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  .tbl tr:last-child td { border-bottom:0; }
+
   /* Grey placeholders shown for the split second before a screen's data arrives */
   .skeleton { height:58px; border-radius:12px; margin-bottom:10px; background:linear-gradient(90deg, var(--line) 25%, var(--card) 50%, var(--line) 75%); background-size:200% 100%; animation:shimmer 1.2s infinite; }
   @keyframes shimmer { from { background-position:200% 0 } to { background-position:-200% 0 } }
@@ -497,7 +518,7 @@ function showMoney() {
     var t = d.totals;
     var groups = {};
     d.students.forEach(function (s) { if (s.group) groups[s.group] = 1; });
-    document.getElementById('main').innerHTML = testBar(d.testMode) +
+    document.getElementById('main').innerHTML = testBar(d.testMode) + moneySwitch('students') +
       '<div class="card totals"><div></div><div><span class="cur EGP">EGP</span></div><div><span class="cur USD">USD</span></div>' +
       '<div class="sub">Owed to you</div><div class="neg">' + amt(t.EGP.owed, '') + '</div><div class="neg">' + amt(t.USD.owed, '') + '</div>' +
       '<div class="sub">Held as credit</div><div class="pos">' + amt(t.EGP.credit, '') + '</div><div class="pos">' + amt(t.USD.credit, '') + '</div></div>' +
@@ -513,6 +534,70 @@ function showMoney() {
     });
     drawMoneyList();
   });
+}
+
+// "Students | Income" switch at the top of Money.
+function moneySwitch(on) {
+  return '<div class="seg"><button class="' + (on === 'students' ? 'on' : '') + '" onclick="showMoney()">Students</button>' +
+    '<button class="' + (on === 'income' ? 'on' : '') + '" onclick="showIncome()">Income</button></div>';
+}
+
+// Income dashboard: this month's numbers, 12-month bars per currency, per group, and a table of every month.
+function showIncome() {
+  newView();
+  refreshView = showIncome;
+  call('income', {}, function (d) {
+    var cur = d.months[d.months.length - 1], egpTotal = d.rate ? Math.round(cur.receivedEGP + cur.receivedUSD * d.rate) : null;
+    var tile = function (label, value, sub) { return '<div class="tile"><div class="sub">' + label + '</div><div class="big">' + value + '</div>' + (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>'; };
+    document.getElementById('main').innerHTML = moneySwitch('income') +
+      '<h2>' + monthName(cur.month, true) + ' so far</h2><div class="tiles">' +
+      tile('Received <span class="cur EGP">EGP</span>', amt(cur.receivedEGP, ''), cur.feesEGP ? 'bank fees ' + amt(cur.feesEGP, '') : '') +
+      tile('Received <span class="cur USD">USD</span>', amt(cur.receivedUSD, ''), cur.feesUSD ? 'bank fees ' + amt(cur.feesUSD, '') : 'after any bank fees') +
+      tile('Earned (sessions held)', amt(cur.earnedEGP, 'EGP'), amt(cur.earnedUSD, 'USD') + ' · ' + cur.sessions + ' charges') +
+      (egpTotal !== null ? tile('All received, in EGP', amt(egpTotal, ''), 'USD at today\'s ' + d.rate) : '') +
+      '</div><div class="tiles">' +
+      tile('Outstanding (owed to you)', amt(d.outstanding.EGP.owed, 'EGP'), amt(d.outstanding.USD.owed, 'USD')) +
+      tile('Next 4 weeks (estimate)', amt(d.forecast.EGP, 'EGP'), amt(d.forecast.USD, 'USD') + ' · at the last 4 weeks\' pace') +
+      '</div>' +
+      '<h2>Received per month</h2>' + barChart(d.months, 'receivedEGP', 'EGP') + barChart(d.months, 'receivedUSD', 'USD') +
+      '<h2>Earned per group</h2><div class="card"><table class="tbl"><tr><th>Group</th><th>This month</th><th>Last 3 months</th></tr>' +
+      d.groups.map(function (g) {
+        return '<tr><td>' + esc(g.group) + '</td><td>' + both(g.thisMonthEGP, g.thisMonthUSD) + '</td><td>' + both(g.last3EGP, g.last3USD) + '</td></tr>';
+      }).join('') + '</table></div>' +
+      '<h2>Every month</h2><div class="card" style="overflow-x:auto"><table class="tbl"><tr><th>Month</th><th>Received EGP</th><th>Received USD</th><th>Earned EGP</th><th>Earned USD</th><th>Fees</th></tr>' +
+      d.months.slice().reverse().map(function (m) {
+        return '<tr><td>' + monthName(m.month) + '</td><td>' + amt(m.receivedEGP, '') + '</td><td>' + amt(m.receivedUSD, '') + '</td><td>' + amt(m.earnedEGP, '') + '</td><td>' + amt(m.earnedUSD, '') + '</td><td>' +
+          ((m.feesEGP || m.feesUSD) ? both(m.feesEGP, m.feesUSD) : '–') + '</td></tr>';
+      }).join('') + '</table></div>';
+  });
+}
+
+// "900 EGP · 35 USD" (skipping zeros).
+function both(egp, usd) {
+  var parts = [];
+  if (egp) parts.push(amt(egp, 'EGP'));
+  if (usd) parts.push(amt(usd, 'USD'));
+  return parts.join(' · ') || '–';
+}
+
+// "2026-10" -> "Oct" (or "October 2026" when long).
+function monthName(ym, long) {
+  var names = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var p = ym.split('-'), n = names[Number(p[1]) - 1];
+  return long ? n + ' ' + p[0] : n.slice(0, 3);
+}
+
+// One bar per month for one currency (single series, so no legend). Tap a bar to see its exact value.
+function barChart(months, key, cur) {
+  var max = Math.max.apply(null, months.map(function (m) { return m[key]; }).concat([1]));
+  var last = months.length - 1;
+  return '<div class="card"><div class="sub"><span class="cur ' + cur + '">' + cur + '</span> received per month (tap a bar)</div><div class="bars">' +
+    months.map(function (m, i) {
+      var h = Math.round(m[key] / max * 100), show = (m[key] === max && m[key] > 0) || i === last;
+      return '<div class="bar-col" onclick="notice(\'' + monthName(m.month, true) + ': ' + amt(m[key], cur) + ' received\')" title="' + monthName(m.month, true) + ': ' + amt(m[key], cur) + '">' +
+        '<div class="bar-val">' + (show ? amt(m[key], '') : '') + '</div>' +
+        '<div class="bar ' + cur + '" style="height:' + Math.max(h, m[key] ? 2 : 0) + '%"></div><div class="bar-lbl">' + monthName(m.month).slice(0, 1) + '</div></div>';
+    }).join('') + '</div></div>';
 }
 
 // Remembered search, filter and sort choices for the Money list (kept while the app is open).
