@@ -242,8 +242,8 @@ function openTab(tab) {
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
-var NO_CACHE = WRITES.concat(['previewPayment', 'rate', 'prefetch', 'studentHistory']);
+var WRITES = ['assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var NO_CACHE = WRITES.concat(['meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
 function newView() { VIEW++; return VIEW; }
@@ -1041,19 +1041,70 @@ function undoSess(id) {
 }
 
 // The log form, opened from a session card (group and date filled in): who attended, amounts, and a note for next time.
+// From a card, Meet fills in attendance, lateness and participation; you check and change anything before saving.
+var sessMeet = null, sessEvent = null;
 function sessionForm(i) {
   if (sessData.source !== 'App') return notice('Sessions are still logged through the old script until the switch-over. After it, this button logs the session here.');
   newView();
   var d = sessData, s = typeof i === 'number' ? WEEK[i] : null;
+  sessMeet = null; sessEvent = s ? s.eventId : null;
   document.getElementById('main').innerHTML = '<button class="back" onclick="showToday()">‹ Cancel</button><h2>Log ' + (s ? esc(s.group) + ' · ' + esc(fmtDate(s.day)) : 'a session') + '</h2>' +
     '<div class="card"><div class="sub">Group</div>' + sel('sg', s ? s.group : '', [['', 'Pick a group']].concat(d.groups.map(function (g) { return [g, g]; }))) +
     '<div class="sub" style="margin-top:8px">Date</div><input id="sd" type="date" value="' + (s ? s.day : today()) + '">' +
     '<div class="sub" style="margin-top:8px">What was it</div><input id="st" list="stl" value="Group Session"><datalist id="stl"><option>Group Session</option><option>Recorded Session</option><option>Quiz Session</option><option>1-on-1 Session</option></datalist>' +
     '<div class="sub" style="margin-top:8px">Note for next session (shows on its card)</div><textarea id="sn" rows="2" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)"></textarea></div>' +
-    '<div id="srows"></div>';
-  document.getElementById('sg').onchange = fillSessionRows;
-  document.getElementById('sd').onchange = fillSessionRows;
-  if (s) fillSessionRows();
+    '<div id="smeet"></div><div id="srows"></div>';
+  document.getElementById('sg').onchange = function () { sessEvent = null; sessMeet = null; drawMeetBox(); fillSessionRows(); };
+  document.getElementById('sd').onchange = document.getElementById('sg').onchange;
+  if (s) { fillSessionRows(); loadMeet(); }
+}
+
+// Asks Meet who came (takes a few seconds), then fills the student lines.
+function loadMeet() {
+  if (!sessEvent) return;
+  document.getElementById('smeet').innerHTML = '<div class="card sub">Reading Meet…</div>';
+  call('meetDraft', { eventId: sessEvent, group: document.getElementById('sg').value }, function (m) {
+    sessMeet = m; applyMeet(); drawMeetBox(); drawSessionRows();
+  }, { part: true });
+}
+
+// Puts Meet's answer into the student lines (Meet absent -> Absent, charged); visiting students Meet saw are added.
+function applyMeet() {
+  if (!sessMeet || !sessMeet.held) return;
+  sessMeet.rows.forEach(function (m) {
+    var r = sessRows.filter(function (x) { return x.id === m.id; })[0];
+    if (!r && m.attended) {
+      var p = sessData.people.filter(function (x) { return x.id === m.id; })[0];
+      if (!p) return;
+      r = { id: p.id, name: p.name, currency: p.currency, amount: p.rate, visiting: true, notes: [] };
+      sessRows.push(r);
+    }
+    if (!r) return;
+    r.meet = m; r.status = m.attended ? 'Attended' : 'Absent';
+    if (m.participation && !r.participation) r.participation = m.participation;
+  });
+}
+
+// The Meet summary card, with "who is this?" for anyone Meet saw but couldn't match.
+function drawMeetBox() {
+  var box = document.getElementById('smeet'), m = sessMeet;
+  if (!box) return;
+  if (!m) { box.innerHTML = ''; return; }
+  if (!m.held) { box.innerHTML = '<div class="card sub">Meet has no record of this session (yet). Fill in attendance by hand.</div>'; return; }
+  box.innerHTML = '<div class="card"><div class="sub">From Meet: first student let in at ' + esc(String(m.firstAdmitted).slice(11)) +
+    (m.hasTranscript ? ' · participation suggested from the transcript' : ' · no transcript, so pick participation yourself') + '. Change anything below.</div>' +
+    m.unknown.map(function (u, k) {
+      return '<div class="item" style="margin-top:8px"><div><b>Who is this?</b> ' + esc(u.name) + '</div></div><div class="filters" style="margin:6px 0 0">' +
+        sel('wk' + k, '', [['', 'Pick the student']].concat(sessData.people.map(function (p) { return [p.id, p.name]; }))) +
+        '<button onclick="hold(this);assignWho(' + k + ')">Save</button></div>';
+    }).join('') + '</div>';
+}
+
+// Links an unknown Meet person to a student, then reads Meet again.
+function assignWho(k) {
+  var u = sessMeet.unknown[k], id = document.getElementById('wk' + k).value;
+  if (!id) return notice('Pick the student first.');
+  call('assignMeetPerson', { id: id, meetId: u.id, name: u.name }, function () { notice(u.name + ' is now linked.'); loadMeet(); });
 }
 
 // True if a membership covers the date.
@@ -1066,33 +1117,60 @@ function fillSessionRows() {
   var g = document.getElementById('sg').value, date = document.getElementById('sd').value;
   if (!g) { document.getElementById('srows').innerHTML = ''; return; }
   sessRows = sessData.people.filter(function (p) { return p.memberships.some(function (m) { return inGroupOn(m, g, date); }); })
-    .map(function (p) { return { id: p.id, name: p.name, currency: p.currency, amount: p.rate, status: 'Attended', visiting: false }; });
+    .map(function (p) { return { id: p.id, name: p.name, currency: p.currency, amount: p.rate, status: 'Attended', visiting: false, notes: [] }; });
+  applyMeet();
   drawSessionRows();
 }
 
-// Draws the student lines (status + amount) and the save button.
+var PARTICIPATION = ['Very active', 'Active', 'Occasional', 'Quiet'];
+var TEACHER_NOTES = ['Understood well', 'Solved well', 'Good questions', 'Explained to others', 'Well prepared', 'Struggled', 'Needs more practice', 'Not prepared', 'Distracted', 'Camera off'];
+
+// What Meet saw for one student, in one short line.
+function meetLine(m) {
+  if (!m) return '';
+  if (!m.attended) return '<div class="sub">Meet: not seen</div>';
+  return '<div class="sub">Meet: joined ' + esc(String(m.joinedAt).slice(11)) + (m.minutesLate ? ' · <b>' + m.minutesLate + ' min late</b>' : ' · on time') +
+    ' · ' + m.minutesInClass + ' min' + (m.contributions !== '' ? ' · ' + m.contributions + ' contributions, ' + m.questions + ' questions' : '') + '</div>';
+}
+
+// Draws the student lines (status, amount, participation, teacher notes) and the save button.
 function drawSessionRows() {
   var others = sessData.people.filter(function (p) { return !sessRows.some(function (r) { return r.id === p.id; }); });
   document.getElementById('srows').innerHTML = '<h2>' + sessRows.length + ' students</h2>' + sessRows.map(function (r, i) {
-    return '<div class="card cur-' + esc(r.currency) + '"><div><span class="cur ' + esc(r.currency) + '">' + esc(r.currency) + '</span> ' + esc(r.name) + (r.visiting ? ' <span class="tag">visiting</span>' : '') + '</div>' +
+    return '<div class="card cur-' + esc(r.currency) + '"><div><span class="cur ' + esc(r.currency) + '">' + esc(r.currency) + '</span> <b>' + esc(r.name) + '</b>' + (r.visiting ? ' <span class="tag">visiting</span>' : '') + '</div>' +
+      meetLine(r.meet) +
       '<div class="filters" style="margin:8px 0 0">' +
       '<select onchange="sessRows[' + i + '].status=this.value">' + ['Attended', 'Absent', 'Not charged'].map(function (s) {
         return '<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + (s === 'Absent' ? 'Absent (charged)' : s) + '</option>';
       }).join('') + '</select>' +
-      '<input type="number" step="any" inputmode="decimal" value="' + esc(r.amount) + '" onchange="sessRows[' + i + '].amount=this.value" style="max-width:120px"></div></div>';
+      '<input type="number" step="any" inputmode="decimal" value="' + esc(r.amount) + '" onchange="sessRows[' + i + '].amount=this.value" style="max-width:120px">' +
+      '<select onchange="sessRows[' + i + '].participation=this.value"><option value="">Participation…</option>' + PARTICIPATION.map(function (p) {
+        return '<option' + (r.participation === p ? ' selected' : '') + '>' + p + '</option>';
+      }).join('') + '</select></div>' +
+      '<div class="chips">' + TEACHER_NOTES.map(function (n) {
+        return '<button class="chip' + (r.notes.indexOf(n) >= 0 ? ' on' : '') + '" onclick="toggleNote(' + i + ',this)">' + n + '</button>';
+      }).join('') + '</div>' +
+      '<input placeholder="Note about ' + esc(r.name.split(' ')[0]) + ' (optional)" value="' + esc(r.freeNote || '') + '" onchange="sessRows[' + i + '].freeNote=this.value" style="width:100%;margin-top:6px"></div>';
   }).join('') +
     '<div class="filters">' + sel('sadd', '', [['', '＋ Add a visiting student']].concat(others.map(function (p) { return [p.id, p.name]; }))) + '</div>' +
     '<button class="primary" style="width:100%;margin-top:6px" onclick="hold(this);saveSession()">Save session and charges</button>';
   document.getElementById('sadd').onchange = function () {
     var p = sessData.people.filter(function (x) { return x.id === this.value; }, this)[0];
-    if (p) { sessRows.push({ id: p.id, name: p.name, currency: p.currency, amount: p.rate, status: 'Attended', visiting: true }); drawSessionRows(); }
+    if (p) { sessRows.push({ id: p.id, name: p.name, currency: p.currency, amount: p.rate, status: 'Attended', visiting: true, notes: [] }); drawSessionRows(); }
   };
+}
+
+// Turns a teacher-note chip on or off.
+function toggleNote(i, btn) {
+  var n = btn.textContent, list = sessRows[i].notes, k = list.indexOf(n);
+  if (k >= 0) list.splice(k, 1); else list.push(n);
+  btn.classList.toggle('on', k < 0);
 }
 
 // Saves the session; the server refuses a second log of the same group and date.
 function saveSession() {
   var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value,
-    noteNext: document.getElementById('sn').value, rows: sessRows };
+    noteNext: document.getElementById('sn').value, rows: sessRows, eventId: sessEvent || '', meetHeld: sessMeet ? sessMeet.held : undefined };
   call('logSession', args, function (r) { showToday(); notice('Logged ' + r.sessionId + ': ' + r.charged + ' charged.'); });
 }
 </script>
