@@ -895,14 +895,17 @@ var google = { script: { get run() {
     withFailureHandler: function (f) { fail = f; return o; },
     api: function (token, action, args) {
       // Google sometimes answers with an error page (cold start); one quiet retry fixes almost all of them.
-      // Saves are retried too: the server re-checks the balance first, so a retried payment can't be saved twice.
+      // Only reads and self-protecting saves are retried (payments re-check the balance, sessions refuse duplicates,
+      // imports and deletes are safe to repeat). Other saves are never repeated automatically.
+      var retry = ['addAdjustment', 'addAccount', 'undoSession', 'undoStudentEdit', 'updateStudent', 'confirmAccount'].indexOf(action) < 0;
       var attempt = function (n) {
         fetch(EXEC_URL, { method: 'POST', credentials: 'omit', redirect: 'follow', body: JSON.stringify({ token: token, action: action, args: args }) })
           .then(function (r) { return r.json(); })
           .then(function (j) { if (j.ok) { ok(j.res); if (action === 'prefetch') saveCache(); } else fail(new Error(j.error)); })
           .catch(function (e) {
-            if (n < 2) return setTimeout(function () { attempt(n + 1); }, 1500);
-            fail(new Error('No connection to the app (' + e.message + '). Check the internet and tap Refresh.'));
+            if (n < 2 && retry) return setTimeout(function () { attempt(n + 1); }, 1500);
+            fail(new Error(retry ? 'No connection to the app (' + e.message + '). Check the internet and tap Refresh.'
+              : 'Not sure this was saved (connection problem). Tap Refresh and check before trying again.'));
           });
       };
       attempt(1);
