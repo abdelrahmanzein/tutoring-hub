@@ -176,6 +176,7 @@ function start(token) {
   });
   document.getElementById('refresh').onclick = function () { if (refreshView) refreshView(); };
   setInterval(showAge, 30000);
+  setTimeout(hideSplash, 8000);
   open('Students');
   prefetch();
 }
@@ -242,7 +243,6 @@ function hideSplash() {
   el.classList.add('gone');
   setTimeout(function () { el.remove(); }, 400);
 }
-setTimeout(hideSplash, 8000);
 
 // Loads every screen's data in one go (in the background) so moving around is instant.
 function prefetch() {
@@ -818,10 +818,13 @@ function loadCache() {
 // The secret token comes once in the link (#t=...), is kept on this device, and removed from the address bar.
 function boot() {
   var m = location.hash.match(/t=([0-9a-f]+)/);
-  if (m) { try { localStorage.setItem('th_token', m[1]); } catch (e) {} history.replaceState(null, '', location.pathname); }
+  // The token stays in the link on purpose: an iPhone Home Screen app keeps its own storage, separate from Safari,
+  // so the icon must be added from the full link to carry the token in.
+  if (m) { try { localStorage.setItem('th_token', m[1]); } catch (e) {} }
   var token = ''; try { token = localStorage.getItem('th_token') || ''; } catch (e) {}
   if (!token) {
-    document.getElementById('splash').innerHTML = '<div class="splash-name">Tutoring Hub</div><div class="sub" style="max-width:280px;text-align:center">Open your private setup link once on this device to sign in.</div>';
+    document.getElementById('splash').innerHTML = '<div class="splash-name">Tutoring Hub</div><div class="sub" style="max-width:300px;text-align:center;line-height:1.5">' +
+      'This copy of the app has no sign-in yet.<br>Open your private setup link in Safari, then Share → Add to Home Screen from that page.</div>';
     return;
   }
   loadCache();
