@@ -1,5 +1,5 @@
 // Keeps the app's page and icons on the phone so it opens instantly; the page itself is refreshed from the network when possible.
-const SHELL = 'th-shell-v1';
+const SHELL = 'th-shell-v2';
 self.addEventListener('install', e => { e.waitUntil(caches.open(SHELL).then(c => c.addAll(['./', 'index.html', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png']))); self.skipWaiting(); });
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', e => {
