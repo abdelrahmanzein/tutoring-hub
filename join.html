@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Student Registration · Mr Zein's Tutoring Groups</title>
+  <style>
+    :root { --bg:#f3f5f9; --card:#fff; --text:#18202e; --sub:#5b6577; --line:#d9dee8; --accent:#2457c5; --bad:#c62828; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#10141c; --card:#1a2030; --text:#e8ecf3; --sub:#9aa5b8; --line:#2c3446; --accent:#7aa2ff; --bad:#ff8a80; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    main { max-width:560px; margin:0 auto; padding:20px 16px 40px; }
+    h1 { font-size:22px; margin:6px 0 2px; }
+    .ar { direction:rtl; text-align:right; font-family:"Geeza Pro", "Noto Naskh Arabic", Tahoma, sans-serif; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:14px 0; }
+    .card h2 { font-size:17px; margin:0 0 6px; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    label { display:block; margin-top:12px; font-size:14px; }
+    label .lbl { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; color:var(--sub); }
+    input, select { width:100%; margin-top:4px; padding:11px 12px; font:inherit; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--text); }
+    .hint { font-size:13px; color:var(--sub); margin-top:3px; }
+    button { width:100%; margin-top:6px; padding:14px; font:inherit; font-weight:600; border:0; border-radius:12px; background:var(--accent); color:#fff; }
+    button:disabled { opacity:.6; }
+    .err { color:var(--bad); margin-top:10px; white-space:pre-line; }
+    .brand { color:var(--accent); font-weight:700; letter-spacing:.2px; margin-top:4px; }
+    .row { padding:8px 0; border-bottom:1px solid var(--line); } .row:last-child { border-bottom:0; }
+    .row .lbl { display:flex; justify-content:space-between; gap:10px; color:var(--sub); font-size:13px; }
+    .val { font-weight:600; margin-top:2px; } .val .ar { font-weight:400; color:var(--sub); }
+    .sub { color:var(--sub); }
+  </style>
+</head>
+<body>
+<main id="main"><p class="sub">Loading…</p></main>
+<script>// Front page on GitHub Pages: talks to the Apps Script web app with fetch, but keeps the same
+// google.script.run calls the screens already use, so the screens are shared with the Apps Script version.
+var EXEC_URL = 'https://script.google.com/macros/s/AKfycbyCLTCfTmk_UHXW6_aSQ28cSyYRWWiUpFdx4Tsa5epjAviwggqbnqIvu89apC2YxQdz/exec';
+var google = { script: { get run() {
+  var ok = function () {}, fail = function () {};
+  var o = {
+    withSuccessHandler: function (f) { ok = f; return o; },
+    withFailureHandler: function (f) { fail = f; return o; },
+    api: function (token, action, args) {
+      // Google sometimes answers with an error page (cold start); one quiet retry fixes almost all of them.
+      // Only reads and self-protecting saves are retried (payments re-check the balance, sessions refuse duplicates,
+      // imports and deletes are safe to repeat). Other saves are never repeated automatically.
+      var retry = ['joinSubmit', 'addAdjustment', 'addAccount', 'undoSession', 'undoStudentEdit', 'updateStudent', 'confirmAccount'].indexOf(action) < 0;
+      var attempt = function (n) {
+        fetch(EXEC_URL, { method: 'POST', credentials: 'omit', redirect: 'follow', body: JSON.stringify({ token: token, action: action, args: args }) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            // Hand the answer over outside this promise, so a drawing problem on the page is never reported as "no connection".
+            setTimeout(function () { if (j.ok) ok(j.res); else fail(new Error(j.error)); }, 0);
+          })
+          .catch(function (e) {
+            if (n < 2 && retry) return setTimeout(function () { attempt(n + 1); }, 1500);
+            fail(new Error(retry ? 'No connection to the app (' + e.message + '). Check the internet and tap Refresh.'
+              : 'Not sure this was saved (connection problem). Tap Refresh and check before trying again.'));
+          });
+      };
+      attempt(1);
+    }
+  };
+  return o;
+} } };
+
+// Keeps the last loaded data on this device, so the app opens with it instantly and refreshes in the background.
+function saveCache() {
+  setTimeout(function () { try { localStorage.setItem('th_cache', JSON.stringify(CACHE)); } catch (e) { /* storage full or blocked */ } }, 0);
+}
+function loadCache() {
+  try { var c = JSON.parse(localStorage.getItem('th_cache') || 'null'); if (c) CACHE = c; } catch (e) { /* ignore */ }
+}
+
+// The secret token comes once in the link (#t=...), is kept on this device, and removed from the address bar.
+function boot() {
+  var m = location.hash.match(/t=([0-9a-f]+)/);
+  // The token stays in the link on purpose: an iPhone Home Screen app keeps its own storage, separate from Safari,
+  // so the icon must be added from the full link to carry the token in.
+  if (m) { try { localStorage.setItem('th_token', m[1]); } catch (e) {} }
+  var token = ''; try { token = localStorage.getItem('th_token') || ''; } catch (e) {}
+  if (!token) {
+    document.getElementById('splash').innerHTML = '<div class="splash-name">Tutoring Hub</div><div class="sub" style="max-width:300px;text-align:center;line-height:1.5">' +
+      'This copy of the app has no sign-in yet.<br>Open your private setup link in Safari, then Share → Add to Home Screen from that page.</div>';
+    return;
+  }
+  loadCache();
+  start(token);
+}
+</script>
+<script>
+var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^0-9a-z]/g, '');
+
+// Calls the app (the same server the private app uses; only the two form actions work without signing in).
+function api(action, args, ok, fail) {
+  google.script.run.withSuccessHandler(function (r) { ok(r.data); }).withFailureHandler(function (e) { fail(e.message || String(e)); }).api('', action, args);
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+// One field: Arabic label on the right, English on the left.
+function field(id, ar, en, input, hint) {
+  return '<label id="f-' + id + '"><span class="lbl"><span>' + en + '</span><span class="ar">' + ar + '</span></span>' + (input || '<input id="' + id + '">') +
+    (hint ? '<div class="hint">' + hint + '</div>' : '') + '</label>';
+}
+function select(id, options) {
+  return '<select id="' + id + '"><option value="">–</option>' + options.map(function (o) { return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>'; }).join('') + '</select>';
+}
+// A WhatsApp number: country code (with flag) + the number.
+function phone(id) {
+  return '<div style="display:flex;gap:8px"><select id="' + id + 'Code" style="width:auto;flex:none">' + F.countries.map(function (c) {
+    return '<option value="' + c.dial + '" data-c="' + esc(c.name) + '">' + c.flag + ' ' + c.dial + '</option>'; }).join('') + '</select>' +
+    '<input id="' + id + '" type="tel" inputmode="tel" placeholder="1xx xxx xxxx"></div>';
+}
+// The details you set, shown to the parent (not editable).
+function info(ar, en, value) {
+  return '<div class="row"><span class="lbl"><span>' + en + '</span><span class="ar">' + ar + '</span></span><div class="val">' + value + '</div></div>';
+}
+var DAYS_EN = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
+var DAYS_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+var MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+var MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+function time12(t) { var h = +t.slice(0, 2), m = t.slice(3); return { en: ((h + 11) % 12 + 1) + ':' + m + (h < 12 ? ' AM' : ' PM'), ar: ((h + 11) % 12 + 1) + ':' + m + (h < 12 ? ' صباحًا' : ' مساءً') }; }
+
+var PREVIEW = false, F = null;
+function draw(f) {
+  F = f;
+  var m = document.getElementById('main');
+  if (!f.valid) { m.innerHTML = '<div class="card"><p class="ar">هذا الرابط غير صالح.</p><p>This link is not valid.</p></div>'; return; }
+  if (f.done) { m.innerHTML = '<div class="card"><p class="ar">تم استلام البيانات، شكرًا لحضراتكم.</p><p>The details have been received. Thank you.</p></div>'; return; }
+  PREVIEW = !!f.preview;
+  var d = f.first ? new Date(f.first + 'T12:00:00') : null, t = f.schedule ? time12(f.schedule.time) : null;
+  m.innerHTML =
+    (PREVIEW ? '<div class="card" style="border-color:#d97706">Preview: this is exactly what parents see. Nothing is sent.</div>' : '') +
+    '<div class="brand">Mr Zein\'s Tutoring Groups</div>' +
+    '<h1 class="ar">تسجيل طالب جديد</h1><h1>Student Registration</h1>' +
+    '<div class="card">' +
+      info('المادة', 'Course', esc(f.course)) +
+      info('المجموعة', 'Group', esc(f.group)) +
+      (t ? info('موعد الحصص', 'Sessions', DAYS_EN[f.schedule.day] + ', ' + t.en + ' (Cairo time)<div class="ar">أيام ' + DAYS_AR[f.schedule.day] + '، الساعة ' + t.ar + ' بتوقيت القاهرة</div>') : '') +
+      (d ? info('أول حصة', 'First session', d.getDate() + ' ' + MONTHS_EN[d.getMonth()] + ' ' + d.getFullYear() + '<div class="ar">' + d.getDate() + ' ' + MONTHS_AR[d.getMonth()] + ' ' + d.getFullYear() + '</div>') : '') +
+    '</div>' +
+    '<div class="card"><h2><span>Student</span><span class="ar">الطالب</span></h2>' +
+      field('first', 'الاسم الأول بالإنجليزية', 'First name (English)') +
+      field('last', 'اسم العائلة بالإنجليزية', 'Last name (English)') +
+      field('arabicFirst', 'الاسم الأول بالعربية', 'First name (Arabic)', '<input id="arabicFirst" dir="rtl">') +
+      field('arabicLast', 'اسم العائلة بالعربية', 'Last name (Arabic)', '<input id="arabicLast" dir="rtl">') +
+      field('gender', 'النوع', 'Gender', select('gender', [['F', 'Female / أنثى'], ['M', 'Male / ذكر']])) +
+      field('school', 'المدرسة', 'School') +
+      field('country', 'بلد الإقامة', 'Country of residence', select('country', f.countries.map(function (c) { return [c.name, c.flag + ' ' + c.name]; }).concat([['Other', '🌍 Other']]))) +
+      field('city', 'المدينة', 'City', null, 'So session times are shown in your local time.') +
+      field('studentWhatsApp', 'رقم واتساب الطالب', 'Student\'s WhatsApp (optional)', phone('studentWhatsApp')) +
+    '</div>' +
+    '<div class="card"><h2><span>Parent</span><span class="ar">ولي الأمر</span></h2>' +
+      field('parentName', 'اسم ولي الأمر', 'Parent\'s name') +
+      field('parentRelation', 'صلة القرابة', 'Relation', select('parentRelation', [['Mother', 'Mother / الأم'], ['Father', 'Father / الأب'], ['Other', 'Other / غير ذلك']])) +
+      field('parentWhatsApp', 'رقم واتساب ولي الأمر', 'Parent\'s WhatsApp', phone('parentWhatsApp')) +
+      field('language', 'لغة الرسائل', 'Language of messages', '<select id="language"><option value="AR">العربية والإنجليزية / Arabic and English</option><option value="EN">English only</option></select>') +
+    '</div>' +
+    '<button id="send" onclick="send()">إرسال · Send</button><div id="err" class="err"></div>';
+  // The city only matters where a country has several time zones; the phone codes follow the country until changed.
+  var showCity = function () {
+    var c = F.countries.filter(function (x) { return x.name === document.getElementById('country').value; })[0];
+    document.getElementById('f-city').style.display = c && c.multiZone ? '' : 'none';
+    ['studentWhatsApp', 'parentWhatsApp'].forEach(function (id) {
+      var el = document.getElementById(id + 'Code');
+      if (c && !el.dataset.touched) el.value = c.dial;
+    });
+  };
+  ['studentWhatsApp', 'parentWhatsApp'].forEach(function (id) { document.getElementById(id + 'Code').onchange = function () { this.dataset.touched = '1'; }; });
+  document.getElementById('country').onchange = showCity;
+  showCity();
+}
+
+function send() {
+  var ids = ['first', 'last', 'arabicFirst', 'arabicLast', 'gender', 'school', 'country', 'city', 'parentName', 'parentRelation', 'language'];
+  var a = {}; ids.forEach(function (id) { a[id] = document.getElementById(id).value.trim(); });
+  if (document.getElementById('f-city').style.display === 'none') a.city = '';
+  ['studentWhatsApp', 'parentWhatsApp'].forEach(function (id) {
+    var n = document.getElementById(id).value.replace(/[^0-9]/g, '').replace(/^0+/, '');
+    a[id] = n ? document.getElementById(id + 'Code').value + ' ' + n : '';
+  });
+  var need = ['first', 'last', 'arabicFirst', 'arabicLast', 'gender', 'school', 'country', 'parentName', 'parentRelation', 'parentWhatsApp'];
+  if (document.getElementById('f-city').style.display !== 'none') need.push('city');
+  var missing = need.filter(function (id) { return !a[id]; });
+  var err = document.getElementById('err');
+  if (missing.length) { err.innerHTML = '<span class="ar">يرجى تعبئة جميع الحقول المطلوبة.</span>\nPlease fill in every field (only the student\'s WhatsApp is optional).'; document.getElementById(missing[0]).focus(); return; }
+  if (PREVIEW) { err.textContent = 'Preview only: nothing was sent. Parents see the thank-you message at this point.'; return; }
+  var b = document.getElementById('send'); b.disabled = true; b.textContent = 'Sending…'; err.textContent = '';
+  api('joinSubmit', { key: KEY, answers: a }, function () {
+    document.getElementById('main').innerHTML = '<div class="card"><p class="ar">تم استلام البيانات، شكرًا لحضراتكم.</p><p>The details have been received. Thank you.</p></div>';
+    window.scrollTo(0, 0);
+  }, function (m) { b.disabled = false; b.textContent = 'إرسال · Send'; err.textContent = m; });
+}
+
+api('joinForm', { key: KEY }, draw, function (m) { document.getElementById('main').innerHTML = '<div class="card err">' + esc(m) + '</div>'; });
+</script>
+</body>
+</html>
