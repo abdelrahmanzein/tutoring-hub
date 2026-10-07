@@ -1314,7 +1314,7 @@ function showGroup(name) {
       '<h2>' + d.members.length + ' students</h2>' + d.members.map(function (m, i) {
         return '<div class="card"><div class="item"><div class="nav-row" style="flex:1" onclick="showProfile(\'' + esc(m.id) + '\')"><span><b>' + esc(m.name) + '</b>' +
           '<div class="sub">' + esc(m.country || '') + (m.since ? ' · since ' + esc(fmtDate(m.since)) : '') + (m.role && m.role !== 'Member' ? ' · ' + esc(m.role) : '') + '</div></span><span>›</span></div>' +
-          '<button class="secondary" onclick="moveForm(' + i + ')">Move</button></div><div id="mv' + i + '"></div></div>';
+          '<button class="small" style="width:auto;flex:none" onclick="moveForm(' + i + ')">Move</button></div><div id="mv' + i + '"></div></div>';
       }).join('') +
       '<h2>Recent sessions</h2><div class="card">' + (d.sessions.map(function (s) {
         return '<div class="item"><span>' + esc(fmtDate(s.date)) + ' · ' + esc(s.title || '') + '</span><span class="tag ' + (s.status === 'Logged' ? 'good' : '') + '">' + esc(s.status) + '</span></div>';
