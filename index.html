@@ -195,7 +195,7 @@
   </div>
   <header>
     <div class="row">
-      <h1 id="title">Students</h1>
+      <h1 id="title">Sessions</h1>
       <div><span class="updated" id="updated"></span> <button id="refresh">Refresh</button></div>
     </div>
   </header>
@@ -242,8 +242,8 @@ function openTab(tab) {
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
-var NO_CACHE = WRITES.concat(['meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
+var WRITES = ['joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var NO_CACHE = WRITES.concat(['joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
 function newView() { VIEW++; return VIEW; }
@@ -734,6 +734,7 @@ function showStudents() {
     var recent = recentIds().filter(function (id) { return byId[id]; });
     document.getElementById('main').innerHTML = testBar(d.testMode) +
       '<div class="actions" style="margin-top:0"><button class="primary" onclick="newStudentForm()">＋ New student</button></div>' +
+      '<div id="joins"></div>' +
       '<input id="rq" placeholder="Search name (English or Arabic)" value="' + esc(RF.q) + '">' +
       '<div class="chips">' + chip('money', 'owes', 'Owes money') + chip('money', 'credit', 'Has credit') +
       chip('cur', 'EGP', '<span class="cur EGP">EGP</span>') + chip('cur', 'USD', '<span class="cur USD">USD</span>') + '</div>' +
@@ -743,6 +744,7 @@ function showStudents() {
         return '<button class="chip" onclick="showProfile(\'' + esc(id) + '\')">' + esc(byId[id].name.split(' ')[0] + ' ' + (byId[id].name.split(' ')[1] || '').slice(0, 1)) + '</button>';
       }).join('') + '</div>' : '') +
       '<div id="rlist"></div>';
+    drawJoins();
     document.getElementById('rq').oninput = function () { RF.q = this.value; saveRF(); drawRoster(); };
     document.getElementById('rg').onchange = function () { RF.g = this.value; saveRF(); drawRoster(); };
     document.getElementById('ro').onchange = function () { RF.o = this.value; saveRF(); drawRoster(); };
@@ -805,12 +807,20 @@ function drawRoster() {
 
 // New student form: everything needed to join a group, with the rate taken from the Rates tab (editable) and
 // optional trial session(s) to charge now that they continue.
-function newStudentForm() {
+function newStudentForm(join) {
   newView();
   document.getElementById('title').textContent = 'Students';
   call('newStudentForm', {}, function (f) {
     var field = function (id, label, input) { return '<div class="sub" style="margin-top:8px">' + label + '</div>' + (input || '<input id="' + id + '">'); };
+    var groupOpts = [['', 'Pick a group']].concat(f.groups.map(function (g) { return [g.group, g.group]; }));
     document.getElementById('main').innerHTML = '<button class="back" onclick="showStudents()">‹ Cancel</button><h2>New student</h2>' +
+      (join ? '<div class="card sub">From ' + esc(join.answers.parentName) + '\'s joining form (' + esc(fmtDate(join.filledAt)) + '). Check everything, set the payment type and rate, then add.</div>' :
+      '<div class="card"><b>Send the parent a joining form</b><div class="sub">They fill in names (English and Arabic), school, country, phone numbers and the Google account. You set these:</div>' +
+        field('jg', 'Group', sel('jg', '', groupOpts)) +
+        field('js', 'In the group since (first session, e.g. the trial)', '<input id="js" type="date" value="' + today() + '">') +
+        field('jt', 'Trial session to charge (optional)', '<input id="jt" type="date">') +
+        '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);createJoin()">Create form link</button></div>' +
+      '<h2>Or fill it in yourself</h2>') +
       '<div class="card"><b>Student</b>' + field('nf', 'First name') + field('nl', 'Last name') + field('naf', 'Arabic first name') + field('nal', 'Arabic last name') +
       field('ng', 'Gender', sel('ng', '', [['', '–'], ['F', 'F'], ['M', 'M']])) + field('nsch', 'School') +
       field('nc', 'Country', '<input id="nc" list="ncl"><datalist id="ncl">' + f.countries.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</datalist>') +
@@ -835,7 +845,60 @@ function newStudentForm() {
     };
     document.getElementById('ngr').onchange = setRate;
     document.getElementById('nc').onchange = setRate;
+    if (join) {
+      var a = join.answers, put = function (id, v) { var el = document.getElementById(id); if (el && v) el.value = v; };
+      put('nf', a.first); put('nl', a.last); put('naf', a.arabicFirst); put('nal', a.arabicLast); put('ng', a.gender); put('nsch', a.school);
+      put('nc', a.country); put('nsw', a.studentWhatsApp); put('nlang', a.language); put('ngr', join.group); put('nsince', join.since);
+      put('ntrial', join.trialDate); put('npn', a.parentName); put('npr', a.parentRelation); put('npw', a.parentWhatsApp); put('nup', a.studentEmail);
+      put('nnotes', a.city ? 'City: ' + a.city : '');
+      JOIN_KEY = join.key;
+      setRate();
+    } else JOIN_KEY = '';
   }, { form: true });
+}
+
+var JOIN_KEY = '', JOINS = [];
+
+// Creates a joining form and shows the link and the message to send.
+function createJoin() {
+  var g = document.getElementById('jg').value;
+  if (!g) { document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; b.textContent = 'Create form link'; }); return notice('Pick the group first.'); }
+  call('joinCreate', { group: g, since: document.getElementById('js').value, trialDate: document.getElementById('jt').value }, function (r) {
+    showStudents(); showJoinLink(r);
+  });
+}
+
+// The ready message for WhatsApp (you pick the parent's chat), plus the plain link.
+function showJoinLink(r) {
+  sheet('Joining form', '<div class="sub" style="margin-bottom:8px">Send this to the parent. When they submit, it shows under Students → Joining forms.</div>' +
+    '<div class="card" style="white-space:pre-wrap;font-size:14px">' + esc(r.message) + '</div>' +
+    '<button class="primary" style="width:100%" onclick="window.open(\'https://wa.me/?text=\' + encodeURIComponent(JOIN_MSG), \'_blank\')">💬 Send on WhatsApp</button>' +
+    '<button style="width:100%;margin-top:8px" onclick="navigator.clipboard.writeText(JOIN_LINK).then(function(){notice(\'Link copied.\');})">Copy link only</button>');
+  JOIN_MSG = r.message; JOIN_LINK = r.link;
+}
+var JOIN_MSG = '', JOIN_LINK = '';
+
+// Joining forms waiting for the parent or for your review (top of Students).
+function drawJoins() {
+  call('joinList', {}, function (list) {
+    JOINS = list;
+    var box = document.getElementById('joins');
+    if (!box) return;
+    box.innerHTML = list.length ? '<div class="card"><b>Joining forms</b>' + list.map(function (j, i) {
+      return '<div class="item" style="margin-top:8px"><div>' + (j.status === 'Filled' ? '<b>' + esc(j.name) + '</b> · ' : '') + esc(j.group) +
+        '<div class="sub">' + (j.status === 'Filled' ? 'Filled ' + esc(fmtDate(j.filledAt)) : 'Waiting for the parent') + '</div></div>' +
+        '<div>' + (j.status === 'Filled' ? '<button class="primary" onclick="newStudentForm(JOINS[' + i + '])">Review</button>'
+          : '<button onclick="showJoinLink(JOINS[' + i + '])">Link</button> <button class="secondary" onclick="cancelJoin(' + i + ')">Cancel</button>') + '</div></div>';
+    }).join('') + '</div>' : '';
+  }, { part: true });
+}
+
+// Cancels a form (second tap confirms); its link stops working.
+var pendingJoinCancel = -1;
+function cancelJoin(i) {
+  if (pendingJoinCancel !== i) { pendingJoinCancel = i; return notice('Tap Cancel again to stop this form\'s link working.'); }
+  pendingJoinCancel = -1;
+  call('joinCancel', { key: JOINS[i].key }, function () { showStudents(); notice('Form cancelled.'); });
 }
 
 // Sends the new student; if someone with the same name exists (or existed), shows them first and asks again.
@@ -844,7 +907,7 @@ function saveNewStudent(confirmSimilar) {
   var args = { first: v('nf'), last: v('nl'), arabicFirst: v('naf'), arabicLast: v('nal'), gender: v('ng'), school: v('nsch'), country: v('nc'),
     studentWhatsApp: v('nsw'), language: v('nlang'), group: v('ngr'), since: v('nsince'), paymentType: v('npt'), rate: v('nrate'), currency: v('ncur'),
     trialDates: v('ntrial') ? [v('ntrial')] : [], billing: v('nbill'), parentName: v('npn'), parentRelation: v('npr'), parentWhatsApp: v('npw'),
-    meetName: v('nmeet'), uploadAccount: v('nup'), notes: v('nnotes'), confirmSimilar: confirmSimilar };
+    meetName: v('nmeet'), uploadAccount: v('nup'), notes: v('nnotes'), confirmSimilar: confirmSimilar, joinKey: JOIN_KEY };
   call('addStudent', args, function (r) {
     if (r.similar) {
       document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; b.textContent = 'Add student'; });
