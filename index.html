@@ -295,6 +295,7 @@ function prefetch(fresh) {
     var at = Date.now();
     CACHE['money|{}'] = { data: d.money, at: at };
     CACHE['sessionForm|{}'] = { data: d.sessionForm, at: at };
+    CACHE['week|{}'] = { data: d.week, at: at };
     Object.keys(d.profiles).forEach(function (id) {
       CACHE['profile|' + JSON.stringify({ id: id })] = { data: d.profiles[id], at: 0 };     // profiles still fetch the full ledger once
       CACHE['student|' + JSON.stringify({ id: id })] = { data: d.profiles[id].detail, at: at };
@@ -863,26 +864,45 @@ function ledgerRows(list, id) {
 // ---------- Today: log a session by hand (until the calendar/Meet stage) ----------
 var sessData = null, sessRows = [];
 
-// Today screen: the "Log a session" button and the latest logged sessions with Undo.
+// Today screen: today's sessions and the next 6 days' from the Tutoring calendar, with their status.
 function showToday() {
   newView();
   refreshView = showToday;
   document.getElementById('title').textContent = 'Today';
-  call('sessionForm', {}, function (d) {
-    sessData = d;
-    document.getElementById('main').innerHTML =
-      (d.source === 'App'
-        ? '<div class="actions"><button class="primary" onclick="sessionForm()">＋ Log a session</button></div>'
-        : '<div class="card sub" style="font-size:14px">Sessions still come from the old script and Log Sheet (new rows are imported every night at 11:30 PM). ' +
-          'Log sessions there until you switch over.<div class="actions"><button onclick="hold(this,\'Importing…\');importNow()">Import new sessions now</button></div></div>') +
-      '<h2>Recently logged</h2>' + (d.recent.length ? d.recent.map(function (r) {
-        var undone = r['Status'] === 'Undone';
-        return '<div class="card item" style="' + (undone ? 'opacity:.5' : '') + '"><div><div>' + esc(fmtDate(r['Date'])) + ' · ' + esc(r['Group']) + '</div>' +
-          '<div class="sub">' + esc(r['Title']) + ' · ' + esc(r['Status']) + '</div></div>' +
-          (undone ? '' : '<div class="right"><button class="small" onclick="undoSess(\'' + esc(r['Session ID']) + '\')">Undo</button></div>') + '</div>';
-      }).join('') : '<div class="card sub">No sessions logged in the app yet.</div>') +
-      '<div class="card sub" style="margin-top:12px">The calendar and Meet will fill this in automatically in the Sessions stage. Until then, log each session here.</div>';
+  call('week', {}, function (week) {
+    call('sessionForm', {}, function (d) {
+      sessData = d;
+      var byDay = {};
+      week.forEach(function (s) { (byDay[s.day] = byDay[s.day] || []).push(s); });
+      var days = Object.keys(byDay).sort();
+      document.getElementById('main').innerHTML =
+        (days.length ? days.map(function (day) {
+          return '<h2>' + dayLabel(day) + '</h2>' + byDay[day].map(function (s) {
+            return '<div class="card item"><div><div><b>' + esc(s.start) + '</b>–' + esc(s.end) + ' · ' + esc(s.group) + '</div>' +
+              '<div class="sub">' + esc(s.students.join(', ') || 'No students') + '</div></div>' +
+              '<div class="right"><span class="tag ' + STATUS_TAG[s.status] + '">' + esc(s.status) + '</span></div></div>';
+          }).join('');
+        }).join('') : '<div class="card sub">No sessions in the Tutoring calendar for the next 7 days.</div>') +
+        (d.source === 'App'
+          ? '<div class="actions"><button class="primary" onclick="sessionForm()">＋ Log a session</button></div>'
+          : '<div class="card sub" style="font-size:14px;margin-top:14px">Sessions are still logged through the old script; "Logged" above means its charges arrived from the Log Sheet (every night at 11:30 PM, or now:)' +
+            '<div class="actions"><button onclick="hold(this,\'Importing…\');importNow()">Import new sessions now</button></div></div>');
+    }, { part: true });
   });
+}
+
+// Colour of each session status label.
+var STATUS_TAG = { 'Upcoming': '', 'In progress': 'warn', 'Needs review': 'owe', 'Logged': 'good', 'Did not happen': '' };
+
+// "2026-10-07" -> "Today", "Tomorrow" or "Friday 9 Oct".
+function dayLabel(day) {
+  var d = new Date(day + 'T12:00:00'), now = new Date();
+  var t = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+  var diff = Math.round((d - t) / 864e5);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()] + ' ' + d.getDate() + ' ' +
+    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
 }
 
 // Pulls new session rows from the Log Sheet right away.
