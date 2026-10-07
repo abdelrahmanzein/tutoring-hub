@@ -102,6 +102,7 @@
   /* A tappable number inside a card (e.g. "4 unpaid sessions ›") */
   .link-row { display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding:8px 10px; border-radius:10px; background:var(--bad-soft); color:var(--bad); cursor:pointer; font-weight:600; }
   .link-row:hover { filter:brightness(.97); }
+  .nav-row { display:flex; justify-content:space-between; align-items:center; gap:10px; cursor:pointer; }
 
   /* Bottom sheet overlay for details */
   .sheet-bg { position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:30; display:flex; align-items:flex-end; justify-content:center; }
@@ -233,6 +234,7 @@ function openTab(tab) {
   if (tab === 'Students') return showStudents();
   if (tab === 'Income') return showIncome();
   if (tab === 'Sessions') return showToday();
+  if (tab === 'Groups') return showGroups();
   refreshView = null; fetchedAt = null; showAge();
   document.getElementById('main').innerHTML = '<div class="soon">' + tab + ' comes in a later stage.</div>';
 }
@@ -242,7 +244,7 @@ function openTab(tab) {
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var NO_CACHE = WRITES.concat(['joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
@@ -1236,6 +1238,113 @@ function saveSession() {
   var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value,
     noteNext: document.getElementById('sn').value, rows: sessRows, eventId: sessEvent || '', meetHeld: sessMeet ? sessMeet.held : undefined };
   call('logSession', args, function (r) { showToday(); notice('Logged ' + r.sessionId + ': ' + r.charged + ' charged.'); });
+}
+</script>
+
+  <script>
+// ---------- Groups: schedule, members, links, mode (homework folders or past papers) ----------
+
+// The list of groups with their next session and member count.
+function showGroups() {
+  newView();
+  refreshView = showGroups;
+  document.getElementById('title').textContent = 'Groups';
+  call('groups', {}, function (list) {
+    document.getElementById('main').innerHTML = list.map(function (g) {
+      return '<div class="card nav-row" onclick="showGroup(\'' + esc(g.group) + '\')"><div><div class="sess-title">' + esc(g.group) + '</div>' +
+        '<div class="sub">' + g.members + ' students' + (g.next ? ' · next ' + esc(fmtDate(g.next.slice(0, 10))) + ' ' + esc(g.next.slice(11)) : '') + '</div></div>' +
+        '<div>' + (g.status === 'Paused' ? '<span class="tag">Paused</span> ' : '') + (g.pastPapers ? '<span class="tag warn">Past papers</span> ' : '') + '›</div></div>';
+    }).join('') || '<div class="card sub">No groups.</div>';
+  });
+}
+
+var GROUP = null;
+
+// One group's page.
+function showGroup(name) {
+  newView();
+  refreshView = function () { showGroup(name); };
+  document.getElementById('title').textContent = 'Groups';
+  call('group', { group: name }, function (d) {
+    GROUP = d;
+    var g = d.group, paused = g['Status'] === 'Paused';
+    document.getElementById('main').innerHTML = '<button class="back" onclick="showGroups()">‹ Groups</button>' +
+      '<h2>' + esc(g['Group']) + (paused ? ' <span class="tag">Paused</span>' : '') + '</h2>' +
+      '<div class="card"><b>Next sessions</b>' + (d.times.length ? d.times.map(function (t) {
+        return '<div class="sub">' + esc(fmtDate(t.slice(0, 10))) + ' · ' + esc(t.slice(11)) + ' (Cairo)</div>'; }).join('') : '<div class="sub">None in the calendar for 3 weeks.</div>') +
+        '<div class="actions">' +
+        (d.folder ? '<button onclick="window.open(\'' + esc(d.folder) + '\',\'_blank\')">📁 Assignments</button>' : '') +
+        (g['WhatsApp link'] ? '<button onclick="window.open(\'' + esc(g['WhatsApp link']) + '\',\'_blank\')">💬 WhatsApp group</button>' : '') +
+        '</div></div>' +
+      '<div class="card"><b>Homework mode</b>' + (d.pastPapersLink
+        ? '<div class="sub">Past papers: progress and questions come from the follow-up sheet; reminders ask them to tick papers and add questions.</div>' +
+          '<div class="actions"><button onclick="window.open(\'' + esc(d.pastPapersLink) + '\',\'_blank\')">Open follow-up sheet</button>' +
+          '<button class="secondary" onclick="ppOff()">Back to homework folders</button></div>'
+        : '<div class="sub">Homework folders ("N. Title" in the Assignments folder).</div><div class="actions"><button onclick="ppForm()">Switch to past papers…</button></div>') +
+        '<div id="ppbox"></div></div>' +
+      '<h2>' + d.members.length + ' students</h2>' + d.members.map(function (m, i) {
+        return '<div class="card"><div class="item"><div class="nav-row" style="flex:1" onclick="showProfile(\'' + esc(m.id) + '\')"><span><b>' + esc(m.name) + '</b>' +
+          '<div class="sub">' + esc(m.country || '') + (m.since ? ' · since ' + esc(fmtDate(m.since)) : '') + (m.role && m.role !== 'Member' ? ' · ' + esc(m.role) : '') + '</div></span><span>›</span></div>' +
+          '<button class="secondary" onclick="moveForm(' + i + ')">Move</button></div><div id="mv' + i + '"></div></div>';
+      }).join('') +
+      '<h2>Recent sessions</h2><div class="card">' + (d.sessions.map(function (s) {
+        return '<div class="item"><span>' + esc(fmtDate(s.date)) + ' · ' + esc(s.title || '') + '</span><span class="tag ' + (s.status === 'Logged' ? 'good' : '') + '">' + esc(s.status) + '</span></div>';
+      }).join('') || '<div class="sub">None yet.</div>') + '</div>' +
+      '<div class="card"><b>Details</b>' +
+        '<div class="sub" style="margin-top:8px">Status</div>' + sel('gst', paused ? 'Paused' : 'Active', [['Active', 'Active'], ['Paused', 'Paused (off Sessions and reminders, no charges)']]) +
+        '<div class="sub" style="margin-top:8px">WhatsApp group link</div><input id="gwa" value="' + esc(g['WhatsApp link'] || '') + '">' +
+        '<div class="sub" style="margin-top:8px">Notes</div><input id="gno" value="' + esc(g['Notes'] || '') + '">' +
+        '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);saveGroup()">Save</button></div>';
+  });
+}
+
+// Saves status, WhatsApp link and notes.
+function saveGroup() {
+  var name = GROUP.group['Group'];
+  call('updateGroup', { group: name, changes: { 'Status': document.getElementById('gst').value, 'WhatsApp link': document.getElementById('gwa').value.trim(), 'Notes': document.getElementById('gno').value.trim() } },
+    function (r) { showGroup(name); notice(r.changed ? 'Saved.' : 'Nothing changed.'); });
+}
+
+// The switch to past papers: an existing follow-up sheet, or a new one made from the B27 AI SL G1 sheet.
+function ppForm() {
+  document.getElementById('ppbox').innerHTML = '<div class="sub" style="margin-top:10px">Already have a follow-up sheet? Paste its link:</div>' +
+    '<input id="pplink" placeholder="https://docs.google.com/spreadsheets/d/…">' +
+    '<button class="primary" style="width:100%;margin-top:6px" onclick="hold(this);ppSwitch(false)">Use this sheet</button>' +
+    '<div class="sub" style="margin-top:14px">Or make a new one: a copy of the B27 AI SL G1 sheet with one column per student, ticks and questions cleared. Check the list of papers fits this course.</div>' +
+    '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="ppshare" checked style="width:auto"> Anyone with the link can edit (like the current sheet, so students can tick)</label>' +
+    '<button style="width:100%;margin-top:6px" onclick="hold(this);ppSwitch(true)">Create the sheet and switch</button>';
+}
+
+function ppSwitch(create) {
+  var name = GROUP.group['Group'];
+  var args = create ? { group: name, create: true, share: document.getElementById('ppshare').checked } : { group: name, link: document.getElementById('pplink').value.trim() };
+  call('setPastPapers', args, function (r) {
+    showGroup(name);
+    notice('Switched to past papers. Session cards and reminders use the sheet from now on.' + (r.note ? ' ' + r.note : ''));
+  });
+}
+
+// Back to homework folders (second tap confirms).
+var pendingPpOff = false;
+function ppOff() {
+  if (!pendingPpOff) { pendingPpOff = true; return notice('Tap again to switch back to homework folders. The sheet itself is kept.'); }
+  pendingPpOff = false;
+  var name = GROUP.group['Group'];
+  call('setPastPapers', { group: name, off: true }, function () { showGroup(name); notice('Back to homework folders.'); });
+}
+
+// Moving a student: new group and the first session there; the history in this group stays.
+function moveForm(i) {
+  var m = GROUP.members[i];
+  document.getElementById('mv' + i).innerHTML = '<div class="filters" style="margin:8px 0 0">' + sel('mvg' + i, '', [['', 'Move to…']].concat(GROUP.otherGroups.map(function (g) { return [g, g]; }))) +
+    '<input id="mvd' + i + '" type="date" value="' + today() + '"></div><div class="sub">Date = their first session in the new group.</div>' +
+    '<button class="primary" style="width:100%;margin-top:6px" onclick="hold(this);moveIt(' + i + ')">Move ' + esc(m.name.split(' ')[0]) + '</button>';
+}
+
+function moveIt(i) {
+  var m = GROUP.members[i], name = GROUP.group['Group'], to = document.getElementById('mvg' + i).value;
+  if (!to) { document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; b.textContent = 'Move'; }); return notice('Pick the new group.'); }
+  call('moveStudent', { id: m.id, group: name, to: to, from: document.getElementById('mvd' + i).value }, function () { showGroup(name); notice(m.name + ' moved to ' + to + '.'); });
 }
 </script>
 
