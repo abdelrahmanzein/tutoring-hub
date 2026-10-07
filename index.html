@@ -1063,7 +1063,7 @@ function sessionForm(i) {
 function loadMeet() {
   if (!sessEvent) return;
   document.getElementById('smeet').innerHTML = '<div class="card sub">Reading Meet…</div>';
-  call('meetDraft', { eventId: sessEvent, group: document.getElementById('sg').value }, function (m) {
+  call('meetDraft', { eventId: sessEvent, day: document.getElementById('sd').value, group: document.getElementById('sg').value }, function (m) {
     sessMeet = m; applyMeet(); drawMeetBox(); drawSessionRows();
   }, { part: true });
 }
