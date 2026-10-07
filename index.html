@@ -144,9 +144,12 @@
   .bars { display:flex; align-items:flex-end; gap:2px; height:150px; margin-top:8px; }
   .bar-col { flex:1; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; cursor:pointer; }
   .bar { width:70%; max-width:26px; border-radius:4px 4px 0 0; }
-  .bar.EGP { background:#f97316; } .bar.USD { background:#22c55e; }
+  .bar.EGP { background:#f97316; } .bar.USD { background:#22c55e; } .bar.TOTAL { background:var(--accent); }
+  .cur.TOTAL { background:var(--accent-soft); color:var(--accent); }
+  .tbl-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; padding:8px 10px; }
+  .tbl-wrap .tbl td, .tbl-wrap .tbl th { white-space:nowrap; }
   .bar-col:hover .bar { filter:brightness(1.1); }
-  .bar-val { font-size:10px; color:var(--muted); min-height:14px; white-space:nowrap; }
+  .bar-val { font-size:9px; color:var(--muted); min-height:13px; white-space:nowrap; letter-spacing:-.02em; }
   .bar-lbl { font-size:11px; color:var(--muted); margin-top:3px; border-top:1px solid var(--line); width:100%; text-align:center; padding-top:2px; }
   .tbl { width:100%; border-collapse:collapse; font-size:14px; }
   .tbl th { text-align:left; color:var(--muted); font-weight:600; font-size:12px; padding:4px 6px; border-bottom:1px solid var(--line); }
@@ -161,6 +164,9 @@
   .pname { font-size:21px; font-weight:700; }
   .parabic { font-size:17px; color:var(--muted); margin:2px 0 4px; }
   details.card summary { cursor:pointer; color:var(--accent); font-weight:600; }
+
+  /* A secondary action that still reads clearly as a button */
+  button.secondary { width:100%; padding:11px; border:1px solid var(--accent); color:var(--accent); background:var(--card); font-weight:600; }
 
   /* Grey placeholders shown for the split second before a screen's data arrives */
   .skeleton { height:58px; border-radius:12px; margin-bottom:10px; background:linear-gradient(90deg, var(--line) 25%, var(--card) 50%, var(--line) 75%); background-size:200% 100%; animation:shimmer 1.2s infinite; }
@@ -204,7 +210,8 @@ function start(token) {
     b.onclick = function () { open(t); };
     nav.appendChild(b);
   });
-  document.getElementById('refresh').onclick = function () { if (refreshView) refreshView(); };
+  // Refresh asks the server for fresh data (skipping its 2-minute cache) for the screen and the background preload.
+  document.getElementById('refresh').onclick = function () { FRESH_UNTIL = Date.now() + 4000; if (refreshView) refreshView(); prefetch(true); };
   setInterval(showAge, 30000);
   setTimeout(hideSplash, 8000);
   open('Students');
@@ -227,7 +234,7 @@ function open(tab) {
 // Screens open instantly from what the page already has (CACHE), then refresh in the background and redraw if
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
-var CACHE = {}, VIEW = 0, INFLIGHT = 0;
+var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
 var WRITES = ['logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var NO_CACHE = WRITES.concat(['previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -244,9 +251,14 @@ function busy(delta) {
 function call(action, args, done, opts) {
   opts = opts || {};
   var key = action + '|' + JSON.stringify(args || {}), myView = VIEW, cached = CACHE[key];
-  var cacheable = NO_CACHE.indexOf(action) < 0;
-  if (cacheable && cached) { hideSplash(); done(cached.data); }
+  var cacheable = NO_CACHE.indexOf(action) < 0, fresh = Date.now() < FRESH_UNTIL;
+  if (cacheable && cached) {
+    hideSplash(); done(cached.data);
+    // Data younger than a minute is not asked for again (saves are always checked live on the server anyway).
+    if (!fresh && cached.at && Date.now() - cached.at < 60000) return;
+  }
   else if (!opts.part && NO_CACHE.indexOf(action) < 0) document.getElementById('main').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+  if (fresh && cacheable) args = Object.assign({}, args, { fresh: true });
   busy(1);
   google.script.run.withSuccessHandler(function (res) {
     busy(-1);
@@ -255,7 +267,7 @@ function call(action, args, done, opts) {
     hideSplash();
     if (!cacheable) return done(res.data);
     var changed = !cached || JSON.stringify(cached.data) !== JSON.stringify(res.data);
-    CACHE[key] = { data: res.data };
+    CACHE[key] = { data: res.data, at: Date.now() };
     if (cached && (opts.form || !changed || myView !== VIEW)) return;
     if (myView === VIEW || opts.part) done(res.data);
   }).withFailureHandler(function (err) {
@@ -275,19 +287,20 @@ function hideSplash() {
 }
 
 // Loads every screen's data in one go (in the background) so moving around is instant.
-function prefetch() {
+function prefetch(fresh) {
   busy(1);
   google.script.run.withSuccessHandler(function (res) {
     busy(-1);
     var d = res.data;
-    CACHE['money|{}'] = { data: d.money };
-    CACHE['sessionForm|{}'] = { data: d.sessionForm };
+    var at = Date.now();
+    CACHE['money|{}'] = { data: d.money, at: at };
+    CACHE['sessionForm|{}'] = { data: d.sessionForm, at: at };
     Object.keys(d.profiles).forEach(function (id) {
-      CACHE['profile|' + JSON.stringify({ id: id })] = { data: d.profiles[id] };
-      CACHE['student|' + JSON.stringify({ id: id })] = { data: d.profiles[id].detail };
-      CACHE['moneyStudent|' + JSON.stringify({ id: id })] = { data: d.profiles[id].money };
+      CACHE['profile|' + JSON.stringify({ id: id })] = { data: d.profiles[id], at: 0 };     // profiles still fetch the full ledger once
+      CACHE['student|' + JSON.stringify({ id: id })] = { data: d.profiles[id].detail, at: at };
+      CACHE['moneyStudent|' + JSON.stringify({ id: id })] = { data: d.profiles[id].money, at: at };
     });
-  }).withFailureHandler(function () { busy(-1); }).api(TOKEN, 'prefetch', {});
+  }).withFailureHandler(function () { busy(-1); }).api(TOKEN, 'prefetch', fresh ? { fresh: true } : {});
 }
 
 // Disables a button and shows "Saving…" so it can't be pressed twice.
@@ -345,6 +358,7 @@ function addAcc(id) {
 
 // Lists recent changes with an Undo button where possible.
 function drawHistory(rows) {
+  if (!document.getElementById('hist')) return;          // the profile was closed before the history arrived
   document.getElementById('hist').innerHTML = rows.map(function (h) {
     return '<div class="item"><div>' + esc(h['Field']) + ': ' + esc(fmtDate(h['Old'])) + ' → ' + esc(fmtDate(h['New'])) +
       '<div class="sub">' + esc(h['Action']) + ' · ' + esc(fmtDate(h['Time'])) + ' · ' + esc(h['Who or source']) + '</div></div>' +
@@ -448,38 +462,51 @@ function testBar(on) {
 // "900 EGP" style amounts.
 function amt(n, cur) { return Number(n).toLocaleString('en-GB', { maximumFractionDigits: 2 }) + ' ' + cur; }
 
-// Income dashboard: this month's numbers, 12-month bars per currency, per group, and a table of every month.
+// Income dashboard. Every "EGP + USD" pair also shows one total in EGP (USD at that month's average rate;
+// outstanding and the forecast at today's rate).
 function showIncome() {
   newView();
   refreshView = showIncome;
   document.getElementById('title').textContent = 'Income';
   call('income', {}, function (d) {
-    var cur = d.months[d.months.length - 1], egpTotal = d.rate ? Math.round(cur.receivedEGP + cur.receivedUSD * d.rate) : null;
-    var tile = function (label, value, sub) { return '<div class="tile"><div class="sub">' + label + '</div><div class="big">' + value + '</div>' + (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>'; };
+    var cur = d.months[d.months.length - 1];
+    var tile = function (label, value, sub, extra) {
+      return '<div class="tile"' + (extra || '') + '><div class="sub">' + label + '</div><div class="big">' + value + '</div>' + (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>';
+    };
     document.getElementById('main').innerHTML =
       '<h2>' + monthName(cur.month, true) + ' so far</h2><div class="tiles">' +
-      tile('Received <span class="cur EGP">EGP</span>', amt(cur.receivedEGP, ''), cur.feesEGP ? 'bank fees ' + amt(cur.feesEGP, '') : '') +
-      tile('Received <span class="cur USD">USD</span>', amt(cur.receivedUSD, ''), cur.feesUSD ? 'bank fees ' + amt(cur.feesUSD, '') : 'after any bank fees') +
-      tile('Earned (sessions held)', amt(cur.earnedEGP, 'EGP'), amt(cur.earnedUSD, 'USD') + ' · ' + cur.sessions + ' charges') +
-      (egpTotal !== null ? tile('All received, in EGP', amt(egpTotal, ''), 'USD at today\'s ' + d.rate) : '') +
-      '</div><div class="tiles">' +
-      '<div class="tile" style="cursor:pointer" onclick="goRoster({ s: \'owes\' })"><div class="sub">Outstanding (owed to you) ›</div><div class="big">' + amt(d.outstanding.EGP.owed, 'EGP') + '</div><div class="sub">' + amt(d.outstanding.USD.owed, 'USD') + ' · tap to see who</div></div>' +
-      tile('Next 4 weeks (estimate)', amt(d.forecast.EGP, 'EGP'), amt(d.forecast.USD, 'USD') + ' · at the last 4 weeks\' pace') +
+      tile('Received, all in EGP', amt(cur.receivedTotal, 'EGP'), amt(cur.receivedEGP, 'EGP') + ' + ' + amt(cur.receivedUSD, 'USD') + ' (at ' + cur.rate + ')' + (cur.feesUSD || cur.feesEGP ? ' · bank fees ' + both(cur.feesEGP, cur.feesUSD) : '')) +
+      tile('Earned, all in EGP', amt(cur.earnedTotal, 'EGP'), amt(cur.earnedEGP, 'EGP') + ' + ' + amt(cur.earnedUSD, 'USD') + ' · ' + cur.sessions + ' charges') +
+      tile('Outstanding, all in EGP ›', amt(d.outstandingTotal, 'EGP'), amt(d.outstanding.EGP.owed, 'EGP') + ' + ' + amt(d.outstanding.USD.owed, 'USD') + ' (today ' + d.rate + ') · tap to see who', ' style="cursor:pointer" onclick="goRoster({ s: \'owes\' })"') +
+      tile('Next 4 weeks, all in EGP', amt(d.forecast.total, 'EGP'), amt(d.forecast.EGP, 'EGP') + ' + ' + amt(d.forecast.USD, 'USD') + ' · at the last 4 weeks\' pace') +
       '</div>' +
-      '<h2>Received per month</h2>' + barChart(d.months, 'receivedEGP', 'EGP') + barChart(d.months, 'receivedUSD', 'USD') +
-      '<h2>Earned per group</h2><div class="card"><table class="tbl"><tr><th>Group</th><th>This month</th><th>Last 3 months</th></tr>' +
-      d.groups.map(function (g) {
-        return '<tr><td>' + esc(g.group) + '</td><td>' + both(g.thisMonthEGP, g.thisMonthUSD) + '</td><td>' + both(g.last3EGP, g.last3USD) + '</td></tr>';
-      }).join('') + '</table></div>' +
-      '<h2>Every year (all students, current and former)</h2><div class="card" style="overflow-x:auto"><table class="tbl"><tr><th>Year</th><th>Received EGP</th><th>Received USD</th><th>Earned EGP</th><th>Earned USD</th></tr>' +
-      d.years.map(function (y) { return '<tr><td>' + y.year + '</td><td>' + amt(y.receivedEGP, '') + '</td><td>' + amt(y.receivedUSD, '') + '</td><td>' + amt(y.earnedEGP, '') + '</td><td>' + amt(y.earnedUSD, '') + '</td></tr>'; }).join('') +
-      '</table></div>' +
-      '<h2>Every month</h2><div class="card" style="overflow-x:auto"><table class="tbl"><tr><th>Month</th><th>Received EGP</th><th>Received USD</th><th>Earned EGP</th><th>Earned USD</th><th>Fees</th></tr>' +
-      d.months.slice().reverse().map(function (m) {
-        return '<tr><td>' + monthName(m.month) + '</td><td>' + amt(m.receivedEGP, '') + '</td><td>' + amt(m.receivedUSD, '') + '</td><td>' + amt(m.earnedEGP, '') + '</td><td>' + amt(m.earnedUSD, '') + '</td><td>' +
-          ((m.feesEGP || m.feesUSD) ? both(m.feesEGP, m.feesUSD) : '–') + '</td></tr>';
-      }).join('') + '</table></div>';
+      '<h2>Received per month</h2>' +
+      barChart(d.months, 'receivedTotal', 'TOTAL', 'All money received, in EGP') +
+      barChart(d.months, 'receivedEGP', 'EGP', 'Received in EGP') + barChart(d.months, 'receivedUSD', 'USD', 'Received in USD') +
+      '<h2>Earned per group</h2>' + table(['Group', 'This month', 'Last 3 months'], d.groups.map(function (g) {
+        return [esc(g.group), withTotal(g.thisMonthEGP, g.thisMonthUSD, g.thisMonthTotal), withTotal(g.last3EGP, g.last3USD, g.last3Total)];
+      })) +
+      '<h2>Every year (current and former students)</h2>' + table(['Year', 'Received EGP', 'Received USD', 'Received, all in EGP', 'Earned, all in EGP'], d.years.map(function (y) {
+        return [y.year, amt(y.receivedEGP, ''), amt(y.receivedUSD, ''), '<b>' + amt(y.receivedTotal, '') + '</b>', amt(y.earnedTotal, '')];
+      })) +
+      '<h2>Every month</h2>' + table(['Month', 'Rate', 'Received EGP', 'Received USD', 'Received, all in EGP', 'Earned, all in EGP', 'Fees'], d.months.slice().reverse().map(function (m) {
+        return [monthName(m.month, true), m.rate, amt(m.receivedEGP, ''), amt(m.receivedUSD, ''), '<b>' + amt(m.receivedTotal, '') + '</b>', amt(m.earnedTotal, ''),
+          (m.feesEGP || m.feesUSD) ? both(m.feesEGP, m.feesUSD) : '–'];
+      })) +
+      '<div class="sub" style="margin:6px 0 16px">Rates: your own monthly rates from the old Financial Analysis tab where you had them, otherwise the average of daily reference rates. They are in the "FX rates" tab and can be edited there.</div>';
   });
+}
+
+// A table inside a card that scrolls sideways on narrow screens instead of spilling out.
+function table(head, rows) {
+  return '<div class="card tbl-wrap"><table class="tbl"><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>' +
+    rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>'; }).join('') + '</table></div>';
+}
+
+// "2,700 EGP + 30 USD = 4,270 EGP" (skipping zeros; the total only when both currencies are there).
+function withTotal(egp, usd, total) {
+  if (egp && usd) return amt(egp, 'EGP') + ' + ' + amt(usd, 'USD') + '<div class="sub">≈ ' + amt(total, 'EGP') + '</div>';
+  return both(egp, usd);
 }
 
 // "900 EGP · 35 USD" (skipping zeros).
@@ -497,15 +524,23 @@ function monthName(ym, long) {
   return long ? n + ' ' + p[0] : n.slice(0, 3);
 }
 
-// One bar per month for one currency (single series, so no legend). Tap a bar to see its exact value.
-function barChart(months, key, cur) {
+// Short number for bar labels: 123,463 -> 123k, 1,380 -> 1.4k, 595 -> 595.
+function shortNum(n) {
+  n = Math.round(n);
+  if (Math.abs(n) >= 100000) return Math.round(n / 1000) + 'k';
+  if (Math.abs(n) >= 1000) return (Math.round(n / 100) / 10) + 'k';
+  return String(n);
+}
+
+// One bar per month (single series, so no legend), with the value above every bar.
+function barChart(months, key, cur, title) {
   var max = Math.max.apply(null, months.map(function (m) { return m[key]; }).concat([1]));
-  var last = months.length - 1;
-  return '<div class="card"><div class="sub"><span class="cur ' + cur + '">' + cur + '</span> received per month (tap a bar)</div><div class="bars">' +
-    months.map(function (m, i) {
-      var h = Math.round(m[key] / max * 100), show = (m[key] === max && m[key] > 0) || i === last;
-      return '<div class="bar-col" onclick="notice(\'' + monthName(m.month, true) + ': ' + amt(m[key], cur) + ' received\')" title="' + monthName(m.month, true) + ': ' + amt(m[key], cur) + '">' +
-        '<div class="bar-val">' + (show ? amt(m[key], '') : '') + '</div>' +
+  var pill = cur === 'TOTAL' ? '<span class="cur TOTAL">EGP + USD</span>' : '<span class="cur ' + cur + '">' + cur + '</span>';
+  return '<div class="card"><div class="sub">' + pill + ' ' + title + '</div><div class="bars">' +
+    months.map(function (m) {
+      var h = Math.round(m[key] / max * 100);
+      return '<div class="bar-col" title="' + monthName(m.month, true) + ': ' + amt(m[key], cur === 'TOTAL' ? 'EGP' : cur) + '">' +
+        '<div class="bar-val">' + (m[key] ? shortNum(m[key]) : '') + '</div>' +
         '<div class="bar ' + cur + '" style="height:' + Math.max(h, m[key] ? 2 : 0) + '%"></div><div class="bar-lbl">' + monthName(m.month).slice(0, 1) + '</div></div>';
     }).join('') + '</div></div>';
 }
@@ -734,7 +769,11 @@ function drawRoster() {
     if (RF.o === 'oldest') return String((lastPaid(a) || {}).date || '').localeCompare(String((lastPaid(b) || {}).date || ''));
     return owedScore(b) - owedScore(a) || a.name.localeCompare(b.name);
   });
-  document.getElementById('rlist').innerHTML = '<div class="sub" style="margin:0 0 6px">' + rows.length + ' student' + (rows.length === 1 ? '' : 's') + '</div>' + rows.map(function (s) {
+  var owedE = 0, owedU = 0;
+  rows.forEach(function (s) { if (s.money.EGP) owedE += s.money.EGP.owed; if (s.money.USD) owedU += s.money.USD.owed; });
+  var rate = rosterData.rate || 0;
+  var totals = (owedE || owedU) ? ' · owe ' + both(owedE, owedU) + (owedE && owedU && rate ? ' ≈ <b>' + amt(Math.round(owedE + owedU * rate), 'EGP') + '</b>' : '') : '';
+  document.getElementById('rlist').innerHTML = '<div class="sub" style="margin:0 0 6px">' + rows.length + ' student' + (rows.length === 1 ? '' : 's') + totals + '</div>' + rows.map(function (s) {
     var tags = Object.keys(s.money).map(function (c) {
       var m = s.money[c];
       if (m.owed) return '<span class="tag owe">owes ' + amt(m.owed, c) + ' · ' + m.sessionsOwed + ' session' + (m.sessionsOwed === 1 ? '' : 's') + '</span>';
@@ -786,7 +825,7 @@ function showProfile(id) {
       '<div class="sub">' + esc(group) + ' · ' + esc(st.paymentType) + '</div></div>' +
       '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button></div>' +
       '<h2>Money</h2>' + money +
-      '<div class="actions" style="margin-top:0"><button class="small" onclick="adjustForm(\'' + esc(id) + '\')">Waive / correct / refund</button></div>' +
+      '<button class="secondary" style="margin:0 0 10px" onclick="adjustForm(\'' + esc(id) + '\')">✎ Waive, correct or refund</button>' +
       '<div class="card" id="ledger">' + ledgerRows(entries.slice(0, 10), id) +
       ((m.entryCount || entries.length) > 10 ? '<button class="small" style="margin-top:8px" onclick="document.getElementById(\'ledger\').innerHTML = ledgerRows(lastMoneyStudent.entries, \'' + esc(id) + '\')">Show all ' + (m.entryCount || entries.length) + ' entries</button>' : '') + '</div>' +
       '<h2>Info</h2><div class="card"><dl>' + info.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + (r[0].indexOf('WhatsApp') >= 0 ? r[1] : esc(r[1])) + '</dd>'; }).join('') + '</dl></div>' +
@@ -928,7 +967,10 @@ var google = { script: { get run() {
       var attempt = function (n) {
         fetch(EXEC_URL, { method: 'POST', credentials: 'omit', redirect: 'follow', body: JSON.stringify({ token: token, action: action, args: args }) })
           .then(function (r) { return r.json(); })
-          .then(function (j) { if (j.ok) { ok(j.res); if (action === 'prefetch') saveCache(); } else fail(new Error(j.error)); })
+          .then(function (j) {
+            // Hand the answer over outside this promise, so a drawing problem on the page is never reported as "no connection".
+            setTimeout(function () { if (j.ok) { ok(j.res); if (action === 'prefetch') saveCache(); } else fail(new Error(j.error)); }, 0);
+          })
           .catch(function (e) {
             if (n < 2 && retry) return setTimeout(function () { attempt(n + 1); }, 1500);
             fail(new Error(retry ? 'No connection to the app (' + e.message + '). Check the internet and tap Refresh.'
