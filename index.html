@@ -258,8 +258,8 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
-var STALE_WRITES = ['leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
+var WRITES = ['createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var STALE_WRITES = ['leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
@@ -1388,10 +1388,7 @@ function showToday() {
         (days.length ? days.map(function (day) {
           return '<h2>' + dayLabel(day) + '</h2><div class="day-cards" data-day="' + day + '">' + byDay[day].map(function (s) { return sessionCard(s); }).join('') + '</div>';
         }).join('') : '<div class="card sub">No sessions in the Tutoring calendar for the next 7 days.</div>') +
-        (d.source === 'App'
-          ? '<div class="actions"><button class="primary" onclick="sessionForm()">＋ Log a session</button></div>'
-          : '<div class="card sub" style="font-size:14px;margin-top:14px">Sessions are still logged through the old script; "Logged" above means its charges arrived from the Log Sheet (every night at 11:30 PM, or now:)' +
-            '<div class="actions"><button onclick="hold(this,\'Importing…\');importNow()">Import new sessions now</button></div></div>');
+        '<div class="actions"><button class="primary" onclick="sessionForm()">＋ Log a session</button></div>';
       // Homework, past papers and reminders (read from Drive, so they may come a moment later) are merged into the cards.
       call('weekLive', {}, function (live) {
         WEEK.forEach(function (s) { var x = live[s.sessionId]; if (x) { s.homework = x.homework; s.pastPapers = x.pastPapers; s.reminder = x.reminder; s.students = x.students; } });
@@ -1506,14 +1503,6 @@ function dayLabel(day) {
     ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
 }
 
-// Pulls new session rows from the Log Sheet right away.
-function importNow() {
-  call('importLogNow', {}, function (r) {
-    showToday();
-    notice((r.added ? r.added + ' new entries imported from the Log Sheet.' : 'Nothing new in the Log Sheet.') + (r.notes.length ? ' ' + r.notes.join(' ') : ''));
-  });
-}
-
 // Undo with a second tap to confirm.
 var pendingUndo = '';
 function undoSess(id) {
@@ -1526,7 +1515,6 @@ function undoSess(id) {
 // From a card, Meet fills in attendance, lateness and participation; you check and change anything before saving.
 var sessMeet = null, sessEvent = null, SESS_ID = '';
 function sessionForm(i) {
-  if (sessData.source !== 'App') return notice('Sessions are still logged through the old script until the switch-over. After it, this button logs the session here.');
   newView();
   var d = sessData, s = typeof i === 'number' ? WEEK[i] : null;
   sessMeet = null; sessEvent = s ? s.eventId : null; SESS_ID = s ? s.sessionId : '';
