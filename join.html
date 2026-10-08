@@ -153,7 +153,6 @@ function draw(f) {
       field('parentName', 'اسم ولي الأمر', 'Parent\'s name') +
       field('parentRelation', 'صلة القرابة', 'Relation', select('parentRelation', [['Mother', 'Mother / الأم'], ['Father', 'Father / الأب'], ['Other', 'Other / غير ذلك']])) +
       field('parentWhatsApp', 'رقم واتساب ولي الأمر', 'Parent\'s WhatsApp', phone('parentWhatsApp')) +
-      field('language', 'لغة الرسائل', 'Language of messages', '<select id="language"><option value="AR">العربية والإنجليزية / Arabic and English</option><option value="EN">English only</option></select>') +
     '</div>' +
     '<button id="send" onclick="send()">إرسال · Send</button><div id="err" class="err"></div>';
   // The city only matters where a country has several time zones; the phone codes follow the country until changed.
@@ -171,7 +170,7 @@ function draw(f) {
 }
 
 function send() {
-  var ids = ['first', 'last', 'arabicFirst', 'arabicLast', 'gender', 'school', 'country', 'city', 'parentName', 'parentRelation', 'language'];
+  var ids = ['first', 'last', 'arabicFirst', 'arabicLast', 'gender', 'school', 'country', 'city', 'parentName', 'parentRelation'];
   var a = {}; ids.forEach(function (id) { a[id] = document.getElementById(id).value.trim(); });
   if (document.getElementById('f-city').style.display === 'none') a.city = '';
   ['studentWhatsApp', 'parentWhatsApp'].forEach(function (id) {

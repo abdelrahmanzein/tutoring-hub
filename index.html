@@ -455,7 +455,7 @@ var EDIT_FIELDS = [
   ['Rate', null, 'number'], ['Currency', ['EGP', 'USD']],
   ['Payment type', ['EGP, every 4 sessions', 'USD rate paid as EGP, every 4 sessions', 'USD in 8-session blocks']],
   ['Billing contact', ['Parent', 'Student']], ['Parent name'], ['Parent relation'], ['Parent WhatsApp'], ['Student WhatsApp'],
-  ['Message language', ['AR', 'EN']], ['Notes']
+  ['Notes']
 ];
 
 // Edit form: loads the latest values, saves only what changed, and asks for a reason.
@@ -883,7 +883,7 @@ function newStudentForm(join) {
       '<div class="card"><b>Student</b>' + field('nf', 'First name') + field('nl', 'Last name') + field('naf', 'Arabic first name') + field('nal', 'Arabic last name') +
       field('ng', 'Gender', sel('ng', '', [['', '–'], ['F', 'F'], ['M', 'M']])) + field('nsch', 'School') +
       field('nc', 'Country', '<input id="nc" list="ncl"><datalist id="ncl">' + f.countries.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</datalist>') +
-      field('nsw', 'Student WhatsApp (with country code)') + field('nlang', 'Message language', sel('nlang', 'AR', [['AR', 'Arabic + English'], ['EN', 'English']])) + '</div>' +
+      field('nsw', 'Student WhatsApp (with country code)') + '</div>' +
       '<div class="card"><b>Group and money</b>' + field('ngr', 'Group', sel('ngr', '', [['', 'Pick a group']].concat(f.groups.map(function (g) { return [g.group, g.group]; })))) +
       field('nsince', 'In the group since (first session, e.g. the trial)', '<input id="nsince" type="date" value="' + today() + '">') +
       field('npt', 'Payment type', sel('npt', '', f.paymentTypes.map(function (p) { return [p, p]; }))) +
@@ -907,7 +907,7 @@ function newStudentForm(join) {
     if (join) {
       var a = join.answers, put = function (id, v) { var el = document.getElementById(id); if (el && v) el.value = v; };
       put('nf', a.first); put('nl', a.last); put('naf', a.arabicFirst); put('nal', a.arabicLast); put('ng', a.gender); put('nsch', a.school);
-      put('nc', a.country); put('nsw', a.studentWhatsApp); put('nlang', a.language); put('ngr', join.group); put('nsince', join.since);
+      put('nc', a.country); put('nsw', a.studentWhatsApp); put('ngr', join.group); put('nsince', join.since);
       put('ntrial', join.trialDate); put('npn', a.parentName); put('npr', a.parentRelation); put('npw', a.parentWhatsApp);
       put('nnotes', a.city ? 'City: ' + a.city : '');
       JOIN_KEY = join.key;
@@ -965,7 +965,7 @@ function cancelJoin(i) {
 function saveNewStudent(confirmSimilar) {
   var v = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
   var args = { first: v('nf'), last: v('nl'), arabicFirst: v('naf'), arabicLast: v('nal'), gender: v('ng'), school: v('nsch'), country: v('nc'),
-    studentWhatsApp: v('nsw'), language: v('nlang'), group: v('ngr'), since: v('nsince'), paymentType: v('npt'), rate: v('nrate'), currency: v('ncur'),
+    studentWhatsApp: v('nsw'), group: v('ngr'), since: v('nsince'), paymentType: v('npt'), rate: v('nrate'), currency: v('ncur'),
     trialDates: v('ntrial') ? [v('ntrial')] : [], billing: v('nbill'), parentName: v('npn'), parentRelation: v('npr'), parentWhatsApp: v('npw'),
     meetName: v('nmeet'), uploadAccount: v('nup'), notes: v('nnotes'), confirmSimilar: confirmSimilar, joinKey: JOIN_KEY };
   call('addStudent', args, function (r) {
@@ -1054,7 +1054,7 @@ function showProfile(id) {
       ['Rate', i['Rate'] + ' ' + i['Currency'] + ' (locked)'], ['Payment', i['Payment type']], ['Billing contact', i['Billing contact']],
       ['Parent', (i['Parent name'] || '-') + (i['Parent relation'] ? ' (' + i['Parent relation'] + ')' : '')],
       ['Parent WhatsApp', wa(i['Parent WhatsApp'])], ['Student WhatsApp', wa(i['Student WhatsApp'])],
-      ['Language', i['Message language']], ['Status', i['Status'] + (i['Status date'] ? ' since ' + fmtDate(i['Status date']) : '')], ['Notes', i['Notes'] || '-']
+      ['Status', i['Status'] + (i['Status date'] ? ' since ' + fmtDate(i['Status date']) : '')], ['Notes', i['Notes'] || '-']
     ];
     document.getElementById('main').innerHTML = testBar(m.testMode) +
       '<button class="back" onclick="goBack()">‹ ' + esc(BACK.label) + '</button>' +
