@@ -102,6 +102,9 @@
   /* A tappable number inside a card (e.g. "4 unpaid sessions ›") */
   .link-row { display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding:8px 10px; border-radius:10px; background:var(--bad-soft); color:var(--bad); cursor:pointer; font-weight:600; }
   .link-row:hover { filter:brightness(.97); }
+  #saving { position:fixed; left:50%; transform:translate(-50%, 20px); bottom:calc(84px + env(safe-area-inset-bottom)); z-index:30; background:var(--text); color:var(--bg);
+    padding:7px 14px; border-radius:999px; font-size:14px; opacity:0; transition:opacity .2s, transform .2s; pointer-events:none; }
+  #saving.on { opacity:.92; transform:translate(-50%, 0); } #saving.ok { background:var(--good); color:#fff; }
   .nav-row { display:flex; justify-content:space-between; align-items:center; gap:10px; cursor:pointer; }
 
   /* Bottom sheet overlay for details */
@@ -255,6 +258,7 @@ function goBack() { BACK.fn(); }
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
 var WRITES = ['markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var STALE_WRITES = ['recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
@@ -313,20 +317,59 @@ function loadSnapshots() {
   })).then(function () {
     SNAP_LOADING = null; setRefreshing(false); hideSplash();
     if (SNAP_AT.core) { fetchedAt = new Date(SNAP_AT.core); showAge(false); }
-    if (STALE_SINCE && SNAP_AT.core > STALE_SINCE) { STALE_SINCE = 0; clearInterval(POLL_T); }
+    if (STALE_SINCE && SNAP_AT.core > STALE_SINCE) STALE_SINCE = 0;
+    if (SAVED_AT && SNAP_AT.core > SAVED_AT) { SAVED_AT = 0; clearInterval(POLL_T); }
+    // Changes made on this phone that the downloaded data doesn't include yet are put back on top of it.
+    PATCHES = PATCHES.filter(function (p) { return !(SNAP_AT.core > p.at + 5000); });
+    PATCHES.forEach(function (p) { try { p.fn(); } catch (e) {} });
     persist();
     if (JSON.stringify(SNAP_AT) !== before && refreshView) { var y = window.scrollY; refreshView(); window.scrollTo(0, y); }
   });
   return SNAP_LOADING;
 }
 
-// After a save: screens ask Google until the read service has the new data (checked every 15 s, for 3 minutes).
-function afterSave() {
-  STALE_SINCE = Date.now();
+// After a save: the new data is uploaded within about a minute; it's checked every 15 s (for 3 minutes).
+// Saves that change money or sessions also make screens ask Google directly until then (stale = true).
+var SAVED_AT = 0;
+function afterSave(stale) {
+  SAVED_AT = Date.now();
+  if (stale) STALE_SINCE = Date.now();
   if (!READ_URL) return;
   clearInterval(POLL_T);
   var tries = 0;
-  POLL_T = setInterval(function () { if (++tries > 12 || !STALE_SINCE) { clearInterval(POLL_T); STALE_SINCE = 0; return; } loadSnapshots(); }, 15000);
+  POLL_T = setInterval(function () { if (++tries > 12 || !SAVED_AT) { clearInterval(POLL_T); SAVED_AT = 0; STALE_SINCE = 0; return; } loadSnapshots(); }, 15000);
+}
+
+// Local changes shown straight away (before the server's new data arrives). fn edits CACHE; it's applied now and
+// again after each download until the download includes it.
+var PATCHES = [];
+function patchLocal(fn) {
+  PATCHES.push({ at: Date.now(), fn: fn });
+  try { fn(); } catch (e) {}
+  persist();
+}
+function cached(action, args) { var c = CACHE[action + '|' + JSON.stringify(args || {})]; return c && c.data; }
+
+// A homework status changed on this phone: the To do list and the student's page show it at once.
+function patchHomework(assignmentId, id, status) {
+  patchLocal(function () {
+    var t = cached('todo');
+    if (t) t.homework.forEach(function (h) { if (h.assignmentId === assignmentId) h.missing = h.missing.filter(function (p) { return p.id !== id; }); });
+    if (t) t.homework = t.homework.filter(function (h) { return h.missing.length; });
+    var pr = cached('profile', { id: id });
+    if (pr && pr.homework) pr.homework.forEach(function (h) { if (h.assignmentId === assignmentId && status) { h.status = status; h.manual = true; } });
+  });
+}
+
+// The "Saving…" marker at the bottom while saves run in the background.
+var SAVING = 0;
+function savingMark(delta, done) {
+  SAVING = Math.max(0, SAVING + delta);
+  var el = document.getElementById('saving');
+  if (!el) { el = document.createElement('div'); el.id = 'saving'; document.body.appendChild(el); }
+  el.className = SAVING ? 'on' : done ? 'on ok' : '';
+  el.textContent = SAVING ? 'Saving' + (SAVING > 1 ? ' ' + SAVING + ' changes' : '') + '…' : done ? 'Saved ✓' : '';
+  if (!SAVING) setTimeout(function () { if (!SAVING) el.className = ''; }, 1800);
 }
 
 // Refresh: download now, and ask Google to rebuild everything (picks up changes typed into the Sheet), then download again.
@@ -359,14 +402,24 @@ function call(action, args, done, opts) {
   }
   else if (!opts.part && cacheable) document.getElementById('main').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
   if (fresh && cacheable) args = Object.assign({}, args, { fresh: true });
-  var waiting = !shown;                       // you're looking at a skeleton, a form waiting, or a save
+  var waiting = !shown && !isWrite;           // you're looking at a skeleton or a form waiting
+  if (isWrite) savingMark(1);
   send(function (finish) {
     if (waiting) busy(1);
     if (shown) setRefreshing(true);
     google.script.run.withSuccessHandler(function (res) {
       if (waiting) busy(-1); if (shown) setRefreshing(false); finish();
       fetchedAt = new Date(res.fetchedAt); showAge(false);
-      if (isWrite) { staleAll(); afterSave(); }
+      if (isWrite) {
+        savingMark(-1, true);
+        var stale = STALE_WRITES.indexOf(action) >= 0;
+        if (stale) staleAll();
+        afterSave(stale);
+        // Optimistic saves already updated the screen; others continue where you are (or just confirm if you moved on).
+        if (opts.optimistic) { if (opts.confirmed) opts.confirmed(res.data); return; }
+        if (myView !== VIEW) { notice('Saved ✓'); if (stale && refreshView) refreshView(); return; }
+        return done(res.data);
+      }
       hideSplash();
       if (!cacheable) return done(res.data);
       var changed = !cached || JSON.stringify(cached.data) !== JSON.stringify(res.data);
@@ -376,11 +429,17 @@ function call(action, args, done, opts) {
     }).withFailureHandler(function (err) {
       if (waiting) busy(-1); if (shown) setRefreshing(false); finish(); hideSplash();
       document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
+      if (isWrite) {
+        savingMark(-1);
+        if (opts.optimistic) { PATCHES = []; loadSnapshots(); }       // undo the on-screen change
+        return notice('Not saved: ' + err.message);
+      }
       if (shown) return showAge(true);                                  // keep what's on screen; the header says it couldn't refresh
       if (isWrite || !cacheable || opts.part) notice(err.message);
       else if (myView === VIEW) document.getElementById('main').innerHTML = '<div class="error">' + esc(err.message) + '</div>';
     }).api(TOKEN, action, args);
-  }, waiting);
+  }, waiting || isWrite);
+  if (isWrite && opts.optimistic) opts.optimistic();
 }
 
 // After a save, every screen's data is marked old (shown at once, refreshed in the background when opened).
@@ -1094,8 +1153,9 @@ function hwEdit(i, id) {
 }
 function hwSave(i, id, clear) {
   var h = HW_LIST[i];
-  call('setHomework', { assignmentId: h.assignmentId, id: id, status: clear ? '' : document.getElementById('hws').value, reason: clear ? '' : document.getElementById('hwr').value },
-    function () { var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove(); showProfile(id); notice('Saved.'); });
+  var status = clear ? '' : document.getElementById('hws').value;
+  call('setHomework', { assignmentId: h.assignmentId, id: id, status: status, reason: clear ? '' : document.getElementById('hwr').value }, function () {}, {
+    optimistic: function () { var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove(); patchHomework(h.assignmentId, id, status); showProfile(id); } });
 }
 
 // Moves the student to another group from their page (the same as Move on the group page).
@@ -1272,12 +1332,21 @@ function notHeldForm(i) {
 function saveNotHeld(i) {
   var s = WEEK[i], mk = document.getElementById('nhm').checked;
   call('markNotHeld', { group: s.group, day: s.day, eventId: s.eventId, reason: document.getElementById('nhr').value,
-    makeupDate: mk ? document.getElementById('nhd').value : '', makeupTime: mk ? document.getElementById('nht').value : '' }, function (r) {
-    var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove();
-    goBack();
-    NH_MSG = r.message;
-    sheet('Tell the group?', '<div class="card" style="white-space:pre-wrap;font-size:14px">' + esc(r.message) + '</div>' +
-      '<button class="primary" style="width:100%" onclick="window.open(\'https://wa.me/?text=\' + encodeURIComponent(NH_MSG), \'_blank\')">💬 Send on WhatsApp</button>');
+    makeupDate: mk ? document.getElementById('nhd').value : '', makeupTime: mk ? document.getElementById('nht').value : '' }, function () {}, {
+    optimistic: function () {
+      var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove();
+      patchLocal(function () {
+        var w = cached('week'); if (w) w.forEach(function (x) { if (x.sessionId === s.sessionId) x.status = 'Did not happen'; });
+        var t = cached('todo'); if (t) t.toLog = t.toLog.filter(function (x) { return x.sessionId !== s.sessionId; });
+      });
+      goBack();
+    },
+    // The message for the group comes from the server (session times per country), so it opens once saved.
+    confirmed: function (r) {
+      NH_MSG = r.message;
+      sheet('Tell the group?', '<div class="card" style="white-space:pre-wrap;font-size:14px">' + esc(r.message) + '</div>' +
+        '<button class="primary" style="width:100%" onclick="window.open(\'https://wa.me/?text=\' + encodeURIComponent(NH_MSG), \'_blank\')">💬 Send on WhatsApp</button>');
+    }
   });
 }
 var NH_MSG = '';
@@ -1510,7 +1579,7 @@ function showGroup(name) {
         '</div></div>' +
       '<h2>' + d.members.length + ' students</h2>' + d.members.map(function (m, i) {
         return '<div class="card"><div class="item"><div class="nav-row" style="flex:1" onclick="showProfile(\'' + esc(m.id) + '\')"><span><b>' + esc(m.name) + '</b>' +
-          '<div class="sub">' + esc(m.country || '') + ' · since ' + (m.since ? esc(fmtDate(m.since)) : '?') + (m.role && m.role !== 'Member' ? ' · ' + esc(m.role) : '') + '</div></span><span>›</span></div>' +
+          '<div class="sub">' + esc(m.country || '') + ' · since ' + (m.firstEver || m.since ? esc(fmtDate(m.firstEver || m.since)) : '?') + (m.role && m.role !== 'Member' ? ' · ' + esc(m.role) : '') + '</div></span><span>›</span></div>' +
           '<button class="small" style="width:auto;flex:none" onclick="moveForm(' + i + ')">Move</button></div><div id="mv' + i + '"></div></div>';
       }).join('') +
       '<h2>Recent sessions</h2>' + sessionsTable(d) +
@@ -1537,8 +1606,14 @@ function sessionsTable(d) {
 // Saves status, WhatsApp link and notes.
 function saveGroup() {
   var name = GROUP.group['Group'];
-  call('updateGroup', { group: name, changes: { 'Status': document.getElementById('gst').value, 'WhatsApp link': document.getElementById('gwa').value.trim(), 'Notes': document.getElementById('gno').value.trim() } },
-    function (r) { showGroup(name); notice(r.changed ? 'Saved.' : 'Nothing changed.'); });
+  var changes = { 'Status': document.getElementById('gst').value, 'WhatsApp link': document.getElementById('gwa').value.trim(), 'Notes': document.getElementById('gno').value.trim() };
+  call('updateGroup', { group: name, changes: changes }, function () {}, { optimistic: function () {
+    patchLocal(function () {
+      var g = cached('group', { group: name }); if (g) Object.keys(changes).forEach(function (k) { g.group[k] = changes[k]; });
+      var l = cached('groups'); if (l) l.forEach(function (x) { if (x.group === name) x.status = changes['Status']; });
+    });
+    showGroup(name);
+  } });
 }
 
 // The switch to past papers: an existing follow-up sheet, or a new one made from the B27 AI SL G1 sheet.
@@ -1668,9 +1743,8 @@ function missingSheet(hi, pi) {
 }
 function setMissing(hi, pi, status) {
   var h = TODO.homework[hi], p = h.missing[pi];
-  call('setHomework', { assignmentId: h.assignmentId, id: p.id, status: status, reason: 'Set from To do' }, function () {
-    var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove(); showTodo(); notice(p.name + ': ' + status + '.');
-  });
+  call('setHomework', { assignmentId: h.assignmentId, id: p.id, status: status, reason: 'Set from To do' }, function () {}, {
+    optimistic: function () { var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove(); patchHomework(h.assignmentId, p.id, status); showTodo(); } });
 }
 function nudge(hi, pi) {
   var h = TODO.homework[hi], p = h.missing[pi];
@@ -1698,13 +1772,16 @@ function todoNotHeld(sessionId) {
 }
 
 function scanNow() {
-  call('scanHomework', {}, function (r) { showTodo(); notice(r.report.split('\n').slice(0, 3).join(' · ')); });
+  call('scanHomework', {}, function (r) { notice(r.report); var b = document.querySelector('button[disabled]'); if (b) b.textContent = 'Checking in the background…'; });
 }
 
 function assignUpload(i) {
   var u = TODO.uploads[i], id = document.getElementById('up' + i).value;
   if (!id) return notice('Pick the student first.');
-  call('assignUpload', { id: id, owner: u.owner }, function () { showTodo(); notice(u.owner + ' saved; homework re-checked.'); });
+  call('assignUpload', { id: id, owner: u.owner }, function () {}, { optimistic: function () {
+    patchLocal(function () { var t = cached('todo'); if (t) t.uploads = t.uploads.filter(function (x) { return x.owner !== u.owner; }); });
+    showTodo(); notice(u.owner + ' saved. Homework is re-checked in the background.');
+  } });
 }
 </script>
 
