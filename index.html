@@ -219,11 +219,15 @@ function start(token) {
     nav.appendChild(b);
   });
   // Refresh asks the server for fresh data (skipping its 2-minute cache) for the screen and the background preload.
-  document.getElementById('refresh').onclick = function () { FRESH_UNTIL = Date.now() + 4000; if (refreshView) refreshView(); prefetch(true); };
+  document.getElementById('refresh').onclick = function () {
+    if (READ_URL) return refreshFromServer();
+    FRESH_UNTIL = Date.now() + 4000; if (refreshView) refreshView(); prefetch(true);
+  };
   setInterval(showAge, 30000);
   setTimeout(hideSplash, 8000);
+  if (READ_URL) loadSnapshots();
   openTab('Sessions');
-  prefetch();
+  if (!READ_URL) prefetch();
 }
 
 // Switches tab.
@@ -254,7 +258,7 @@ var WRITES = ['markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'upd
 var NO_CACHE = WRITES.concat(['todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
-function newView() { VIEW++; return VIEW; }
+function newView() { VIEW++; refreshView = null; return VIEW; }
 
 // Shows/hides the thin loading bar at the top. Only for things you're waiting for (a screen with nothing to show
 // yet, or a save); quiet background refreshes never show it.
@@ -285,10 +289,67 @@ function persist() {
   SAVE_T = setTimeout(function () { if (typeof saveCache === 'function') saveCache(); }, 1500);
 }
 
+// ---------- Fast screens (Cloudflare read service) ----------
+// Every screen's data is prepared by the server and uploaded to a fast read service; the app downloads it in a
+// fraction of a second instead of asking Google for each screen. Right after a save, screens ask Google directly
+// (as before) until the new data has been uploaded (usually within a minute).
+var READ_URL = '';   // set once the read service is live
+var SNAP_ACTIONS = ['money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
+var SNAP_AT = {}, STALE_SINCE = 0, SNAP_LOADING = null, POLL_T = null;
+
+// Downloads the three blobs; redraws the screen you're on if anything changed.
+function loadSnapshots() {
+  if (SNAP_LOADING) return SNAP_LOADING;
+  setRefreshing(true);
+  var before = JSON.stringify(SNAP_AT);
+  SNAP_LOADING = Promise.all(['core', 'live', 'profiles'].map(function (name) {
+    return fetch(READ_URL + '/s/' + name, { headers: { Authorization: 'Bearer ' + TOKEN }, credentials: 'omit', cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || !j.data) return;
+        SNAP_AT[name] = Date.parse(j.at);
+        Object.keys(j.data).forEach(function (k) { CACHE[k] = { data: j.data[k], at: Date.now(), snap: true }; });
+      }).catch(function () {});
+  })).then(function () {
+    SNAP_LOADING = null; setRefreshing(false); hideSplash();
+    if (SNAP_AT.core) { fetchedAt = new Date(SNAP_AT.core); showAge(false); }
+    if (STALE_SINCE && SNAP_AT.core > STALE_SINCE) { STALE_SINCE = 0; clearInterval(POLL_T); }
+    persist();
+    if (JSON.stringify(SNAP_AT) !== before && refreshView) { var y = window.scrollY; refreshView(); window.scrollTo(0, y); }
+  });
+  return SNAP_LOADING;
+}
+
+// After a save: screens ask Google until the read service has the new data (checked every 15 s, for 3 minutes).
+function afterSave() {
+  STALE_SINCE = Date.now();
+  if (!READ_URL) return;
+  clearInterval(POLL_T);
+  var tries = 0;
+  POLL_T = setInterval(function () { if (++tries > 12 || !STALE_SINCE) { clearInterval(POLL_T); STALE_SINCE = 0; return; } loadSnapshots(); }, 15000);
+}
+
+// Refresh: download now, and ask Google to rebuild everything (picks up changes typed into the Sheet), then download again.
+function refreshFromServer() {
+  loadSnapshots();
+  setRefreshing(true);
+  google.script.run.withSuccessHandler(function () { setRefreshing(false); loadSnapshots(); })
+    .withFailureHandler(function () { setRefreshing(false); showAge(true); }).api(TOKEN, 'publishNow', {});
+}
+
 // Calls the server. opts.form: draw once only (never redraw a form the user is typing in). opts.part: a piece of a screen.
 function call(action, args, done, opts) {
   opts = opts || {};
   var key = action + '|' + JSON.stringify(args || {}), myView = VIEW, cached = CACHE[key];
+  // Fast path: straight from the read service's data (waits for the first download if it's still coming).
+  if (READ_URL && !STALE_SINCE && SNAP_ACTIONS.indexOf(action) >= 0 && !(args && args.fresh)) {
+    if (cached && cached.snap) { hideSplash(); return done(cached.data); }
+    if (SNAP_LOADING && !opts.retried) {
+      if (cached) { hideSplash(); return done(cached.data); }      // saved on this device; redrawn when the download lands
+      if (!opts.part) document.getElementById('main').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+      return SNAP_LOADING.then(function () { if (myView === VIEW || opts.part) call(action, args, done, Object.assign({}, opts, { retried: true })); });
+    }
+  }
   var cacheable = NO_CACHE.indexOf(action) < 0, fresh = Date.now() < FRESH_UNTIL, isWrite = WRITES.indexOf(action) >= 0;
   var shown = false;
   if (cacheable && cached) {
@@ -305,7 +366,7 @@ function call(action, args, done, opts) {
     google.script.run.withSuccessHandler(function (res) {
       if (waiting) busy(-1); if (shown) setRefreshing(false); finish();
       fetchedAt = new Date(res.fetchedAt); showAge(false);
-      if (isWrite) staleAll();
+      if (isWrite) { staleAll(); afterSave(); }
       hideSplash();
       if (!cacheable) return done(res.data);
       var changed = !cached || JSON.stringify(cached.data) !== JSON.stringify(res.data);
@@ -1581,10 +1642,19 @@ var google = { script: { get run() {
 
 // Keeps the last loaded data on this device, so the app opens with it instantly and refreshes in the background.
 function saveCache() {
-  setTimeout(function () { try { localStorage.setItem('th_cache', JSON.stringify(CACHE)); } catch (e) { /* storage full or blocked */ } }, 0);
+  setTimeout(function () {
+    try { localStorage.setItem('th_cache', JSON.stringify(CACHE)); }
+    catch (e) {                                    // too big for the phone's storage: keep everything but the student pages
+      try { var c = {}; Object.keys(CACHE).forEach(function (k) { if (k.indexOf('profile|') !== 0) c[k] = CACHE[k]; }); localStorage.setItem('th_cache', JSON.stringify(c)); } catch (e2) {}
+    }
+  }, 0);
 }
 function loadCache() {
-  try { var c = JSON.parse(localStorage.getItem('th_cache') || 'null'); if (c) CACHE = c; } catch (e) { /* ignore */ }
+  try {
+    var c = JSON.parse(localStorage.getItem('th_cache') || 'null');
+    // Saved data shows at once but counts as old: it's replaced as soon as the fresh download arrives.
+    if (c) { Object.keys(c).forEach(function (k) { c[k].snap = false; c[k].at = 0; }); CACHE = c; }
+  } catch (e) { /* ignore */ }
 }
 
 // The secret token comes once in the link (#t=...), is kept on this device, and removed from the address bar.

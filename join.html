@@ -65,10 +65,19 @@ var google = { script: { get run() {
 
 // Keeps the last loaded data on this device, so the app opens with it instantly and refreshes in the background.
 function saveCache() {
-  setTimeout(function () { try { localStorage.setItem('th_cache', JSON.stringify(CACHE)); } catch (e) { /* storage full or blocked */ } }, 0);
+  setTimeout(function () {
+    try { localStorage.setItem('th_cache', JSON.stringify(CACHE)); }
+    catch (e) {                                    // too big for the phone's storage: keep everything but the student pages
+      try { var c = {}; Object.keys(CACHE).forEach(function (k) { if (k.indexOf('profile|') !== 0) c[k] = CACHE[k]; }); localStorage.setItem('th_cache', JSON.stringify(c)); } catch (e2) {}
+    }
+  }, 0);
 }
 function loadCache() {
-  try { var c = JSON.parse(localStorage.getItem('th_cache') || 'null'); if (c) CACHE = c; } catch (e) { /* ignore */ }
+  try {
+    var c = JSON.parse(localStorage.getItem('th_cache') || 'null');
+    // Saved data shows at once but counts as old: it's replaced as soon as the fresh download arrives.
+    if (c) { Object.keys(c).forEach(function (k) { c[k].snap = false; c[k].at = 0; }); CACHE = c; }
+  } catch (e) { /* ignore */ }
 }
 
 // The secret token comes once in the link (#t=...), is kept on this device, and removed from the address bar.
