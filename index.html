@@ -258,7 +258,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -299,7 +299,7 @@ function persist() {
 // fraction of a second instead of asking Google for each screen. Right after a save, screens ask Google directly
 // (as before) until the new data has been uploaded (usually within a minute).
 var READ_URL = 'https://tutoring-hub.abdelrahmanzein.workers.dev';
-var SNAP_ACTIONS = ['money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
+var SNAP_ACTIONS = ['prospects', 'money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
 var SNAP_AT = {}, STALE_SINCE = 0, SNAP_LOADING = null, POLL_T = null;
 
 // Downloads the three blobs; redraws the screen you're on if anything changed.
@@ -357,7 +357,7 @@ function cached(action, args) { var c = CACHE[action + '|' + JSON.stringify(args
 // then "Saved ✓". If Google refuses one (e.g. the balance changed meanwhile), you get "Not saved: why".
 var QUEUE_ACTIONS = ['setHomework', 'updateGroup', 'assignUpload', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession',
   'undoSession', 'updateStudent', 'addAccount', 'confirmAccount', 'undoStudentEdit', 'moveStudent', 'joinCancel',
-  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement'];
+  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect'];
 var QUEUE_LABEL = { recordPayment: 'payment', addAdjustment: 'adjustment', logSession: 'session', undoSession: 'undo', updateStudent: 'student edit', setHomework: 'homework' };
 
 function newId() {
@@ -998,7 +998,7 @@ function showStudents() {
     var recent = recentIds().filter(function (id) { return byId[id]; });
     document.getElementById('main').innerHTML = testBar(d.testMode) +
       '<div class="actions" style="margin-top:0"><button class="primary" onclick="newStudentForm()">＋ New student</button></div>' +
-      '<div id="joins"></div>' +
+      '<div id="pros"></div><div id="joins"></div>' +
       '<input id="rq" placeholder="Search name (English or Arabic)" value="' + esc(RF.q) + '">' +
       '<div class="chips">' + chip('money', 'owes', 'Owes money') + chip('money', 'credit', 'Has credit') +
       chip('cur', 'EGP', '<span class="cur EGP">EGP</span>') + chip('cur', 'USD', '<span class="cur USD">USD</span>') + '</div>' +
@@ -1009,6 +1009,7 @@ function showStudents() {
       }).join('') + '</div>' : '') +
       '<div id="rlist"></div>';
     drawJoins();
+    drawProspects();
     document.getElementById('rq').oninput = function () { RF.q = this.value; saveRF(); drawRoster(); };
     document.getElementById('rg').onchange = function () { RF.g = this.value; saveRF(); drawRoster(); };
     document.getElementById('ro').onchange = function () { RF.o = this.value; saveRF(); drawRoster(); };
@@ -1392,6 +1393,7 @@ function sessionCard(s) {
       (s.homework.link ? ' · <a href="' + esc(s.homework.link) + '" target="_blank">📁 submissions</a>' : '') + '</div>' : '') +
     (s.pastPapers ? '<div class="sub">Past papers · <a href="' + esc(s.pastPapers.link) + '" target="_blank">open follow-up sheet</a></div>' : '') +
     (s.note ? '<div class="note">📌 Note from ' + esc(fmtDate(s.note.from)) + ': ' + esc(s.note.text) + '</div>' : '') +
+    (s.trials && s.trials.length ? '<div class="note">🆕 Trial: ' + s.trials.map(function (t) { return esc(t.name); }).join(', ') + '</div>' : '') +
     '<div class="chips">' + (s.students.map(function (p) {
       return '<button class="chip hw-' + (HW_CLASS[p.hw] || 'none') + '" title="' + esc(p.detail || p.hw || '') + '" onclick="showProfile(\'' + esc(p.id) + '\')">' +
         (HW_ICON[p.hw] ? HW_ICON[p.hw] + ' ' : '') + esc(p.name) + (p.detail ? ' <span class="sub">' + esc(p.detail) + '</span>' : '') + '</button>';
@@ -1546,7 +1548,7 @@ function drawMeetBox() {
   box.innerHTML = '<div class="card"><div class="sub">From Meet: first student let in at ' + esc(String(m.firstAdmitted).slice(11)) +
     (m.hasTranscript ? ' · participation suggested from the transcript' : ' · no transcript, so pick participation yourself') + '. Change anything below.</div>' +
     m.unknown.map(function (u, k) {
-      return '<div class="item" style="margin-top:8px"><div><b>Who is this?</b> ' + esc(u.name) + (u.suggest ? '<div class="sub">Probably ' + esc(u.suggestName) + ' (the only one without a Meet account yet)</div>' : '') + '</div></div><div class="filters" style="margin:6px 0 0">' +
+      return '<div class="item" style="margin-top:8px"><div><b>Who is this?</b> ' + esc(u.name) + (u.suggest ? '<div class="sub">Probably ' + esc(u.suggestName) + ' (the only one without a Meet account yet)</div>' : u.trial ? '<div class="sub">Probably the trial student: ' + esc(u.trial) + ' (nothing to save now; the account is picked when they join)</div>' : '') + '</div></div><div class="filters" style="margin:6px 0 0">' +
         sel('wk' + k, u.suggest || '', [['', 'Pick the student']].concat(sessData.people.map(function (p) { return [p.id, p.name]; }))) +
         '<button onclick="hold(this);assignWho(' + k + ')">Save</button></div>';
     }).join('') + '</div>';
@@ -1774,6 +1776,10 @@ function showTodo() {
     }).join(''));
     if (d.joins.length) parts.push('<h2>Joining forms to review</h2>' + d.joins.map(function (j, i) {
       return '<div class="card nav-row" onclick="newStudentForm(TODO.joins[' + i + '])"><span><b>' + esc(j.name) + '</b><div class="sub">' + esc(j.group) + ' · filled ' + esc(fmtDate(j.filledAt)) + '</div></span><span>Review ›</span></div>';
+    }).join(''));
+    var decideList = (cached('prospects') || []).filter(function (p) { return p['Stage'] === 'Trial done'; });
+    if (decideList.length) parts.push('<h2>Decide after the trial</h2>' + decideList.map(function (p) {
+      return '<div class="card nav-row" onclick="openProspect(\'' + esc(p['Prospect ID']) + '\')"><span><b>' + esc(p['Student name']) + '</b><div class="sub">Trial ' + esc(fmtDate(String(p['Trial date']).slice(0, 10))) + ' · ' + esc(p['Group']) + '</div></span><span>›</span></div>';
     }).join(''));
     parts.push('<div id="todo-pay"></div>');
     parts.push('<div id="todo-up"></div>');
@@ -2031,6 +2037,134 @@ function showSettings() {
       }).join('') + '</div>';
     if (typeof drawSettingsMore === 'function') drawSettingsMore();
   });
+}
+</script>
+
+  <script>
+// ---------- Prospects: interest → details → trial → decision → joining form → joined ----------
+var PROS = [];
+var STAGE_TAG = { 'New': 'warn', 'Details sent': '', 'Trial booked': 'warn', 'Trial done': 'owe', 'Joining form sent': '', 'Joined': 'good', 'Closed': '' };
+
+// The prospects card at the top of Students.
+function drawProspects() {
+  call('prospects', {}, function (list) {
+    PROS = list;
+    var box = document.getElementById('pros');
+    if (!box) return;
+    var open = list.filter(function (p) { return !/^(Joined|Closed)$/.test(p['Stage']); });
+    box.innerHTML = '<div class="card"><div class="item"><b>Prospects' + (open.length ? ' (' + open.length + ')' : '') + '</b><button class="small" onclick="prospectForm()">＋ Prospect</button></div>' +
+      open.map(function (p) {
+        var i = PROS.indexOf(p);
+        return '<div class="item" style="margin-top:8px;cursor:pointer" onclick="showProspect(' + i + ')"><span><b>' + esc(p['Student name']) + '</b><div class="sub">' +
+          esc([p['Course'] && p['Level'] ? p['Course'] + ' ' + p['Level'] : '', p['Batch'], p['Country']].filter(String).join(' · ')) +
+          (p['Trial date'] ? ' · trial ' + esc(fmtDate(String(p['Trial date']).slice(0, 10))) : '') + '</div></span><span class="tag ' + (STAGE_TAG[p['Stage']] || '') + '">' + esc(p['Stage']) + '</span></div>';
+      }).join('') + '</div>';
+  }, { part: true });
+}
+
+// Opens a prospect from anywhere (e.g. To do).
+function openProspect(id) {
+  PROS = cached('prospects') || PROS;
+  var i = PROS.map(function (p) { return p['Prospect ID']; }).indexOf(id);
+  if (i >= 0) showProspect(i);
+}
+
+// Quick add: name, who you talk to, their number, course and country (the rest can wait).
+function prospectForm() {
+  call('newStudentForm', {}, function (f) {
+    sheet('New prospect', '<div class="sub">Student name</div><input id="pname">' +
+      '<div class="sub" style="margin-top:8px">You talk to</div>' + sel('pcontact', 'Parent', [['Parent', 'The parent'], ['Student', 'The student']]) +
+      '<div class="sub" style="margin-top:8px">Their WhatsApp</div>' + phoneCells('pphone', f) +
+      '<div class="sub" style="margin-top:8px">Parent name (optional)</div><input id="ppn">' +
+      '<div class="filters" style="margin:8px 0 0">' + sel('pcourse', 'AA', [['AA', 'AA'], ['AI', 'AI']]) + sel('plevel', 'SL', [['SL', 'SL'], ['HL', 'HL']]) +
+      '<input id="pbatch" type="number" placeholder="Batch (e.g. 2028)" style="max-width:140px"></div>' +
+      '<div class="sub" style="margin-top:8px">Country</div><input id="pcountry" list="ncl2" value="Egypt"><datalist id="ncl2">' + f.countries.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</datalist>' +
+      '<div class="sub" style="margin-top:8px">School (optional)</div><input id="pschool">' +
+      '<div class="sub" style="margin-top:8px">Notes (optional)</div><input id="pnotes">' +
+      '<button class="primary" style="width:100%;margin-top:12px" onclick="saveProspect()">Add</button>');
+  }, { form: true });
+}
+function saveProspect() {
+  var v = function (id) { return document.getElementById(id).value.trim(); }, contact = v('pcontact');
+  if (!v('pname')) return notice('Enter the student\'s name.');
+  var phone = phoneValue('pphone');
+  var args = { name: v('pname'), contact: contact, parentName: v('ppn'), course: v('pcourse'), level: v('plevel'), batch: v('pbatch'), country: v('pcountry'),
+    school: v('pschool'), notes: v('pnotes'), parentWhatsApp: contact === 'Parent' ? phone : '', studentWhatsApp: contact === 'Student' ? phone : '' };
+  call('addProspect', args, function () {}, { optimistic: function () { closeSheet(); notice(args.name + ' added. Their messages are ready in about a minute.'); showStudents(); } });
+}
+
+// One prospect: the next step with its ready message, and the other options.
+function showProspect(i) {
+  var p = PROS[i], st = p['Stage'], m = p.messages || {};
+  var wa = function (text, label, next) {
+    return '<button class="primary" style="width:100%;margin-top:8px" onclick="prospectSend(' + i + ',\'' + text + '\',\'' + (next || '') + '\')">' + label + '</button>';
+  };
+  var body = '<div class="sub">' + esc([p['Course'] + ' ' + p['Level'], p['Batch'], p['Country'], p['School']].filter(function (x) { return x && x.trim(); }).join(' · ')) +
+    (p['Parent name'] ? '<br>Parent: ' + esc(p['Parent name']) : '') + (p['Notes'] ? '<br>' + esc(p['Notes']) : '') + '</div>';
+  if (st === 'New' || st === 'Details sent') {
+    body += m.details ? '<details style="margin-top:10px"><summary class="sub">Details message</summary><div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(m.details) + '</div></details>' +
+      wa('details', st === 'New' ? '💬 Send the details' : '💬 Send the details again', 'Details sent') : '<div class="sub">The details message is being prepared…</div>';
+    body += '<div class="sub" style="margin-top:14px">Book the trial</div>' + trialPicker(p) + '<button style="width:100%;margin-top:6px" onclick="bookTrial(' + i + ')">Book trial</button>';
+  } else if (st === 'Trial booked') {
+    body += '<div style="margin-top:8px">Trial: <b>' + esc(p['Group']) + '</b> · ' + esc(fmtDate(String(p.trialStart || p['Trial date']).slice(0, 16))) + '</div>';
+    body += m.trial ? '<details><summary class="sub">Trial invitation</summary><div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(m.trial) + '</div></details>' + wa('trial', '💬 Send the trial invitation') : '<div class="sub">The invitation is being prepared…</div>';
+    body += '<div class="actions"><button onclick="decide(' + i + ',true)">Continues ✓</button><button class="secondary" onclick="decide(' + i + ',false)">Not continuing</button></div>' +
+      '<div class="sub" style="margin-top:12px">Move the trial</div>' + trialPicker(p) + '<button style="width:100%;margin-top:6px" onclick="bookTrial(' + i + ')">Change trial</button>';
+  } else if (st === 'Trial done') {
+    body += '<div class="actions"><button class="primary" onclick="decide(' + i + ',true)">Continues ✓</button><button class="secondary" onclick="decide(' + i + ',false)">Not continuing</button></div>';
+  } else if (st === 'Joining form sent') {
+    body += '<div class="sub" style="margin-top:8px">Waiting for the joining form. It shows in To do when it\'s filled.</div>';
+  } else body += '<div class="sub" style="margin-top:8px">' + esc(st) + (p['Reason'] ? ': ' + esc(p['Reason']) : '') + '</div>';
+  if (!/^(Joined|Closed)$/.test(st)) body += '<button class="secondary" style="width:100%;margin-top:14px" onclick="decide(' + i + ',false)">Close (not interested)</button>';
+  sheet(p['Student name'] + ' · ' + st, body);
+}
+
+// Group + a date from that group's upcoming sessions.
+function trialPicker(p) {
+  var groups = (cached('groups') || []);
+  return '<div class="filters" style="margin:4px 0 0">' + sel('tg', p['Group'] || '', [['', 'Group']].concat(groups.map(function (g) { return [g.group, g.group]; }))) +
+    '<input id="td" type="date" value="' + esc(String(p['Trial date'] || '').slice(0, 10)) + '"></div>' +
+    '<div class="sub">Pick a date the group meets (see Sessions or Groups).</div>';
+}
+function bookTrial(i) {
+  var p = PROS[i], g = document.getElementById('tg').value, d = document.getElementById('td').value;
+  if (!g || !d) return notice('Pick the group and the date.');
+  call('updateProspect', { id: p['Prospect ID'], changes: { 'Group': g, 'Trial date': d, 'Stage': 'Trial booked' } }, function () {}, { optimistic: function () {
+    patchLocal(function () { var l = cached('prospects'); if (l) l.forEach(function (x) { if (x['Prospect ID'] === p['Prospect ID']) { x['Group'] = g; x['Trial date'] = d; x['Stage'] = 'Trial booked'; x.messages.trial = ''; } }); });
+    closeSheet(); notice('Trial booked. The invitation (with the time in their country) is ready in about a minute.'); showStudents();
+  } });
+}
+
+// Opens WhatsApp with a ready message, and moves the stage on if given.
+function prospectSend(i, kind, next) {
+  var p = PROS[i];
+  window.open('https://wa.me/' + (p.phone || '') + '?text=' + encodeURIComponent(p.messages[kind]), '_blank');
+  if (!p.phone) notice('No number saved: pick the chat in WhatsApp.');
+  if (next && p['Stage'] !== next) call('updateProspect', { id: p['Prospect ID'], changes: { 'Stage': next } }, function () {}, { optimistic: function () {
+    patchLocal(function () { var l = cached('prospects'); if (l) l.forEach(function (x) { if (x['Prospect ID'] === p['Prospect ID']) x['Stage'] = next; }); });
+    closeSheet(); showStudents();
+  } });
+}
+
+// The decision after the trial.
+function decide(i, continues) {
+  var p = PROS[i];
+  if (!continues) {
+    sheet('Close ' + p['Student name'], '<div class="sub">Reason (for your records)</div>' + sel('pr', '', [['Not continuing after the trial', 'Not continuing after the trial'], ['Not interested', 'Not interested'], ['Timing doesn\'t suit', 'Timing doesn\'t suit'], ['Price', 'Price'], ['No reply', 'No reply'], ['Other', 'Other']]) +
+      '<button class="primary" style="width:100%;margin-top:10px" onclick="closeProspect(' + i + ')">Close</button><div class="sub" style="margin-top:6px">The trial stays free of charge.</div>');
+    return;
+  }
+  closeSheet();
+  hold(null);
+  notice('Creating the joining form…');
+  call('prospectContinues', { id: p['Prospect ID'] }, function (r) { showStudents(); showJoinLink(r); });
+}
+function closeProspect(i) {
+  var p = PROS[i], reason = document.getElementById('pr').value;
+  call('updateProspect', { id: p['Prospect ID'], changes: { 'Stage': 'Closed', 'Decision': 'Not continuing', 'Reason': reason } }, function () {}, { optimistic: function () {
+    patchLocal(function () { var l = cached('prospects'); if (l) l.forEach(function (x) { if (x['Prospect ID'] === p['Prospect ID']) { x['Stage'] = 'Closed'; x['Reason'] = reason; } }); });
+    closeSheet(); showStudents();
+  } });
 }
 </script>
 
