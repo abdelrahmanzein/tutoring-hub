@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Cover sessions · Mr Zein's Tutoring Groups</title>
+  <style>
+    :root { --bg:#f3f5f9; --card:#fff; --text:#18202e; --sub:#5b6577; --line:#d9dee8; --accent:#2457c5; --ok:#15803d; --bad:#b42318; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#10141c; --card:#1a2030; --text:#e8ecf3; --sub:#9aa5b8; --line:#2c3446; --accent:#7aa2ff; --ok:#4ade80; --bad:#ff8a80; } }
+    * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    main { max-width:560px; margin:0 auto; padding:20px 16px 40px; } .brand { color:var(--accent); font-weight:700; } h1 { font-size:22px; margin:4px 0 12px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:12px 0; } .sub { color:var(--sub); font-size:14px; }
+    label { display:block; margin-top:10px; font-size:14px; color:var(--sub); }
+    input, select, textarea { width:100%; margin-top:4px; padding:10px 12px; font:inherit; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--text); }
+    button { width:100%; margin-top:12px; padding:12px; font:inherit; font-weight:600; border:0; border-radius:12px; background:var(--accent); color:#fff; } button:disabled { opacity:.6; }
+    .ok { color:var(--ok); } .err { color:var(--bad); margin-top:8px; }
+  </style>
+</head>
+<body>
+<main id="main"><p class="sub">Loading…</p></main>
+<script>// Front page on GitHub Pages: talks to the Apps Script web app with fetch, but keeps the same
+// google.script.run calls the screens already use, so the screens are shared with the Apps Script version.
+var EXEC_URL = 'https://script.google.com/macros/s/AKfycbyCLTCfTmk_UHXW6_aSQ28cSyYRWWiUpFdx4Tsa5epjAviwggqbnqIvu89apC2YxQdz/exec';
+var google = { script: { get run() {
+  var ok = function () {}, fail = function () {};
+  var o = {
+    withSuccessHandler: function (f) { ok = f; return o; },
+    withFailureHandler: function (f) { fail = f; return o; },
+    api: function (token, action, args) {
+      // Google sometimes answers with an error page (cold start); one quiet retry fixes almost all of them.
+      // Only reads and self-protecting saves are retried (payments re-check the balance, sessions refuse duplicates,
+      // imports and deletes are safe to repeat). Other saves are never repeated automatically.
+      var retry = ['tutorReport', 'joinSubmit', 'addAdjustment', 'addAccount', 'undoSession', 'undoStudentEdit', 'updateStudent', 'confirmAccount'].indexOf(action) < 0;
+      var attempt = function (n) {
+        fetch(EXEC_URL, { method: 'POST', credentials: 'omit', redirect: 'follow', body: JSON.stringify({ token: token, action: action, args: args }) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            // Hand the answer over outside this promise, so a drawing problem on the page is never reported as "no connection".
+            setTimeout(function () { if (j.ok) ok(j.res); else fail(new Error(j.error)); }, 0);
+          })
+          .catch(function (e) {
+            if (n < 2 && retry) return setTimeout(function () { attempt(n + 1); }, 1500);
+            fail(new Error(retry ? 'No connection to the app (' + e.message + '). Check the internet and tap Refresh.'
+              : 'Not sure this was saved (connection problem). Tap Refresh and check before trying again.'));
+          });
+      };
+      attempt(1);
+    }
+  };
+  return o;
+} } };
+
+// Keeps the last loaded data on this device, so the app opens with it instantly and refreshes in the background.
+function saveCache() {
+  setTimeout(function () {
+    try { localStorage.setItem('th_cache', JSON.stringify(CACHE)); }
+    catch (e) {                                    // too big for the phone's storage: keep everything but the student pages
+      try { var c = {}; Object.keys(CACHE).forEach(function (k) { if (k.indexOf('profile|') !== 0) c[k] = CACHE[k]; }); localStorage.setItem('th_cache', JSON.stringify(c)); } catch (e2) {}
+    }
+  }, 0);
+}
+function loadCache() {
+  try {
+    var c = JSON.parse(localStorage.getItem('th_cache') || 'null');
+    // Saved data shows at once but counts as old: it's replaced as soon as the fresh download arrives.
+    if (c) { Object.keys(c).forEach(function (k) { c[k].snap = false; c[k].at = 0; }); CACHE = c; }
+  } catch (e) { /* ignore */ }
+}
+
+// The secret token comes once in the link (#t=...), is kept on this device, and removed from the address bar.
+function boot() {
+  var m = location.hash.match(/t=([0-9a-f]+)/);
+  // The token stays in the link on purpose: an iPhone Home Screen app keeps its own storage, separate from Safari,
+  // so the icon must be added from the full link to carry the token in.
+  if (m) { try { localStorage.setItem('th_token', m[1]); } catch (e) {} }
+  var token = ''; try { token = localStorage.getItem('th_token') || ''; } catch (e) {}
+  if (!token) {
+    document.getElementById('splash').innerHTML = '<div class="splash-name">Tutoring Hub</div><div class="sub" style="max-width:300px;text-align:center;line-height:1.5">' +
+      'This copy of the app has no sign-in yet.<br>Open your private setup link in Safari, then Share → Add to Home Screen from that page.</div>';
+    return;
+  }
+  loadCache();
+  start(token);
+}
+</script>
+<script>
+var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^0-9a-f]/g, '');
+function api(action, args, ok, fail) {
+  google.script.run.withSuccessHandler(function (r) { ok(r.data); }).withFailureHandler(function (e) { fail(e.message || String(e)); }).api('', action, args);
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function d(v) { var m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? +m[3] + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1] : ''; }
+var DATA = null;
+
+function draw(p) {
+  DATA = p;
+  var m = document.getElementById('main');
+  if (!p.valid) { m.innerHTML = '<div class="card">This link is not valid.</div>'; return; }
+  m.innerHTML = '<div class="brand">Mr Zein\'s Tutoring Groups</div><h1>Hello ' + esc(p.name) + '</h1><div class="sub">Your cover sessions. Please report each one after it\'s done.</div>' +
+    (p.sessions.length ? p.sessions.map(function (s, i) {
+      var done = s.status === 'Reported';
+      return '<div class="card"><b>' + esc(s.student) + '</b> <span class="sub">' + esc(s.group) + '</span><div class="sub">' + esc(d(s.date)) + (s.start ? ' · ' + esc(s.start) + ' (Cairo)' : '') + ' · ' + esc(s.minutes) + ' min' +
+        (done ? ' · <span class="ok">reported ✓</span>' : '') + '</div>' +
+        '<label>Did ' + esc(s.student) + ' attend?<select id="a' + i + '"><option value="true"' + (s.attended !== false ? ' selected' : '') + '>Yes</option><option value="false"' + (s.attended === false ? ' selected' : '') + '>No</option></select></label>' +
+        '<label>What did the session cover?<textarea id="c' + i + '" rows="2">' + esc(s.covered || '') + '</textarea></label>' +
+        '<label>Homework done (if any)<input id="h' + i + '" value="' + esc(s.homework || '') + '"></label>' +
+        '<label>Comments on ' + esc(s.student) + '\'s work (shared with the family after Mr Zein reads them)<textarea id="m' + i + '" rows="3">' + esc(s.comments || '') + '</textarea></label>' +
+        '<button id="b' + i + '" onclick="report(' + i + ')">' + (done ? 'Update report' : 'Send report') + '</button><div id="e' + i + '" class="err"></div></div>';
+    }).join('') : '<div class="card sub">No sessions booked for you yet.</div>');
+}
+
+function report(i) {
+  var s = DATA.sessions[i], b = document.getElementById('b' + i);
+  b.disabled = true; b.textContent = 'Sending…';
+  api('tutorReport', { token: KEY, coverId: s.id, attended: document.getElementById('a' + i).value === 'true', covered: document.getElementById('c' + i).value,
+    homework: document.getElementById('h' + i).value, comments: document.getElementById('m' + i).value },
+    function () { b.disabled = false; b.textContent = 'Update report'; s.status = 'Reported'; document.getElementById('e' + i).innerHTML = '<span class="ok">Thank you, the report is saved.</span>'; },
+    function (msg) { b.disabled = false; b.textContent = 'Send report'; document.getElementById('e' + i).textContent = msg; });
+}
+
+api('tutorPage', { token: KEY }, draw, function (msg) { document.getElementById('main').innerHTML = '<div class="card err">' + esc(msg) + '</div>'; });
+</script>
+</body>
+</html>

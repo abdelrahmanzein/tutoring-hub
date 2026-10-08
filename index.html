@@ -258,9 +258,9 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
-var NO_CACHE = WRITES.concat(['adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
+var NO_CACHE = WRITES.concat(['tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
 function newView() { VIEW++; refreshView = null; return VIEW; }
@@ -357,7 +357,7 @@ function cached(action, args) { var c = CACHE[action + '|' + JSON.stringify(args
 // then "Saved ✓". If Google refuses one (e.g. the balance changed meanwhile), you get "Not saved: why".
 var QUEUE_ACTIONS = ['setHomework', 'updateGroup', 'assignUpload', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession',
   'undoSession', 'updateStudent', 'addAccount', 'confirmAccount', 'undoStudentEdit', 'moveStudent', 'joinCancel',
-  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate', 'shareRecording', 'logMessage'];
+  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate', 'shareRecording', 'logMessage', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment'];
 var QUEUE_LABEL = { recordPayment: 'payment', addAdjustment: 'adjustment', logSession: 'session', undoSession: 'undo', updateStudent: 'student edit', setHomework: 'homework' };
 
 function newId() {
@@ -1336,6 +1336,7 @@ function showProfile(id) {
       '<div class="sub">' + esc(group) + ' · ' + esc(st.paymentType) + '</div></div>' +
       '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button><button onclick="moveFromProfile(\'' + esc(id) + '\')">Move group</button>' +
         (p.detail.livePage ? '<button onclick="window.open(\'' + esc(p.detail.livePage) + '\',\'_blank\')">Parent page</button>' : '') +
+        (/^(Active|Trial)$/.test(i['Status']) ? '<button onclick="coverForm(\'' + esc(id) + '\')">1-on-1 with a tutor</button>' : '') +
         (/^(Active|Trial)$/.test(i['Status']) ? '<button class="secondary" onclick="leaveForm(\'' + esc(id) + '\')">Leaving…</button>' : '') + '</div>' +
       '<h2>Money</h2>' + money +
       '<button class="secondary" style="margin:0 0 10px" onclick="adjustForm(\'' + esc(id) + '\')">✎ Waive, correct or refund</button>' +
@@ -2138,7 +2139,7 @@ function showSettings() {
   newView();
   refreshView = showSettings;
   document.getElementById('title').textContent = 'Settings';
-  document.getElementById('main').innerHTML = '<div id="health"><div class="skeleton"></div></div><div id="settings-more"></div>';
+  document.getElementById('main').innerHTML = '<div id="health"><div class="skeleton"></div></div><div id="tutors"></div><div id="settings-more"></div>';
   call('health', {}, function (h) {
     var used = Math.round(h.minutesToday / h.limit * 100);
     var NAMES = { publish: 'Screens uploaded', live: 'Sessions homework (Drive)', homework: 'Homework check (nightly)', backup: 'Nightly backup', email: '7 AM email', queue: 'Saves processed', check: 'Save check (every 5 min)' };
@@ -2150,6 +2151,7 @@ function showSettings() {
           '<span class="tag ' + (j.late || /FAILED/.test(j.info) ? 'owe' : 'good') + '">' + (j.late ? 'late' : /FAILED/.test(j.info) ? 'failed' : 'ok') + '</span></div>';
       }).join('') + '</div>';
     if (typeof drawSettingsMore === 'function') drawSettingsMore();
+    if (typeof drawTutors === 'function') drawTutors();
   });
 }
 </script>
@@ -2205,6 +2207,73 @@ function editTemplate(i) {
 function saveTemplate(i) {
   var t = ADMIN.templates[i], v = document.getElementById('tplv').value;
   call('updateTemplate', { key: t.key, text: v }, function () {}, { optimistic: function () { t.text = v; closeSheet(); notice('Saved. Messages use it from the next update (about a minute).'); } });
+}
+</script>
+<script>
+// ---------- Cover tutors (in Settings) ----------
+var TUT = null;
+function drawTutors() {
+  call('tutors', {}, function (d) {
+    TUT = d;
+    var box = document.getElementById('tutors');
+    if (!box) return;
+    var reports = d.covers.filter(function (c) { return c['Status'] === 'Reported'; });
+    box.innerHTML = '<h2>Cover tutors</h2><div class="card">' + (d.tutors.map(function (t, i) {
+      return '<div class="item"><span><b>' + esc(t['Name']) + '</b><div class="sub">' + (t['Usual fee'] ? 'usual fee ' + amt(t['Usual fee'], t['Currency']) : '') + (t.owed ? ' · <b>you owe ' + amt(t.owed, t['Currency']) + '</b>' : '') + '</div></span>' +
+        '<button class="small" style="width:auto" onclick="tutorLink(' + i + ')">Link</button></div>';
+    }).join('') || '<div class="sub">No tutors yet.</div>') + '<div class="actions"><button onclick="tutorForm()">＋ Tutor</button></div></div>' +
+      (reports.length ? '<h2>Cover reports</h2>' + reports.slice(0, 15).map(function (c) {
+        var i = d.covers.indexOf(c);
+        return '<div class="card"><div class="item"><span><b>' + esc(c.studentName) + '</b><div class="sub">' + esc(fmtDate(c['Date'])) + ' · ' + esc(c['Tutor ID']) + ' · ' + (c['Attended'] ? 'attended' : 'absent') + '</div></span>' +
+          (c['Fee paid on'] ? '<span class="tag good">fee paid</span>' : '<button class="small" style="width:auto" onclick="payFee(' + i + ')">Fee paid</button>') + '</div>' +
+          (c['Covered'] ? '<div class="sub">Covered: ' + esc(c['Covered']) + '</div>' : '') + (c['Comments'] ? '<div style="white-space:pre-wrap;font-size:14px">' + esc(c['Comments']) + '</div>' +
+          '<div class="actions"><button class="small" onclick="approveComment(' + i + ',' + !c['Comment approved'] + ')">' + (c['Comment approved'] ? 'Hide from the parent page' : 'Show on the parent page') + '</button></div>' : '') + '</div>';
+      }).join('') : '');
+  }, { part: true });
+}
+function tutorForm() {
+  sheet('New cover tutor', '<div class="sub">Name</div><input id="tn"><div class="sub" style="margin-top:8px">WhatsApp</div><input id="tw" type="tel">' +
+    '<div class="filters" style="margin:8px 0 0"><input id="tf" type="number" placeholder="Usual fee per session">' + sel('tc', 'EGP', [['EGP', 'EGP'], ['USD', 'USD']]) + '</div>' +
+    '<button class="primary" style="width:100%;margin-top:10px" onclick="saveTutor()">Add</button>');
+}
+function saveTutor() {
+  var a = { name: document.getElementById('tn').value.trim(), whatsapp: document.getElementById('tw').value.trim(), fee: document.getElementById('tf').value, currency: document.getElementById('tc').value };
+  call('addTutor', a, function () {}, { optimistic: function () { closeSheet(); notice('Added. Their link is ready in Settings in a moment.'); }, confirmed: function () { drawTutors(); } });
+}
+function tutorLink(i) {
+  var t = TUT.tutors[i];
+  TLINK = t.link;
+  sheet(t['Name'], '<div class="sub">Their private link: they see only the sessions you book for them (first name and group), and report each one. No money or other students.</div>' +
+    '<div class="card" style="word-break:break-all;font-size:13px">' + esc(t.link) + '</div>' +
+    '<button class="primary" style="width:100%" onclick="waSend(\'' + esc(String(t['WhatsApp'] || '').replace(/[^0-9]/g, '')) + '\', \'Hi ' + esc(t['Name'].split(' ')[0]) + ', here is your link for the cover sessions (please report each session there after it\\\'s done): \' + TLINK, \'Tutor link\')">💬 Send on WhatsApp</button>');
+}
+var TLINK = '';
+function payFee(i) {
+  var c = TUT.covers[i];
+  call('payTutorFee', { coverId: c['Cover ID'] }, function () {}, { optimistic: function () { c['Fee paid on'] = today(); drawTutorsFrom(); } });
+}
+function approveComment(i, on) {
+  var c = TUT.covers[i];
+  call('approveCoverComment', { coverId: c['Cover ID'], approve: on }, function () {}, { optimistic: function () { c['Comment approved'] = on; drawTutorsFrom(); } });
+}
+function drawTutorsFrom() { var d = TUT; CACHE['tutors|{}'] = { data: d, at: Date.now() }; drawTutors(); }
+
+// Booking a 1-on-1 with a cover tutor (from a student's page).
+function coverForm(id) {
+  call('tutors', {}, function (d) {
+    if (!d.tutors.length) return notice('Add a cover tutor first (Settings → Cover tutors).');
+    sheet('1-on-1 with a cover tutor', sel('ct', '', [['', 'Pick the tutor']].concat(d.tutors.map(function (t) { return [t['Tutor ID'], t['Name']]; }))) +
+      '<div class="filters" style="margin:8px 0 0"><input id="cd" type="date" value="' + today() + '"><input id="cs" type="time" value="18:00"><input id="cm" type="number" value="60" style="max-width:90px" title="Minutes"></div>' +
+      '<div class="sub" style="margin-top:8px">Tutor\'s fee for this session (blank = their usual fee)</div><input id="cf" type="number">' +
+      '<div class="sub" style="margin-top:8px">When they report it, the student is charged the 1-on-1 rate and the fee is noted as owed to the tutor.</div>' +
+      '<button class="primary" style="width:100%;margin-top:10px" onclick="saveCover(\'' + esc(id) + '\')">Book</button>');
+  }, { part: true });
+}
+function saveCover(id) {
+  var a = { studentId: id, tutorId: document.getElementById('ct').value, date: document.getElementById('cd').value, start: document.getElementById('cs').value,
+    minutes: document.getElementById('cm').value, fee: document.getElementById('cf').value };
+  if (!a.tutorId) return notice('Pick the tutor.');
+  call('bookCover', a, function () {}, { optimistic: function () { closeSheet(); notice('Booked. It shows on the tutor\'s page in about a minute.'); } });
 }
 </script>
 
@@ -2348,7 +2417,7 @@ var google = { script: { get run() {
       // Google sometimes answers with an error page (cold start); one quiet retry fixes almost all of them.
       // Only reads and self-protecting saves are retried (payments re-check the balance, sessions refuse duplicates,
       // imports and deletes are safe to repeat). Other saves are never repeated automatically.
-      var retry = ['joinSubmit', 'addAdjustment', 'addAccount', 'undoSession', 'undoStudentEdit', 'updateStudent', 'confirmAccount'].indexOf(action) < 0;
+      var retry = ['tutorReport', 'joinSubmit', 'addAdjustment', 'addAccount', 'undoSession', 'undoStudentEdit', 'updateStudent', 'confirmAccount'].indexOf(action) < 0;
       var attempt = function (n) {
         fetch(EXEC_URL, { method: 'POST', credentials: 'omit', redirect: 'follow', body: JSON.stringify({ token: token, action: action, args: args }) })
           .then(function (r) { return r.json(); })

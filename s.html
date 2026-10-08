@@ -55,6 +55,8 @@ function draw(p) {
     return '<div class="row"><span>' + esc(day(u.date)) + '</span><span>' + money(u.amount, c) + '</span></div>'; }).join('') + '</div>';
   if (p.lastPayment) html += '<div class="card"><div class="row"><span>Last payment</span><span>' + money(p.lastPayment.amount, c) + ' · ' + esc(d(p.lastPayment.date)) + '</span></div></div>';
   if (p.note && p.note.text) html += '<h2>A note from Mr Zein</h2><div class="card"><div style="white-space:pre-wrap">' + esc(p.note.text) + '</div>' + (p.note.date ? '<div class="sub">' + esc(d(p.note.date)) + '</div>' : '') + '</div>';
+  if (p.coverNotes && p.coverNotes.length) html += '<h2>1-on-1 sessions</h2>' + p.coverNotes.map(function (c) {
+    return '<div class="card"><div class="sub">' + esc(d(c.date)) + ' · with ' + esc(c.from) + '</div>' + (c.covered ? '<div><b>Covered:</b> ' + esc(c.covered) + '</div>' : '') + '<div style="white-space:pre-wrap">' + esc(c.text) + '</div></div>'; }).join('');
   var sm = p.summary || {}, light = function (label, x) {
     if (!x) return '';
     var r = x.value / x.of, cls = r >= 0.85 ? 'ok' : r >= 0.6 ? 'late' : 'miss', dot = r >= 0.85 ? '🟢' : r >= 0.6 ? '🟡' : '🔴';
