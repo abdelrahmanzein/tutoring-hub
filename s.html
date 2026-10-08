@@ -54,6 +54,13 @@ function draw(p) {
   if (p.unpaid && p.unpaid.length) html += '<div class="card"><div class="sub">' + (p.due ? 'Sessions in this amount' : 'Sessions since the last payment') + '</div>' + p.unpaid.map(function (u) {
     return '<div class="row"><span>' + esc(day(u.date)) + '</span><span>' + money(u.amount, c) + '</span></div>'; }).join('') + '</div>';
   if (p.lastPayment) html += '<div class="card"><div class="row"><span>Last payment</span><span>' + money(p.lastPayment.amount, c) + ' · ' + esc(d(p.lastPayment.date)) + '</span></div></div>';
+  if (p.note && p.note.text) html += '<h2>A note from Mr Zein</h2><div class="card"><div style="white-space:pre-wrap">' + esc(p.note.text) + '</div>' + (p.note.date ? '<div class="sub">' + esc(d(p.note.date)) + '</div>' : '') + '</div>';
+  var sm = p.summary || {}, light = function (label, x) {
+    if (!x) return '';
+    var r = x.value / x.of, cls = r >= 0.85 ? 'ok' : r >= 0.6 ? 'late' : 'miss', dot = r >= 0.85 ? '🟢' : r >= 0.6 ? '🟡' : '🔴';
+    return '<div class="row"><span>' + dot + ' ' + label + '</span><span class="' + cls + '">' + x.value + ' of ' + x.of + '</span></div>';
+  };
+  if (sm.attendance || sm.homework) html += '<h2>At a glance</h2><div class="card">' + light('Sessions attended', sm.attendance) + light('On time to sessions', sm.punctuality) + light('Homework on time', sm.homework) + '</div>';
   if (p.recent && p.recent.length) html += '<h2>Recent sessions</h2><div class="card">' + p.recent.map(function (r) {
     return '<div class="row"><span>' + esc(day(r.date)) + '</span><span>' + (r.attended ? (r.late ? '<span class="late">Attended, ' + r.late + ' min late</span>' : '<span class="ok">Attended</span>') : '<span class="miss">Absent (recording sent)</span>') +
       (r.participation ? ' · ' + esc(r.participation) : '') + '</span></div>'; }).join('') + '</div>';
