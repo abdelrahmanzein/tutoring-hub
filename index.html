@@ -1883,6 +1883,10 @@ function showTodo() {
     if (decideList.length) parts.push('<h2>Decide after the trial</h2>' + decideList.map(function (p) {
       return '<div class="card nav-row" onclick="openProspect(\'' + esc(p['Prospect ID']) + '\')"><span><b>' + esc(p['Student name']) + '</b><div class="sub">Trial ' + esc(fmtDate(String(p['Trial date']).slice(0, 10))) + ' · ' + esc(p['Group']) + '</div></span><span>›</span></div>';
     }).join(''));
+    if (d.recordings && d.recordings.length) parts.push('<h2>Recordings to send</h2>' + d.recordings.map(function (r, i) {
+      return '<div class="card"><div class="item"><span><b>' + esc(r.first) + '</b> missed ' + esc(r.group) + '<div class="sub">' + esc(fmtDate(r.date)) + '</div></span></div>' +
+        (r.links.length ? '<div class="actions"><button class="primary" onclick="sendRec(' + i + ')">💬 Send the recording</button></div>' : '<div class="sub">Meet hasn\'t saved the recording yet.</div>') + '</div>';
+    }).join(''));
     parts.push('<div id="todo-pay"></div>');
     parts.push('<div id="todo-up"></div>');
     if (d.homework.length) parts.push('<h2>Homework not submitted</h2>' + d.homework.map(function (h, hi) {
@@ -1957,6 +1961,15 @@ function nudge(hi, pi) {
   var text = 'Hi ' + p.first + ', I haven\'t seen homework ' + h.title + ' in the folder yet. If you upload it by tonight, it will still count. ' +
     'Please send me a message once it\'s uploaded so I can check it 🙂' + (h.link ? '\n' + h.link : '');
   waSend(p.phone, text, 'Homework nudge', { studentId: p.id });
+}
+
+// Sends an absent student the recording (sharing it so they can open it) and logs it.
+function sendRec(i) {
+  var r = TODO.recordings[i];
+  waSend(r.phone, 'Hi ' + r.first + ', here is the recording of the session you missed:\n' + r.links.join('\n') + '\nPlease watch it before the next session.', 'Recording to absent student', { studentId: r.id });
+  r.links.forEach(function (u) { var m = u.match(/\/d\/([-\w]+)/); if (m) call('shareRecording', { fileId: m[1] }, function () {}, { optimistic: function () {}, quiet: true }); });
+  patchLocal(function () { var t = cached('todo'); if (t) t.recordings = t.recordings.filter(function (x) { return !(x.id === r.id && x.sessionId === r.sessionId); }); });
+  showTodo();
 }
 
 // Opens the log form for a session from the list (finds it among the loaded week, else a blank form for it).
