@@ -118,7 +118,7 @@ function phone(id) {
   return '<div style="display:flex;gap:8px"><select id="' + id + 'Code" aria-label="Country code" style="width:auto;flex:none">' + F.countries.map(function (c) {
     return '<option value="' + c.dial + '" data-c="' + esc(c.name) + '">' + c.flag + ' ' + c.dial + '</option>'; }).join('') + '</select>' +
     '<input id="' + id + '" type="tel" inputmode="tel" placeholder="Number / الرقم"></div>' +
-    '<div class="hint" style="display:flex;justify-content:space-between"><span>Country code · مفتاح الدولة</span><span>Number without the country code</span></div>';
+    '<div class="hint" style="display:flex;justify-content:space-between"><span>Country code · مفتاح الدولة</span><span>Number · الرقم بدون مفتاح الدولة</span></div>';
 }
 // The details you set, shown to the parent (not editable).
 function info(ar, en, value) {
