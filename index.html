@@ -1167,11 +1167,7 @@ function showToday() {
   refreshView = showToday;
   document.getElementById('title').textContent = 'Sessions';
   call('week', {}, function (week) {
-    // Homework, past papers and reminders arrive a moment later (they read Drive) and are merged into the cards.
-    call('weekLive', {}, function (live) {
-      WEEK.forEach(function (s) { var x = live[s.sessionId]; if (x) { s.homework = x.homework; s.pastPapers = x.pastPapers; s.reminder = x.reminder; s.students = x.students; } });
-      redrawSessionCards();
-    }, { part: true });
+    week = week.map(liveStatus);
     call('sessionForm', {}, function (d) {
       sessData = d;
       var byDay = {};
@@ -1191,11 +1187,24 @@ function showToday() {
           ? '<div class="actions"><button class="primary" onclick="sessionForm()">＋ Log a session</button></div>'
           : '<div class="card sub" style="font-size:14px;margin-top:14px">Sessions are still logged through the old script; "Logged" above means its charges arrived from the Log Sheet (every night at 11:30 PM, or now:)' +
             '<div class="actions"><button onclick="hold(this,\'Importing…\');importNow()">Import new sessions now</button></div></div>');
+      // Homework, past papers and reminders (read from Drive, so they may come a moment later) are merged into the cards.
+      call('weekLive', {}, function (live) {
+        WEEK.forEach(function (s) { var x = live[s.sessionId]; if (x) { s.homework = x.homework; s.pastPapers = x.pastPapers; s.reminder = x.reminder; s.students = x.students; } });
+        redrawSessionCards();
+      }, { part: true });
     }, { part: true });
   });
 }
 
 var WEEK = [];
+
+// The prepared data can be some minutes old, so the time-based status is worked out again from the clock here.
+function liveStatus(s) {
+  if (s.status === 'Logged' || s.status === 'Did not happen' || !s.start || !s.end) return s;
+  var now = new Date(), a = new Date(s.day + 'T' + s.start + ':00'), b = new Date(s.day + 'T' + s.end + ':00');
+  var st = now < a ? 'Upcoming' : now <= b ? 'In progress' : 'Needs review';
+  return Object.assign({}, s, { status: st, upcoming: st !== 'Needs review', canLog: st !== 'Upcoming' });
+}
 
 // One session card: group, time, homework or past papers, a note left last time, student chips, and the actions.
 function sessionCard(s) {
