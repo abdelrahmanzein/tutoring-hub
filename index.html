@@ -350,6 +350,62 @@ function patchLocal(fn) {
 }
 function cached(action, args) { var c = CACHE[action + '|' + JSON.stringify(args || {})]; return c && c.data; }
 
+// ---------- Saves through Cloudflare ----------
+// Most saves are handed to the read service, which answers in a fraction of a second and passes them to Google
+// (usually within a minute). The screen moves on at once; "Saving…" stays at the bottom until Google confirms,
+// then "Saved ✓". If Google refuses one (e.g. the balance changed meanwhile), you get "Not saved: why".
+var QUEUE_ACTIONS = ['setHomework', 'updateGroup', 'assignUpload', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession',
+  'undoSession', 'updateStudent', 'addAccount', 'confirmAccount', 'undoStudentEdit', 'moveStudent', 'joinCancel'];
+var QUEUE_LABEL = { recordPayment: 'payment', addAdjustment: 'adjustment', logSession: 'session', undoSession: 'undo', updateStudent: 'student edit', setHomework: 'homework' };
+
+function newId() {
+  var a = new Uint8Array(12); (window.crypto || window.msCrypto).getRandomValues(a);
+  return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+}
+
+function queueSave(action, args, done, opts) {
+  var id = newId(), clean = Object.assign({}, args); delete clean.fresh;
+  savingMark(1);
+  fetch(READ_URL + '/q', { method: 'POST', credentials: 'omit', headers: { Authorization: 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: id, action: action, args: clean }) })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function () {
+      document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
+      if (opts.optimistic) opts.optimistic(); else done({ queued: true });
+      waitForSave(id, action, opts);
+    })
+    .catch(function () {                                     // the read service is unreachable: save through Google directly
+      savingMark(-1);
+      var q = QUEUE_ACTIONS; QUEUE_ACTIONS = [];
+      try { call(action, args, done, opts); } finally { QUEUE_ACTIONS = q; }
+    });
+}
+
+// Checks for the outcome every 4 seconds (for up to 4 minutes).
+function waitForSave(id, action, opts) {
+  var tries = 0;
+  var t = setInterval(function () {
+    if (++tries > 60) { clearInterval(t); savingMark(-1); return notice('Still waiting for Google to save the ' + (QUEUE_LABEL[action] || 'change') + '. It will go through; check again in a few minutes.'); }
+    fetch(READ_URL + '/r/' + id, { headers: { Authorization: 'Bearer ' + TOKEN }, credentials: 'omit', cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (r.pending) return;
+        clearInterval(t);
+        var d = r.data || {};
+        if (!r.ok || d.conflict || d.changed || d.similar) {
+          savingMark(-1);
+          PATCHES = [];
+          notice('Not saved: ' + (r.error || (d.changed ? 'the balance changed in the meantime. Check it and record the payment again.' :
+            d.conflict ? 'it was changed elsewhere since you opened it. Open it again to see the latest values.' : 'please check and try again.')));
+        } else {
+          savingMark(-1, true);
+          if (opts.confirmed) opts.confirmed(d);
+        }
+        loadSnapshots();                                      // the server uploaded the new data right after saving
+      }).catch(function () {});
+  }, 4000);
+}
+
 // A homework status changed on this phone: the To do list and the student's page show it at once.
 function patchHomework(assignmentId, id, status) {
   patchLocal(function () {
@@ -403,6 +459,7 @@ function call(action, args, done, opts) {
   else if (!opts.part && cacheable) document.getElementById('main').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
   if (fresh && cacheable) args = Object.assign({}, args, { fresh: true });
   var waiting = !shown && !isWrite;           // you're looking at a skeleton or a form waiting
+  if (isWrite && READ_URL && QUEUE_ACTIONS.indexOf(action) >= 0) return queueSave(action, args, done, opts);
   if (isWrite) savingMark(1);
   send(function (finish) {
     if (waiting) busy(1);
@@ -839,6 +896,7 @@ function pctDiff(a, b) { var d = Math.round((a - b) / b * 1000) / 10; return (d 
 // Saves the payment. If the balance changed in the meantime the new numbers are shown and nothing is saved.
 function savePayment(args) {
   call('recordPayment', args, function (r) {
+    if (r.queued) { showMoneyStudent(args.id); return notice('Payment sent. The balance updates in about a minute.'); }
     if (r.changed) { notice('The balance changed since you checked (' + amt(r.now.before, args.currency) + '). Check again.'); return checkPayment(args.id, args.currency); }
     showMoneyStudent(args.id); notice('Payment saved (' + r.saved + ').');
   });
@@ -867,7 +925,7 @@ function adjustForm(id) {
 // Saves the adjustment.
 function saveAdjust(id) {
   call('addAdjustment', { id: id, type: document.getElementById('at2').value, amount: document.getElementById('aa').value, currency: document.getElementById('ac').value,
-    date: document.getElementById('ad').value, reason: document.getElementById('ar').value }, function (r) { showMoneyStudent(id); notice('Saved (' + r.saved + ').'); });
+    date: document.getElementById('ad').value, reason: document.getElementById('ar').value }, function (r) { showMoneyStudent(id); if (!r.queued) notice('Saved (' + r.saved + ').'); });
 }
 </script>
 
@@ -1537,7 +1595,17 @@ function toggleNote(i, btn) {
 function saveSession() {
   var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value,
     noteNext: document.getElementById('sn').value, rows: sessRows, eventId: sessEvent || '', meetHeld: sessMeet ? sessMeet.held : undefined };
-  call('logSession', args, function (r) { showToday(); notice('Logged ' + r.sessionId + ': ' + r.charged + ' charged.'); });
+  call('logSession', args, function (r) {
+    if (r.queued) {
+      var sid = args.date + ' ' + args.group;
+      patchLocal(function () {
+        var w = cached('week'); if (w) w.forEach(function (x) { if (x.sessionId === sid) x.status = 'Logged'; });
+        var t = cached('todo'); if (t) t.toLog = t.toLog.filter(function (x) { return x.sessionId !== sid; });
+      });
+      showToday(); return;
+    }
+    showToday(); notice('Logged ' + r.sessionId + ': ' + r.charged + ' charged.');
+  }, { confirmed: function (r) { notice('Logged ' + r.sessionId + ': ' + r.charged + ' charged.'); } });
 }
 </script>
 
