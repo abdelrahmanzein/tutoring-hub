@@ -258,9 +258,9 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
-var STALE_WRITES = ['recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
-var NO_CACHE = WRITES.concat(['health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
+var WRITES = ['createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var STALE_WRITES = ['leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
+var NO_CACHE = WRITES.concat(['adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
 function newView() { VIEW++; refreshView = null; return VIEW; }
@@ -357,7 +357,7 @@ function cached(action, args) { var c = CACHE[action + '|' + JSON.stringify(args
 // then "Saved ✓". If Google refuses one (e.g. the balance changed meanwhile), you get "Not saved: why".
 var QUEUE_ACTIONS = ['setHomework', 'updateGroup', 'assignUpload', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession',
   'undoSession', 'updateStudent', 'addAccount', 'confirmAccount', 'undoStudentEdit', 'moveStudent', 'joinCancel',
-  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect'];
+  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate'];
 var QUEUE_LABEL = { recordPayment: 'payment', addAdjustment: 'adjustment', logSession: 'session', undoSession: 'undo', updateStudent: 'student edit', setHomework: 'homework' };
 
 function newId() {
@@ -930,7 +930,7 @@ function savePayment(args) {
 }
 
 // Adjustment or refund form.
-function adjustForm(id) {
+function adjustForm(id, pre) {
   newView();
   call('moneyStudent', { id: id }, function (d) {
     document.getElementById('main').innerHTML = testBar(d.testMode) + '<button class="back" onclick="showMoneyStudent(\'' + esc(id) + '\')">‹ Cancel</button><h2>Waive, correct or refund · ' + esc(d.student.name) + '</h2>' +
@@ -946,6 +946,8 @@ function adjustForm(id) {
       '<div class="sub" style="margin-top:8px">Reason (required, kept in the ledger)</div><input id="ar"></div>' +
       '<button class="primary" style="margin-top:10px" onclick="hold(this);saveAdjust(\'' + esc(id) + '\')">Save</button>';
     document.getElementById('ac').value = d.student.currency;
+    if (pre) { if (pre.type) document.getElementById('at2').value = pre.type; if (pre.amount) document.getElementById('aa').value = pre.amount;
+      if (pre.currency) document.getElementById('ac').value = pre.currency; if (pre.reason) document.getElementById('ar').value = pre.reason; }
   }, { form: true });
 }
 
@@ -1123,7 +1125,7 @@ function newStudentForm(join) {
   }, { form: true });
 }
 
-var JOIN_KEY = '', JOINS = [];
+var JOIN_KEY = '', JOINS = [], WELCOME = null;
 
 // A WhatsApp number as two cells: country code (with flag) and the number.
 function phoneCells(id, f) {
@@ -1213,6 +1215,12 @@ function saveNewStudent(confirmSimilar) {
       return;
     }
     showProfile(r.added); notice('Added. They are in the group from ' + fmtDate(args.since) + '.');
+    if (r.welcome) {
+      WELCOME = r.welcome;
+      sheet('Welcome message', '<div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(r.welcome.text) + '</div>' +
+        '<button class="primary" style="width:100%" onclick="window.open(\'https://wa.me/\' + (WELCOME.phone || \'\') + \'?text=\' + encodeURIComponent(WELCOME.text), \'_blank\')">💬 Send on WhatsApp</button>' +
+        '<div class="sub" style="margin-top:6px">Add them to the group\'s WhatsApp yourself.</div>');
+    }
   });
 }
 
@@ -1263,6 +1271,25 @@ function moveFromProfileSave(id, from) {
   });
 }
 
+// A student leaves or graduates: status, date and reason; then a refund of any advance, or a final request.
+function leaveForm(id) {
+  sheet('Leaving', sel('lvs', 'Left', [['Left', 'Left (stopped)'], ['Alumni', 'Alumni (graduated)']]) +
+    '<div class="sub" style="margin-top:8px">Last day (their group membership ends that day)</div><input id="lvd" type="date" value="' + today() + '">' +
+    '<div class="sub" style="margin-top:8px">Reason</div><input id="lvr" placeholder="e.g. finished DP, moved school">' +
+    '<div class="sub" style="margin-top:8px">All history stays. They drop off group lists and reminders.</div>' +
+    '<button class="primary" style="width:100%;margin-top:10px" onclick="saveLeave(\'' + esc(id) + '\')">Save</button>');
+}
+function saveLeave(id) {
+  var args = { id: id, status: document.getElementById('lvs').value, date: document.getElementById('lvd').value, reason: document.getElementById('lvr').value };
+  closeSheet();
+  call('leaveStudent', args, function () {}, { optimistic: function () { notice('Saving… then you\'ll see if a refund or a final request is due.'); showProfile(id); },
+    confirmed: function (r) {
+      if (r.credit > 0.5) sheet('Unused advance', '<div>' + amt(r.credit, r.currency) + ' paid ahead is left on the account. It\'s refunded in full.</div>' +
+        '<button class="primary" style="width:100%;margin-top:10px" onclick="closeSheet();adjustForm(\'' + esc(id) + '\',{type:\'Refund\',amount:' + r.credit + ',currency:\'' + r.currency + '\',reason:\'Unused advance refunded on leaving\'})">Record the refund</button>');
+      else if (r.owed > 0.5) notice(amt(r.owed, r.currency) + ' is still owed: a final payment request is ready in To do.');
+    } });
+}
+
 // Old entry point: the student page is now the profile.
 function showStudent(id) { showProfile(id); }
 
@@ -1299,7 +1326,8 @@ function showProfile(id) {
       '<div class="parabic">' + esc(i['Arabic first name'] + ' ' + i['Arabic last name']) + '</div>' +
       '<div class="sub">' + esc(group) + ' · ' + esc(st.paymentType) + '</div></div>' +
       '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button><button onclick="moveFromProfile(\'' + esc(id) + '\')">Move group</button>' +
-        (p.detail.livePage ? '<button onclick="window.open(\'' + esc(p.detail.livePage) + '\',\'_blank\')">Parent page</button>' : '') + '</div>' +
+        (p.detail.livePage ? '<button onclick="window.open(\'' + esc(p.detail.livePage) + '\',\'_blank\')">Parent page</button>' : '') +
+        (/^(Active|Trial)$/.test(i['Status']) ? '<button class="secondary" onclick="leaveForm(\'' + esc(id) + '\')">Leaving…</button>' : '') + '</div>' +
       '<h2>Money</h2>' + money +
       '<button class="secondary" style="margin:0 0 10px" onclick="adjustForm(\'' + esc(id) + '\')">✎ Waive, correct or refund</button>' +
       '<div class="card" id="ledger">' + ledgerRows(entries.slice(0, 10), id) +
@@ -1648,7 +1676,7 @@ function showGroups() {
   refreshView = showGroups;
   document.getElementById('title').textContent = 'Groups';
   call('groups', {}, function (list) {
-    document.getElementById('main').innerHTML = list.map(function (g) {
+    document.getElementById('main').innerHTML = '<div class="actions" style="margin-top:0"><button class="primary" onclick="groupForm()">＋ New group</button></div>' + list.map(function (g) {
       return '<div class="card nav-row" onclick="showGroup(\'' + esc(g.group) + '\')"><div><div class="sess-title">' + esc(g.group) + '</div>' +
         '<div class="sub">' + g.members + ' students' + (g.next ? ' · next ' + esc(fmtDate(g.next.slice(0, 10))) + ' ' + esc(g.next.slice(11)) : '') + '</div></div>' +
         '<div>' + (g.status === 'Paused' ? '<span class="tag">Paused</span> ' : '') + (g.pastPapers ? '<span class="tag warn">Past papers</span> ' : '') + '›</div></div>';
@@ -1681,13 +1709,16 @@ function showGroup(name) {
           '<button class="small" style="width:auto;flex:none" onclick="moveForm(' + i + ')">Move</button></div><div id="mv' + i + '"></div></div>';
       }).join('') +
       '<h2>Recent sessions</h2>' + sessionsTable(d) +
+      (d.sessions.length ? '<div class="sub" style="margin:-4px 0 8px">Correct a session: ' + d.sessions.filter(function (s) { return s.status === 'Logged'; }).map(function (s) {
+        return '<a href="#" onclick="editSession(\'' + esc(s.id) + '\');return false">' + esc(fmtDate(s.date).slice(0, 5)) + '</a>'; }).join(' · ') + '</div>' : '') +
       '<div class="card"><b>Details</b>' +
         '<div class="sub" style="margin-top:8px">Status</div>' + sel('gst', paused ? 'Paused' : 'Active', [['Active', 'Active'], ['Paused', 'Paused (off Sessions and reminders, no charges)']]) +
         '<div class="sub" style="margin-top:8px">WhatsApp group link</div><input id="gwa" value="' + esc(g['WhatsApp link'] || '') + '">' +
         '<div class="sub" style="margin-top:8px">Notes</div><input id="gno" value="' + esc(g['Notes'] || '') + '">' +
         '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);saveGroup()">Save</button>' +
         '<div class="sub" style="margin-top:14px">Homework: ' + (d.pastPapersLink ? 'past papers (<a href="' + esc(d.pastPapersLink) + '" target="_blank">follow-up sheet</a>) · <a href="#" onclick="ppOff();return false">back to homework folders</a>'
-          : 'homework folders · <a href="#" onclick="ppForm();return false">switch to past papers</a>') + '</div><div id="ppbox"></div></div>';
+          : 'homework folders · <a href="#" onclick="ppForm();return false">switch to past papers</a>') + '</div><div id="ppbox"></div>' +
+        '<div class="sub" style="margin-top:14px"><a href="#" onclick="archiveForm();return false">Archive this group…</a></div></div>';
   });
 }
 
@@ -1754,6 +1785,60 @@ function moveIt(i) {
   var m = GROUP.members[i], name = GROUP.group['Group'], to = document.getElementById('mvg' + i).value;
   if (!to) { document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; b.textContent = 'Move'; }); return notice('Pick the new group.'); }
   call('moveStudent', { id: m.id, group: name, to: to, from: document.getElementById('mvd' + i).value }, function () { showGroup(name); notice(m.name + ' moved to ' + to + '.'); });
+}
+
+// A new group: name from batch, course, level and number; a weekly calendar series; its Assignments folder.
+function groupForm() {
+  sheet('New group', '<div class="filters" style="margin:0"><input id="gb" type="number" placeholder="Batch (e.g. 2029)">' + sel('gc', 'AA', [['AA', 'AA'], ['AI', 'AI']]) + sel('gl', 'SL', [['SL', 'SL'], ['HL', 'HL']]) +
+    '<input id="gn" type="number" value="1" style="max-width:70px" title="Group number"></div>' +
+    '<div class="sub" style="margin-top:8px">First session (Cairo time)</div><div class="filters" style="margin:0"><input id="gd" type="date"><input id="gt" type="time" value="19:00"></div>' +
+    '<div class="sub" style="margin-top:8px">Length (minutes)</div><input id="gm" type="number" value="90">' +
+    '<div class="sub" style="margin-top:8px">WhatsApp group link (optional)</div><input id="gw">' +
+    '<div class="sub" style="margin-top:8px">Creates the weekly session in the Tutoring calendar (until the end of May of the batch year) and the "… - Assignments" folder.</div>' +
+    '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this,\'Creating…\');saveGroupNew()">Create group</button>');
+}
+function saveGroupNew() {
+  var v = function (id) { return document.getElementById(id).value.trim(); };
+  call('createGroup', { batch: v('gb'), course: v('gc'), level: v('gl'), number: v('gn'), firstDate: v('gd'), start: v('gt'), minutes: v('gm'), whatsapp: v('gw') }, function (r) {
+    closeSheet(); notice(r.group + ' created.'); afterSave(true); showGroups();
+  });
+}
+
+// Archiving: after the exams (students become Alumni), or an empty group.
+function archiveForm() {
+  var g = GROUP.group['Group'];
+  sheet('Archive ' + g, '<div class="sub">The group leaves Sessions, reminders and lists; all its history stays.</div>' +
+    (GROUP.members.length ? '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="agr" style="width:auto"> Its ' + GROUP.members.length + ' students graduated (they become Alumni)</label>' : '') +
+    '<div class="sub" style="margin-top:8px">End or delete its weekly series in Google Calendar yourself.</div>' +
+    '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);saveArchive()">Archive</button>');
+}
+function saveArchive() {
+  var g = GROUP.group['Group'], gr = document.getElementById('agr');
+  call('archiveGroup', { group: g, graduate: gr ? gr.checked : false }, function (r) { closeSheet(); notice(g + ' archived' + (r.alumni ? '; ' + r.alumni + ' students are now Alumni.' : '.')); afterSave(true); showGroups(); });
+}
+
+// Correcting a logged session: attendance, lateness, participation and notes per student (charges stay).
+var SESS_EDIT = null;
+function editSession(id) {
+  call('sessionDetail', { sessionId: id }, function (d) {
+    SESS_EDIT = d;
+    sheet(id, d.rows.map(function (r, i) {
+      return '<div class="card"><b>' + esc(r.name) + '</b><div class="filters" style="margin:6px 0 0">' +
+        sel('ea' + i, r.attended ? '1' : '0', [['1', 'Attended'], ['0', 'Absent']]) + '<input id="el' + i + '" type="number" min="0" placeholder="min late" value="' + esc(r.late || '') + '" style="max-width:110px">' +
+        sel('ep' + i, r.participation || '', [['', 'Participation…'], ['Very active', 'Very active'], ['Active', 'Active'], ['Occasional', 'Occasional'], ['Quiet', 'Quiet']]) + '</div>' +
+        '<input id="en' + i + '" placeholder="Note" value="' + esc(r.free || '') + '" style="width:100%;margin-top:6px"></div>';
+    }).join('') + '<div class="sub">Charges stay as they are (absent sessions are charged too). To change charges, undo the session or use the ledger.</div>' +
+      '<button class="primary" style="width:100%;margin-top:8px" onclick="saveSessionEdit()">Save changes</button>');
+  }, { part: true });
+}
+function saveSessionEdit() {
+  var d = SESS_EDIT;
+  d.rows.forEach(function (r, i) {
+    var a = document.getElementById('ea' + i).value === '1', late = document.getElementById('el' + i).value, p = document.getElementById('ep' + i).value, f = document.getElementById('en' + i).value;
+    if (a === r.attended && String(late || '') === String(r.late || '') && p === (r.participation || '') && f === (r.free || '')) return;
+    call('updateAttendance', { sessionId: d.session['Session ID'], id: r.id, attended: a, late: late, participation: p, notes: r.notes || '', free: f }, function () {}, { optimistic: function () {} });
+  });
+  closeSheet();
 }
 </script>
 
@@ -2037,6 +2122,60 @@ function showSettings() {
       }).join('') + '</div>';
     if (typeof drawSettingsMore === 'function') drawSettingsMore();
   });
+}
+</script>
+<script>
+// Settings values, rates and message templates (changes are logged in History).
+var ADMIN = null;
+function drawSettingsMore() {
+  call('adminData', {}, function (d) {
+    ADMIN = d;
+    var box = document.getElementById('settings-more');
+    if (!box) return;
+    box.innerHTML = '<h2>Settings</h2><div class="card">' + d.settings.map(function (s, i) {
+      return '<div class="item" style="cursor:pointer" onclick="editSetting(' + i + ')"><span>' + esc(s.key) + '<div class="sub">' + esc(s.note || '') + '</div></span><b>' + esc(s.value) + '</b></div>';
+    }).join('') + '</div>' +
+    '<h2>Rates</h2>' + table(['Batch', 'Region', 'Rate', 'From'], d.rates.map(function (r) {
+      return [esc(r['Batch']), esc(r['Region']), amt(r['Rate per session'], r['Currency']), esc(fmtDate(r['Valid from']))]; })) +
+    '<div class="sub">A rate is copied to each student when they join, so changing rates only affects new students.</div>' +
+    '<div class="actions"><button onclick="rateForm()">＋ Add a rate (e.g. next year\'s batch)</button></div>' +
+    '<h2>Message templates</h2><div class="card">' + d.templates.map(function (t, i) {
+      return '<div class="item" style="cursor:pointer" onclick="editTemplate(' + i + ')"><span>' + esc(t.key) + '<div class="sub">' + esc(t.note || '') + '</div></span><span>›</span></div>';
+    }).join('') + '</div><div class="sub">{words in braces} are filled in by the app. Arabic first, then English.</div>';
+  });
+}
+
+function editSetting(i) {
+  var s = ADMIN.settings[i];
+  sheet(s.key, '<div class="sub">' + esc(s.note || '') + '</div><input id="setv" value="' + esc(s.value) + '">' +
+    '<button class="primary" style="width:100%;margin-top:10px" onclick="saveSetting(' + i + ')">Save</button>');
+}
+function saveSetting(i) {
+  var s = ADMIN.settings[i], v = document.getElementById('setv').value.trim();
+  call('updateSetting', { key: s.key, value: v }, function () {}, { optimistic: function () { s.value = v; closeSheet(); drawSettingsMore(); } });
+}
+
+function rateForm() {
+  sheet('New rate', '<div class="filters" style="margin:0"><input id="rb" placeholder="Batch, e.g. 2029">' + sel('rr', 'Egypt', [['Egypt', 'Egypt (EGP)'], ['Abroad', 'Abroad (USD)']]) + '</div>' +
+    '<div class="sub" style="margin-top:8px">Rate per session</div><input id="rv" type="number" step="any" inputmode="decimal">' +
+    '<div class="sub" style="margin-top:8px">Valid from</div><input id="rf" type="date" value="' + today() + '">' +
+    '<button class="primary" style="width:100%;margin-top:10px" onclick="saveRate()">Add</button>');
+}
+function saveRate() {
+  var a = { batch: document.getElementById('rb').value.trim(), region: document.getElementById('rr').value, rate: document.getElementById('rv').value, validFrom: document.getElementById('rf').value };
+  call('addRate', a, function () {}, { optimistic: function () {
+    ADMIN.rates.push({ 'Batch': a.batch, 'Region': a.region, 'Rate per session': Number(a.rate), 'Currency': a.region === 'Egypt' ? 'EGP' : 'USD', 'Valid from': a.validFrom });
+    closeSheet(); drawSettingsMore(); } });
+}
+
+function editTemplate(i) {
+  var t = ADMIN.templates[i];
+  sheet(t.key, '<div class="sub">' + esc(t.note || '') + '</div><textarea id="tplv" rows="14" style="width:100%;font:inherit;font-size:14px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)">' + esc(t.text) + '</textarea>' +
+    '<button class="primary" style="width:100%;margin-top:10px" onclick="saveTemplate(' + i + ')">Save</button>');
+}
+function saveTemplate(i) {
+  var t = ADMIN.templates[i], v = document.getElementById('tplv').value;
+  call('updateTemplate', { key: t.key, text: v }, function () {}, { optimistic: function () { t.text = v; closeSheet(); notice('Saved. Messages use it from the next update (about a minute).'); } });
 }
 </script>
 
