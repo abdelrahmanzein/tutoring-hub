@@ -944,7 +944,7 @@ function newStudentForm(join) {
       '<div class="card"><b>Student</b>' + field('nf', 'First name') + field('nl', 'Last name') + field('naf', 'Arabic first name') + field('nal', 'Arabic last name') +
       field('ng', 'Gender', sel('ng', '', [['', '–'], ['F', 'F'], ['M', 'M']])) + field('nsch', 'School') +
       field('nc', 'Country', '<input id="nc" list="ncl"><datalist id="ncl">' + f.countries.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</datalist>') +
-      field('nsw', 'Student WhatsApp (with country code)') + '</div>' +
+      field('nsw', 'Student WhatsApp', phoneCells('nsw', f)) + '</div>' +
       '<div class="card"><b>Group and money</b>' + field('ngr', 'Group', sel('ngr', '', [['', 'Pick a group']].concat(f.groups.map(function (g) { return [g.group, g.group]; })))) +
       field('nsince', 'In the group since (first session, e.g. the trial)', '<input id="nsince" type="date" value="' + today() + '">') +
       field('npt', 'Payment type', sel('npt', '', f.paymentTypes.map(function (p) { return [p, p]; }))) +
@@ -952,8 +952,8 @@ function newStudentForm(join) {
       field('ntrial', 'Trial session to charge (optional; the trial is charged once they continue)', '<input id="ntrial" type="date">') +
       field('nbill', 'Billing contact', sel('nbill', 'Parent', [['Parent', 'Parent'], ['Student', 'Student']])) + '</div>' +
       '<div class="card"><b>Parent</b>' + field('npn', 'Parent name') + field('npr', 'Relation', '<input id="npr" list="nprl"><datalist id="nprl"><option>Mother</option><option>Father</option></datalist>') +
-      field('npw', 'Parent WhatsApp (with country code)') + '</div>' +
-      '<div class="card"><b>Accounts (optional, can be added later)</b>' + field('nmeet', 'Meet name') + field('nup', 'Upload account (email)') + field('nnotes', 'Notes') + '</div>' +
+      field('npw', 'Parent WhatsApp', phoneCells('npw', f)) + '</div>' +
+      '<div class="card"><b>Accounts (optional, can be added later)</b>' + (join && join.trialDate ? '<div id="trialmeet" class="sub" style="margin-top:6px">Looking for them in the trial session\'s Meet…</div>' : '') + field('nmeet', 'Meet name') + field('nup', 'Upload account (email)') + field('nnotes', 'Notes') + '</div>' +
       '<button class="primary" style="width:100%;margin:6px 0 16px" onclick="hold(this);saveNewStudent(false)">Add student</button>';
     var setRate = function () {
       var g = f.groups.filter(function (x) { return x.group === document.getElementById('ngr').value; })[0];
@@ -968,16 +968,46 @@ function newStudentForm(join) {
     if (join) {
       var a = join.answers, put = function (id, v) { var el = document.getElementById(id); if (el && v) el.value = v; };
       put('nf', a.first); put('nl', a.last); put('naf', a.arabicFirst); put('nal', a.arabicLast); put('ng', a.gender); put('nsch', a.school);
-      put('nc', a.country); put('nsw', a.studentWhatsApp); put('ngr', join.group); put('nsince', join.since);
-      put('ntrial', join.trialDate); put('npn', a.parentName); put('npr', a.parentRelation); put('npw', a.parentWhatsApp);
+      put('nc', a.country); putPhone('nsw', a.studentWhatsApp); put('ngr', join.group); put('nsince', join.since);
+      put('ntrial', join.trialDate); put('npn', a.parentName); put('npr', a.parentRelation); putPhone('npw', a.parentWhatsApp);
       put('nnotes', a.city ? 'City: ' + a.city : '');
       JOIN_KEY = join.key;
       setRate();
+      trialMeet(join);
     } else JOIN_KEY = '';
   }, { form: true });
 }
 
 var JOIN_KEY = '', JOINS = [];
+
+// A WhatsApp number as two cells: country code (with flag) and the number.
+function phoneCells(id, f) {
+  return '<div class="filters" style="margin:0"><select id="' + id + 'c" style="flex:none;width:auto">' + f.dials.map(function (d) {
+    return '<option value="' + d.dial + '">' + d.flag + ' ' + d.dial + '</option>'; }).join('') + '</select><input id="' + id + '" type="tel" inputmode="tel" placeholder="Number"></div>';
+}
+function putPhone(id, v) {
+  var m = String(v || '').match(/^(\+\d+)\s*(.*)$/);
+  if (!m) { if (v) document.getElementById(id).value = v; return; }
+  document.getElementById(id + 'c').value = m[1]; document.getElementById(id).value = m[2];
+}
+function phoneValue(id) {
+  var n = document.getElementById(id).value.replace(/[^0-9]/g, '').replace(/^0+/, '');
+  return n ? document.getElementById(id + 'c').value + ' ' + n : '';
+}
+
+// The trial session's Meet: people Meet couldn't match are offered as the new student's Google account.
+function trialMeet(join) {
+  var box = document.getElementById('trialmeet');
+  if (!box) return;
+  call('meetDraft', { eventId: '', day: String(join.trialDate).slice(0, 10), group: join.group }, function (m) {
+    if (!document.getElementById('trialmeet')) return;
+    var opts = (m.unknown || []).filter(function (u) { return u.id; });
+    box.innerHTML = opts.length ? '<b>Google Meet account from the trial (' + esc(fmtDate(join.trialDate)) + ')</b>' +
+      sel('ntm', opts.length === 1 ? opts[0].id : '', [['', 'Not sure: learn it at the next session']].concat(opts.map(function (u) { return [u.id, u.name]; }))) +
+      '<div class="sub">' + (opts.length === 1 ? 'Everyone else in that session is already known, so this is most likely them.' : 'Several people in that session are unknown: pick the one that is them.') + '</div>'
+      : 'No unknown Meet account in the trial session; it will be learnt at their next session.';
+  }, { part: true });
+}
 var JOIN_PREVIEW = 'https://abdelrahmanzein.github.io/tutoring-hub/join.html?k=preview';
 
 // Creates a joining form and shows the link and the message to send.
@@ -1026,8 +1056,8 @@ function cancelJoin(i) {
 function saveNewStudent(confirmSimilar) {
   var v = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
   var args = { first: v('nf'), last: v('nl'), arabicFirst: v('naf'), arabicLast: v('nal'), gender: v('ng'), school: v('nsch'), country: v('nc'),
-    studentWhatsApp: v('nsw'), group: v('ngr'), since: v('nsince'), paymentType: v('npt'), rate: v('nrate'), currency: v('ncur'),
-    trialDates: v('ntrial') ? [v('ntrial')] : [], billing: v('nbill'), parentName: v('npn'), parentRelation: v('npr'), parentWhatsApp: v('npw'),
+    studentWhatsApp: phoneValue('nsw'), meetId: v('ntm'), group: v('ngr'), since: v('nsince'), paymentType: v('npt'), rate: v('nrate'), currency: v('ncur'),
+    trialDates: v('ntrial') ? [v('ntrial')] : [], billing: v('nbill'), parentName: v('npn'), parentRelation: v('npr'), parentWhatsApp: phoneValue('npw'),
     meetName: v('nmeet'), uploadAccount: v('nup'), notes: v('nnotes'), confirmSimilar: confirmSimilar, joinKey: JOIN_KEY };
   call('addStudent', args, function (r) {
     if (r.similar) {
@@ -1212,7 +1242,8 @@ function sessionCard(s) {
   return '<div class="card"><div class="item"><div class="sess-title">' + esc(s.group) + '</div>' +
     '<span class="tag ' + STATUS_TAG[s.status] + '">' + esc(s.status) + '</span></div>' +
     '<div class="sub">' + esc(s.start) + '–' + esc(s.end) + ' (Cairo)</div>' +
-    (s.homework ? '<div class="sub">Homework: ' + esc(s.homework.title) + ' · due ' + esc(dueLabel(s.homework.due)) + '</div>' : '') +
+    (s.homework ? '<div class="sub">Homework: ' + esc(s.homework.title) + ' · due ' + esc(dueLabel(s.homework.due)) +
+      (s.homework.link ? ' · <a href="' + esc(s.homework.link) + '" target="_blank">📁 submissions</a>' : '') + '</div>' : '') +
     (s.pastPapers ? '<div class="sub">Past papers · <a href="' + esc(s.pastPapers.link) + '" target="_blank">open follow-up sheet</a></div>' : '') +
     (s.note ? '<div class="note">📌 Note from ' + esc(fmtDate(s.note.from)) + ': ' + esc(s.note.text) + '</div>' : '') +
     '<div class="chips">' + (s.students.map(function (p) {
@@ -1224,14 +1255,14 @@ function sessionCard(s) {
     (s.status === 'Did not happen' ? '<button class="secondary" onclick="undoSess(\'' + esc(s.sessionId) + '\')">Undo "didn\'t happen"</button>' : '') +
     (s.status === 'Logged' || s.status === 'Did not happen' ? '' :
       '<button class="primary"' + (s.canLog ? '' : ' disabled') + ' onclick="sessionForm(' + i + ')">Log session</button>' +
-      '<button class="secondary" onclick="notHeldForm(' + i + ')">Didn\'t happen</button>') +
-    '</div></div>';
+      (s.status === 'Upcoming' ? '' : '<button class="secondary" onclick="notHeldForm(' + i + ')">Didn\'t happen</button>')) +
+    '</div>' + (s.status === 'Upcoming' ? '<div style="text-align:right;margin-top:6px"><a href="#" class="sub" onclick="notHeldForm(' + i + ');return false">Cancel this session</a></div>' : '') + '</div>';
 }
 
 // "Didn't happen": not charged, with the reason, and optionally a make-up session added to the calendar.
 function notHeldForm(i) {
   var s = WEEK[i];
-  sheet(s.group + ' · ' + fmtDate(s.day), '<div class="sub">Nobody is charged for it, and it stays off the list of sessions to log.</div>' +
+  sheet((s.status === 'Upcoming' ? 'Cancel ' : '') + s.group + ' · ' + fmtDate(s.day), '<div class="sub">Nobody is charged for it, and it stays off the list of sessions to log.</div>' +
     '<div class="sub" style="margin-top:8px">Why</div>' + sel('nhr', 'Cancelled by me', [['Cancelled by me', 'Cancelled by me'], ['Students couldn\'t attend', 'Students couldn\'t attend'], ['Holiday or school event', 'Holiday or school event'], ['Technical problem', 'Technical problem']]) +
     '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="nhm" style="width:auto" onchange="document.getElementById(\'nhmk\').style.display=this.checked?\'\':\'none\'"> Make it up on another day</label>' +
     '<div id="nhmk" style="display:none"><div class="filters" style="margin:6px 0 0"><input id="nhd" type="date" value="' + today() + '"><input id="nht" type="time" value="' + esc(s.start || '19:00') + '"></div>' +
@@ -1573,20 +1604,80 @@ function showTodo() {
     if (d.joins.length) parts.push('<h2>Joining forms to review</h2>' + d.joins.map(function (j, i) {
       return '<div class="card nav-row" onclick="newStudentForm(TODO.joins[' + i + '])"><span><b>' + esc(j.name) + '</b><div class="sub">' + esc(j.group) + ' · filled ' + esc(fmtDate(j.filledAt)) + '</div></span><span>Review ›</span></div>';
     }).join(''));
-    if (d.homework.length) parts.push('<h2>Homework</h2>' + d.homework.map(function (h) {
-      var chip = function (p, cls, txt) { return '<button class="chip hw-' + cls + '" onclick="showProfile(\'' + esc(p.id) + '\')">' + txt + ' ' + esc(p.name) + (p.daysLate ? ' <span class="sub">' + p.daysLate + 'd</span>' : '') + '</button>'; };
-      return '<div class="card"><b>' + esc(h.group) + '</b><div class="sub">' + esc(h.title) + ' · was due ' + esc(fmtDate(String(h.due).slice(0, 10))) + '</div><div class="chips">' +
-        h.missing.map(function (p) { return chip(p, 'miss', '❌'); }).join('') + h.late.map(function (p) { return chip(p, 'late', '⏰'); }).join('') + '</div></div>';
+    parts.push('<div id="todo-up"></div>');
+    if (d.homework.length) parts.push('<h2>Homework not submitted</h2>' + d.homework.map(function (h, hi) {
+      return '<div class="card"><b>' + esc(h.group) + '</b><div class="sub">' + esc(h.title) + ' · was due ' + esc(fmtDate(String(h.due).slice(0, 10))) +
+        (h.link ? ' · <a href="' + esc(h.link) + '" target="_blank">📁 folder</a>' : '') + '</div><div class="chips">' +
+        h.missing.map(function (p, pi) { return '<button class="chip hw-miss" onclick="missingSheet(' + hi + ',' + pi + ')">❌ ' + esc(p.name) + '</button>'; }).join('') + '</div></div>';
     }).join(''));
     if (d.uploads.length) parts.push('<h2>Who uploaded this?</h2>' + d.uploads.map(function (u, i) {
+      var members = d.people.filter(function (p) { return p.groups.indexOf(u.group) >= 0; });
       return '<div class="card"><div><b>' + esc(u.owner || 'unknown account') + '</b></div><div class="sub">' + esc(u.assignment) + ' · <a href="' + esc(u.url) + '" target="_blank">' + esc(u.file) + '</a> · ' + esc(u.created) + '</div>' +
-        (u.owner ? '<div class="filters" style="margin:6px 0 0">' + sel('up' + i, '', [['', 'Pick the student']].concat(d.people.map(function (p) { return [p.id, p.name]; }))) +
+        (u.owner ? '<div class="filters" style="margin:6px 0 0">' + sel('up' + i, '', [['', 'Which ' + esc(u.group) + ' student?']].concat(members.map(function (p) { return [p.id, p.name]; }))) +
           '<button onclick="hold(this);assignUpload(' + i + ')">Save</button></div>' : '') + '</div>';
     }).join(''));
-    document.getElementById('main').innerHTML = (parts.join('') || '<div class="card sub">Nothing waiting. 🎉</div>') +
+    document.getElementById('main').innerHTML = parts.join('') + (parts.length > 1 ? '' : '<div class="card sub">Nothing else waiting. 🎉</div>') +
       '<div class="card sub" style="margin-top:14px">Homework is checked every night at 00:30' + (d.scannedAt ? ' (last: ' + esc(fmtDate(d.scannedAt.slice(0, 10))) + ' ' + esc(new Date(d.scannedAt).toTimeString().slice(0, 5)) + ')' : '') + '.' +
       '<div class="actions"><button onclick="hold(this,\'Checking Drive…\');scanNow()">Check homework now</button></div></div>';
+    drawUpcomingHomework();
   });
+}
+
+// Homework due in the next two days (live from Drive): who has and hasn't uploaded, with a group reminder.
+var UP_HW = [];
+function drawUpcomingHomework() {
+  call('week', {}, function (week) {
+    call('weekLive', {}, function (live) {
+      var now = Date.now(), soon = now + 2 * 864e5, seen = {};
+      UP_HW = week.map(function (s) { var x = live[s.sessionId]; return x && x.homework ? { s: s, x: x } : null; }).filter(function (o) {
+        if (!o) return false;
+        var due = new Date(String(o.x.homework.due).replace(' ', 'T') + ':00').getTime();
+        if (!(due > now && due <= soon) || seen[o.s.group + o.x.homework.title]) return false;
+        return (seen[o.s.group + o.x.homework.title] = true);
+      });
+      var box = document.getElementById('todo-up');
+      if (!box) return;
+      box.innerHTML = UP_HW.length ? '<h2>Homework due soon</h2>' + UP_HW.map(function (o, i) {
+        return '<div class="card"><b>' + esc(o.s.group) + '</b><div class="sub">' + esc(o.x.homework.title) + ' · due ' + esc(dueLabel(o.x.homework.due)) +
+          (o.x.homework.link ? ' · <a href="' + esc(o.x.homework.link) + '" target="_blank">📁 submissions</a>' : '') + '</div><div class="chips">' +
+          o.x.students.map(function (p) { return '<span class="chip hw-' + (HW_CLASS[p.hw] || 'none') + '">' + (HW_ICON[p.hw] || '') + ' ' + esc(p.name) + '</span>'; }).join('') + '</div>' +
+          '<div class="actions"><button onclick="hwReminder(' + i + ')">💬 Send reminder</button></div></div>';
+      }).join('') : '';
+    }, { part: true });
+  }, { part: true });
+}
+
+// The group message: thanks to those who uploaded, a reminder to the rest.
+function hwReminder(i) {
+  var o = UP_HW[i], done = o.x.students.filter(function (p) { return p.hw === 'On time' || p.hw === 'Late'; }).map(function (p) { return p.name; });
+  var left = o.x.students.filter(function (p) { return p.hw !== 'On time' && p.hw !== 'Late'; }).map(function (p) { return p.name; });
+  var list = function (a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; };
+  var text = '📝 Homework reminder: ' + o.x.homework.title + ' is due ' + dueLabel(o.x.homework.due) + ' (Cairo time).' +
+    (done.length ? '\nThank you ' + list(done) + ' for submitting ✅' : '') + (left.length ? '\nStill waiting for ' + list(left) + '.' : '');
+  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+}
+
+// A student who hasn't submitted: set the status by hand, or send them a nudge.
+function missingSheet(hi, pi) {
+  var h = TODO.homework[hi], p = h.missing[pi];
+  sheet(p.name + ' · ' + h.title, '<div class="sub">Not in the folder (was due ' + esc(fmtDate(String(h.due).slice(0, 10))) + ').</div>' +
+    '<div class="sub" style="margin-top:10px">Already done it (e.g. sent on WhatsApp)?</div>' +
+    '<div class="actions"><button onclick="hold(this);setMissing(' + hi + ',' + pi + ',\'On time\')">Mark on time</button><button onclick="hold(this);setMissing(' + hi + ',' + pi + ',\'Late\')">Mark late</button><button class="secondary" onclick="hold(this);setMissing(' + hi + ',' + pi + ',\'Excused\')">Excused</button></div>' +
+    '<div class="sub" style="margin-top:14px">Or remind ' + esc(p.first) + ':</div>' +
+    '<button class="primary" style="width:100%;margin-top:6px" onclick="nudge(' + hi + ',' + pi + ')">💬 Message ' + esc(p.first) + (p.phone ? '' : ' (no number saved: you pick the chat)') + '</button>');
+}
+function setMissing(hi, pi, status) {
+  var h = TODO.homework[hi], p = h.missing[pi];
+  call('setHomework', { assignmentId: h.assignmentId, id: p.id, status: status, reason: 'Set from To do' }, function () {
+    var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove(); showTodo(); notice(p.name + ': ' + status + '.');
+  });
+}
+function nudge(hi, pi) {
+  var h = TODO.homework[hi], p = h.missing[pi];
+  var text = 'Hi ' + p.first + ', I haven\'t seen homework ' + h.title + ' in the folder yet. If you upload it by tonight, it will still count. ' +
+    'Please send me a message once it\'s uploaded so I can check it 🙂' + (h.link ? '\n' + h.link : '');
+  var num = String(p.phone || '').replace(/[^0-9]/g, '');
+  window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(text), '_blank');
 }
 
 // Opens the log form for a session from the list (finds it among the loaded week, else a blank form for it).

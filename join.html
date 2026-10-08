@@ -115,9 +115,10 @@ function select(id, options) {
 }
 // A WhatsApp number: country code (with flag) + the number.
 function phone(id) {
-  return '<div style="display:flex;gap:8px"><select id="' + id + 'Code" style="width:auto;flex:none">' + F.countries.map(function (c) {
+  return '<div style="display:flex;gap:8px"><select id="' + id + 'Code" aria-label="Country code" style="width:auto;flex:none">' + F.countries.map(function (c) {
     return '<option value="' + c.dial + '" data-c="' + esc(c.name) + '">' + c.flag + ' ' + c.dial + '</option>'; }).join('') + '</select>' +
-    '<input id="' + id + '" type="tel" inputmode="tel" placeholder="1xx xxx xxxx"></div>';
+    '<input id="' + id + '" type="tel" inputmode="tel" placeholder="Number / الرقم"></div>' +
+    '<div class="hint" style="display:flex;justify-content:space-between"><span>Country code · مفتاح الدولة</span><span>Number without the country code</span></div>';
 }
 // The details you set, shown to the parent (not editable).
 function info(ar, en, value) {
@@ -156,7 +157,7 @@ function draw(f) {
       field('school', 'المدرسة', 'School') +
       field('country', 'بلد الإقامة', 'Country of residence', select('country', f.countries.map(function (c) { return [c.name, c.flag + ' ' + c.name]; }).concat([['Other', '🌍 Other']]))) +
       field('city', 'المدينة', 'City', null, 'So session times are shown in your local time.') +
-      field('studentWhatsApp', 'رقم واتساب الطالب', 'Student\'s WhatsApp (optional)', phone('studentWhatsApp')) +
+      field('studentWhatsApp', 'رقم واتساب الطالب', 'Student\'s WhatsApp', phone('studentWhatsApp')) +
     '</div>' +
     '<div class="card"><h2><span>Parent</span><span class="ar">ولي الأمر</span></h2>' +
       field('parentName', 'اسم ولي الأمر', 'Parent\'s name') +
@@ -186,11 +187,11 @@ function send() {
     var n = document.getElementById(id).value.replace(/[^0-9]/g, '').replace(/^0+/, '');
     a[id] = n ? document.getElementById(id + 'Code').value + ' ' + n : '';
   });
-  var need = ['first', 'last', 'arabicFirst', 'arabicLast', 'gender', 'school', 'country', 'parentName', 'parentRelation', 'parentWhatsApp'];
+  var need = ['first', 'last', 'arabicFirst', 'arabicLast', 'gender', 'school', 'country', 'studentWhatsApp', 'parentName', 'parentRelation', 'parentWhatsApp'];
   if (document.getElementById('f-city').style.display !== 'none') need.push('city');
   var missing = need.filter(function (id) { return !a[id]; });
   var err = document.getElementById('err');
-  if (missing.length) { err.innerHTML = '<span class="ar">يرجى تعبئة جميع الحقول المطلوبة.</span>\nPlease fill in every field (only the student\'s WhatsApp is optional).'; document.getElementById(missing[0]).focus(); return; }
+  if (missing.length) { err.innerHTML = '<span class="ar">يرجى تعبئة جميع الحقول المطلوبة.</span>\nPlease fill in every field.'; document.getElementById(missing[0]).focus(); return; }
   if (PREVIEW) { err.textContent = 'Preview only: nothing was sent. Parents see the thank-you message at this point.'; return; }
   var b = document.getElementById('send'); b.disabled = true; b.textContent = 'Sending…'; err.textContent = '';
   api('joinSubmit', { key: KEY, answers: a }, function () {
