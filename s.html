@@ -42,16 +42,16 @@ function draw(p) {
   html += '<h2>Financials</h2>';
   if (p.due) {
     html += '<div class="card due"><div class="sub">Amount due</div><div class="big">' + money(p.due.amount, c) + '</div>' +
-      '<div>by ' + esc(day(p.due.by)) + '</div>' +
+      (p.due.by ? '<div>by ' + esc(day(p.due.by)) + '</div>' : '<div class="sub">The payment request with the date comes shortly.</div>') +
       (p.type === 2 ? '<div class="sub">Paid as the EGP equivalent on the transfer day' + (p.due.egpToday ? ' (about ' + money(p.due.egpToday, 'EGP') + ' at today\'s rate)' : '') + '.</div>' : '') +
       (p.type === 3 ? '<div class="sub">Covers the sessions taken and the next 4 sessions.</div>' : '') +
       (p.due.transferSent ? '<div class="sub">Noted that the transfer is on its way. Thank you.</div>' : '') + '</div>';
   } else {
     html += '<div class="card clear"><div class="big">Nothing to pay now</div>' +
       (p.aheadSessions ? '<div>' + p.aheadSessions + ' session' + (p.aheadSessions > 1 ? 's' : '') + ' already paid in advance.</div>' : '') +
-      (p.sessionsSinceLastPayment ? '<div class="sub">' + p.sessionsSinceLastPayment + ' session' + (p.sessionsSinceLastPayment > 1 ? 's' : '') + ' since the last payment; a payment request comes after 4 sessions.</div>' : '') + '</div>';
+      (p.sessionsSinceLastPayment ? '<div class="sub">' + p.sessionsSinceLastPayment + ' session' + (p.sessionsSinceLastPayment > 1 ? 's' : '') + ' since the last payment; a payment request comes after ' + (p.every || 4) + ' sessions.</div>' : '') + '</div>';
   }
-  if (p.unpaid && p.unpaid.length) html += '<div class="card"><div class="sub">Sessions not yet paid</div>' + p.unpaid.map(function (u) {
+  if (p.unpaid && p.unpaid.length) html += '<div class="card"><div class="sub">' + (p.due ? 'Sessions in this amount' : 'Sessions since the last payment') + '</div>' + p.unpaid.map(function (u) {
     return '<div class="row"><span>' + esc(day(u.date)) + '</span><span>' + money(u.amount, c) + '</span></div>'; }).join('') + '</div>';
   if (p.lastPayment) html += '<div class="card"><div class="row"><span>Last payment</span><span>' + money(p.lastPayment.amount, c) + ' · ' + esc(d(p.lastPayment.date)) + '</span></div></div>';
   if (p.recent && p.recent.length) html += '<h2>Recent sessions</h2><div class="card">' + p.recent.map(function (r) {
