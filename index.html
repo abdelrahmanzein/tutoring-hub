@@ -293,7 +293,7 @@ function persist() {
 // Every screen's data is prepared by the server and uploaded to a fast read service; the app downloads it in a
 // fraction of a second instead of asking Google for each screen. Right after a save, screens ask Google directly
 // (as before) until the new data has been uploaded (usually within a minute).
-var READ_URL = '';   // set once the read service is live
+var READ_URL = 'https://tutoring-hub.abdelrahmanzein.workers.dev';
 var SNAP_ACTIONS = ['money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
 var SNAP_AT = {}, STALE_SINCE = 0, SNAP_LOADING = null, POLL_T = null;
 
