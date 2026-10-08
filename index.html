@@ -258,7 +258,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -356,7 +356,8 @@ function cached(action, args) { var c = CACHE[action + '|' + JSON.stringify(args
 // (usually within a minute). The screen moves on at once; "Saving…" stays at the bottom until Google confirms,
 // then "Saved ✓". If Google refuses one (e.g. the balance changed meanwhile), you get "Not saved: why".
 var QUEUE_ACTIONS = ['setHomework', 'updateGroup', 'assignUpload', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession',
-  'undoSession', 'updateStudent', 'addAccount', 'confirmAccount', 'undoStudentEdit', 'moveStudent', 'joinCancel'];
+  'undoSession', 'updateStudent', 'addAccount', 'confirmAccount', 'undoStudentEdit', 'moveStudent', 'joinCancel',
+  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement'];
 var QUEUE_LABEL = { recordPayment: 'payment', addAdjustment: 'adjustment', logSession: 'session', undoSession: 'undo', updateStudent: 'student edit', setHomework: 'homework' };
 
 function newId() {
@@ -833,7 +834,9 @@ function toggleEntry(entryId, deleted, studentId) {
 }
 
 // Record payment form.
-function paymentForm(id) {
+var PAY_PRE = null;
+function paymentForm(id, pre) {
+  PAY_PRE = pre || null;
   newView();
   call('moneyStudent', { id: id }, function (d) {
     var st = d.student;
@@ -848,6 +851,13 @@ function paymentForm(id) {
       '<div class="sub" style="margin-top:8px">Note (optional)</div><input id="pn"></div>' +
       '<button class="primary" style="margin-top:10px" onclick="checkPayment(\'' + esc(id) + '\',\'' + esc(st.currency) + '\')">Check</button><div id="pv"></div>';
     document.getElementById('pc').value = /paid as EGP/i.test(st.paymentType) ? 'EGP' : st.currency;
+    // Started from a payment text or a request: amount, currency and reference filled in.
+    if (PAY_PRE) {
+      if (PAY_PRE.amount) document.getElementById('pa').value = PAY_PRE.amount;
+      if (PAY_PRE.currency) document.getElementById('pc').value = PAY_PRE.currency;
+      if (PAY_PRE.note) document.getElementById('pn').value = PAY_PRE.note;
+      if (PAY_PRE.date) document.getElementById('pd').value = PAY_PRE.date;
+    }
     rateBox(st.currency);
   }, { form: true });
 }
@@ -900,6 +910,7 @@ function checkPayment(id, studentCur) {
       (p.owedAfter ? '<div>Still owed: ' + amt(p.owedAfter, studentCur) + ' (' + p.sessionsStillUnpaid + ' sessions)</div>' : '') +
       '</div><button class="primary" onclick=\'hold(this);savePayment(' + JSON.stringify(Object.assign({}, args, {
         note: document.getElementById('pn').value, receivedCurrency: cur, sentAmount: received, arrivedAmount: arrived, bankFee: fee,
+        reference: PAY_PRE && PAY_PRE.reference || '', smsKey: PAY_PRE && PAY_PRE.smsKey || '',
         expectedBalance: p.before })) + ')\'>Confirm and save</button>';
   });
 }
@@ -909,6 +920,8 @@ function pctDiff(a, b) { var d = Math.round((a - b) / b * 1000) / 10; return (d 
 
 // Saves the payment. If the balance changed in the meantime the new numbers are shown and nothing is saved.
 function savePayment(args) {
+  // A payment from a forwarded text: the text is cleared from To do once the payment is handed over.
+  if (args.smsKey) { forgetSms(args.smsKey); delete args.smsKey; }
   call('recordPayment', args, function (r) {
     if (r.queued) { showMoneyStudent(args.id); return notice('Payment sent. The balance updates in about a minute.'); }
     if (r.changed) { notice('The balance changed since you checked (' + amt(r.now.before, args.currency) + '). Check again.'); return checkPayment(args.id, args.currency); }
@@ -1761,6 +1774,7 @@ function showTodo() {
     if (d.joins.length) parts.push('<h2>Joining forms to review</h2>' + d.joins.map(function (j, i) {
       return '<div class="card nav-row" onclick="newStudentForm(TODO.joins[' + i + '])"><span><b>' + esc(j.name) + '</b><div class="sub">' + esc(j.group) + ' · filled ' + esc(fmtDate(j.filledAt)) + '</div></span><span>Review ›</span></div>';
     }).join(''));
+    parts.push('<div id="todo-pay"></div>');
     parts.push('<div id="todo-up"></div>');
     if (d.homework.length) parts.push('<h2>Homework not submitted</h2>' + d.homework.map(function (h, hi) {
       return '<div class="card"><b>' + esc(h.group) + '</b><div class="sub">' + esc(h.title) + ' · was due ' + esc(fmtDate(String(h.due).slice(0, 10))) +
@@ -1773,10 +1787,11 @@ function showTodo() {
         (u.owner ? '<div class="filters" style="margin:6px 0 0">' + sel('up' + i, '', [['', 'Which ' + esc(u.group) + ' student?']].concat(members.map(function (p) { return [p.id, p.name]; }))) +
           '<button onclick="hold(this);assignUpload(' + i + ')">Save</button></div>' : '') + '</div>';
     }).join(''));
-    document.getElementById('main').innerHTML = parts.join('') + (parts.length > 1 ? '' : '<div class="card sub">Nothing else waiting. 🎉</div>') +
+    document.getElementById('main').innerHTML = parts.join('') + (parts.length > 2 ? '' : '<div class="card sub">Nothing else waiting. 🎉</div>') +
       '<div class="card sub" style="margin-top:14px">Homework is checked every night at 00:30' + (d.scannedAt ? ' (last: ' + esc(fmtDate(d.scannedAt.slice(0, 10))) + ' ' + esc(new Date(d.scannedAt).toTimeString().slice(0, 5)) + ')' : '') + '.' +
       '<div class="actions"><button onclick="hold(this,\'Checking Drive…\');scanNow()">Check homework now</button></div></div>';
     drawUpcomingHomework();
+    drawPayments();
   });
 }
 
@@ -1864,6 +1879,134 @@ function assignUpload(i) {
     patchLocal(function () { var t = cached('todo'); if (t) t.uploads = t.uploads.filter(function (x) { return x.owner !== u.owner; }); });
     showTodo(); notice(u.owner + ' saved. Homework is re-checked in the background.');
   } });
+}
+</script>
+<script>
+// ---------- To do: payments (requests to send, reminders, waiting, and payment texts from the bank) ----------
+var SMS = [];
+
+// The Payments part of To do (drawn into #todo-pay).
+function drawPayments() {
+  var box = document.getElementById('todo-pay'), p = TODO && TODO.payments;
+  if (!box || !p) return;
+  var cur = function (x) { return '<span class="cur ' + esc(x.currency) + '">' + esc(x.currency) + '</span>'; };
+  var html = '';
+  if (p.ready.length) html += '<h2>Payment requests to send</h2>' + p.ready.map(function (r, i) {
+    return '<div class="card"><div class="item"><span>' + cur(r) + ' <b>' + esc(r.name) + '</b><div class="sub">' + r.sessions + ' sessions unpaid · due by ' + esc(fmtDate(r.due)) +
+      (r.type === 2 && r.egpToday ? ' · ≈ ' + amt(r.egpToday, 'EGP') + ' today' : '') + (r.toStudent ? ' · to the student' : '') + '</div></span><b>' + amt(r.amount, r.currency) + '</b></div>' +
+      '<details><summary class="sub">Message</summary><div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(r.message) + '</div></details>' +
+      '<div class="actions"><button class="primary" onclick="sendRequest(' + i + ')">💬 Send on WhatsApp</button></div></div>';
+  }).join('');
+  if (p.reminders.length) html += '<h2>Payment reminders due</h2>' + p.reminders.map(function (r, i) {
+    return '<div class="card"><div class="item"><span>' + cur(r) + ' <b>' + esc(r.name) + '</b><div class="sub">Sent ' + esc(fmtDate(r.sent)) + (r.reminders ? ' · ' + r.reminders + ' reminder' + (r.reminders > 1 ? 's' : '') + ' so far' : '') + '</div></span><b>' + amt(r.amount, r.currency) + '</b></div>' +
+      '<details><summary class="sub">Message</summary><div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(r.message) + '</div></details>' +
+      '<div class="actions"><button class="primary" onclick="sendReminderPay(' + i + ')">💬 Send reminder</button><button class="secondary" onclick="payActions(\'reminders\',' + i + ')">More…</button></div></div>';
+  }).join('');
+  if (p.waiting.length) html += '<details class="card"><summary><b>Waiting for payment (' + p.waiting.length + ')</b></summary>' + p.waiting.map(function (r, i) {
+    return '<div class="item" style="margin-top:8px;cursor:pointer" onclick="payActions(\'waiting\',' + i + ')"><span>' + cur(r) + ' ' + esc(r.name) +
+      '<div class="sub">Sent ' + esc(fmtDate(r.sent)) + (r.status === 'Transfer sent' ? ' · transfer on its way' : '') + (r.reminders ? ' · ' + r.reminders + ' reminders' : '') + '</div></span><span>' + amt(r.amount, r.currency) + ' ›</span></div>';
+  }).join('') + '</details>';
+  html += '<div id="todo-sms"></div>';
+  box.innerHTML = html;
+  loadSms();
+}
+
+// Opens WhatsApp with the request and records it as sent.
+function sendRequest(i) {
+  var r = TODO.payments.ready[i];
+  window.open('https://wa.me/' + (r.phone || '') + '?text=' + encodeURIComponent(r.message), '_blank');
+  if (!r.phone) notice('No WhatsApp number saved: pick the chat in WhatsApp.');
+  call('statementSent', { id: r.id, amount: r.amount, currency: r.currency, sessions: r.sessions, due: r.due, message: r.message }, function () {}, { optimistic: function () {
+    patchLocal(function () {
+      var t = cached('todo'); if (!t) return;
+      t.payments.ready = t.payments.ready.filter(function (x) { return x.id !== r.id; });
+      t.payments.waiting.push(Object.assign({}, r, { sent: today(), reminders: 0, status: 'Sent', statementId: '' }));
+    });
+    showTodo();
+  } });
+}
+
+function sendReminderPay(i) {
+  var r = TODO.payments.reminders[i];
+  window.open('https://wa.me/' + (r.phone || '') + '?text=' + encodeURIComponent(r.message), '_blank');
+  call('reminderSent', { statementId: r.statementId }, function () {}, { optimistic: function () {
+    patchLocal(function () {
+      var t = cached('todo'); if (!t) return;
+      t.payments.reminders = t.payments.reminders.filter(function (x) { return x.statementId !== r.statementId; });
+      t.payments.waiting.push(Object.assign({}, r, { reminders: r.reminders + 1 }));
+    });
+    showTodo();
+  } });
+}
+
+// Options for an open request: transfer on its way, record the payment, or withdraw it.
+function payActions(list, i) {
+  var r = TODO.payments[list][i];
+  PAY_SEL = r;
+  sheet(r.name + ' · ' + amt(r.amount, r.currency), '<div class="sub">Request sent ' + esc(fmtDate(r.sent)) + (r.statementId ? '' : ' (still saving)') + '.</div>' +
+    '<div class="actions"><button class="primary" onclick="payFromRequest()">Record payment</button>' +
+    (r.status === 'Transfer sent' ? '<button onclick="transferFlag(false)">Transfer not sent after all</button>' : '<button onclick="transferFlag(true)">Transfer on its way</button>') + '</div>' +
+    '<div class="sub" style="margin-top:8px">"Transfer on its way" pauses reminders (e.g. a USD transfer that takes a few days).</div>' +
+    '<button class="secondary" style="width:100%;margin-top:12px" onclick="withdrawRequest()">Withdraw this request</button>');
+}
+var PAY_SEL = null;
+function closeSheet() { var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove(); }
+function payFromRequest() { closeSheet(); paymentForm(PAY_SEL.id, { amount: PAY_SEL.amount, currency: PAY_SEL.type === 2 ? 'EGP' : PAY_SEL.currency }); }
+function transferFlag(on) {
+  var r = PAY_SEL; if (!r.statementId) return notice('Still saving the request; try again in a moment.');
+  call('transferSent', { statementId: r.statementId, undo: !on }, function () {}, { optimistic: function () {
+    patchLocal(function () { var t = cached('todo'); if (t) ['waiting', 'reminders'].forEach(function (l) { t.payments[l].forEach(function (x) { if (x.statementId === r.statementId) x.status = on ? 'Transfer sent' : 'Sent'; }); }); });
+    closeSheet(); showTodo();
+  } });
+}
+var pendingWithdraw = '';
+function withdrawRequest() {
+  var r = PAY_SEL; if (!r.statementId) return notice('Still saving the request; try again in a moment.');
+  if (pendingWithdraw !== r.statementId) { pendingWithdraw = r.statementId; return notice('Tap Withdraw again to confirm.'); }
+  call('cancelStatement', { statementId: r.statementId }, function () {}, { optimistic: function () {
+    patchLocal(function () { var t = cached('todo'); if (t) ['waiting', 'reminders'].forEach(function (l) { t.payments[l] = t.payments[l].filter(function (x) { return x.statementId !== r.statementId; }); }); });
+    closeSheet(); showTodo();
+  } });
+}
+
+// Payment texts forwarded from the bank (InstaPay): amount and reference read from the text, matched to open requests.
+function loadSms() {
+  if (!READ_URL) return;
+  fetch(READ_URL + '/sms', { headers: { Authorization: 'Bearer ' + TOKEN }, credentials: 'omit', cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+    SMS = (j.items || []).map(function (it) { var v = {}; try { v = JSON.parse(it.value); } catch (e) {} return Object.assign(parseSms(v.text || ''), { key: it.key, at: v.at, text: v.text || '' }); });
+    var box = document.getElementById('todo-sms');
+    if (!box || !SMS.length) return;
+    var open = TODO.payments.ready.concat(TODO.payments.reminders, TODO.payments.waiting);
+    box.innerHTML = '<h2>Money received (bank texts)</h2>' + SMS.map(function (m, i) {
+      var match = open.filter(function (r) { return m.amount && Math.abs(r.amount - m.amount) < 0.5 && (r.currency === m.currency || r.type === 2); });
+      return '<div class="card"><div class="item"><b>' + (m.amount ? amt(m.amount, m.currency) : 'Amount not found') + '</b><span class="sub">' + esc(fmtDate(String(m.at).slice(0, 10))) + '</span></div>' +
+        '<div class="sub" style="white-space:pre-wrap">' + esc(m.text.slice(0, 300)) + '</div>' + (m.ref ? '<div class="sub">Ref ' + esc(m.ref) + '</div>' : '') +
+        '<div class="actions">' + match.map(function (r) { return '<button class="primary" onclick="smsRecord(' + i + ',\'' + esc(r.id) + '\')">It\'s ' + esc(r.name.split(' ')[0]) + '</button>'; }).join('') +
+        '<button onclick="smsPick(' + i + ')">' + (match.length ? 'Someone else…' : 'Whose is it?') + '</button><button class="secondary" onclick="forgetSms(SMS[' + i + '].key);loadSms()">Not a payment</button></div></div>';
+    }).join('');
+  }).catch(function () {});
+}
+
+// "You have received EGP 3,600.00 … Ref 123456" → {amount, currency, ref}.
+function parseSms(t) {
+  var s = String(t).replace(/٬/g, ',');
+  var m = s.match(/(EGP|E£|LE|جنيه|USD|\$)\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i) || s.match(/([0-9][0-9,]*(?:\.[0-9]+)?)\s*(EGP|LE|جنيه|USD)/i);
+  var amount = 0, currency = 'EGP';
+  if (m) { var num = /[0-9]/.test(m[1]) ? m[1] : m[2], c = /[0-9]/.test(m[1]) ? m[2] : m[1]; amount = Number(String(num).replace(/,/g, '')); currency = /USD|\$/i.test(c) ? 'USD' : 'EGP'; }
+  var r = s.match(/(?:ref(?:erence)?(?:\s*(?:no|number|#))?|رقم\s*(?:المرجع|العملية))\s*[:#.]?\s*([A-Z0-9]{5,})/i);
+  return { amount: amount, currency: currency, ref: r ? r[1] : '' };
+}
+
+function smsRecord(i, studentId) {
+  var m = SMS[i];
+  paymentForm(studentId, { amount: m.amount, currency: m.currency, reference: m.ref, note: 'InstaPay' + (m.ref ? ' ' + m.ref : ''), date: String(m.at).slice(0, 10), smsKey: m.key });
+}
+function smsPick(i) {
+  sheet('Whose payment?', sel('smsw', '', [['', 'Pick the student']].concat(TODO.people.map(function (p) { return [p.id, p.name]; }))) +
+    '<button class="primary" style="width:100%;margin-top:10px" onclick="var v=document.getElementById(\'smsw\').value;if(!v)return;closeSheet();smsRecord(' + i + ',v)">Record payment</button>');
+}
+function forgetSms(key) {
+  fetch(READ_URL + '/sms/' + encodeURIComponent(key), { method: 'DELETE', headers: { Authorization: 'Bearer ' + TOKEN }, credentials: 'omit' }).catch(function () {});
 }
 </script>
 

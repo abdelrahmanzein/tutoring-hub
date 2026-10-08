@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Student page · Mr Zein's Tutoring Groups</title>
+  <style>
+    :root { --bg:#f3f5f9; --card:#fff; --text:#18202e; --sub:#5b6577; --line:#e3e7ef; --accent:#2457c5; --due:#b45309; --due-bg:#fff7ed; --ok:#15803d; --ok-bg:#f0fdf4; --bad:#b42318; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#10141c; --card:#1a2030; --text:#e8ecf3; --sub:#9aa5b8; --line:#2c3446; --accent:#7aa2ff; --due:#fbbf24; --due-bg:#2a2112; --ok:#4ade80; --ok-bg:#12261a; --bad:#ff8a80; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    main { max-width:560px; margin:0 auto; padding:20px 16px 40px; }
+    .brand { color:var(--accent); font-weight:700; }
+    h1 { font-size:24px; margin:4px 0 0; } .ar { direction:rtl; font-family:"Geeza Pro","Noto Naskh Arabic",Tahoma,sans-serif; color:var(--sub); }
+    h2 { font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--sub); margin:22px 0 8px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:10px 0; }
+    .due { background:var(--due-bg); border-color:var(--due); } .due .big { color:var(--due); }
+    .clear { background:var(--ok-bg); border-color:var(--ok); } .clear .big { color:var(--ok); }
+    .big { font-size:26px; font-weight:700; }
+    .row { display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid var(--line); } .row:last-child { border-bottom:0; }
+    .sub { color:var(--sub); font-size:14px; }
+    .ok { color:var(--ok); } .late { color:var(--due); } .miss { color:var(--bad); }
+    footer { margin-top:24px; font-size:12px; color:var(--sub); }
+  </style>
+</head>
+<body>
+<main id="main"><p class="sub">Loading…</p></main>
+<script>
+var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev';
+var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^0-9a-f]/g, '');
+var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function d(v) { var m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? +m[3] + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1] : ''; }
+function day(v) { var m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); if (!m) return ''; var x = new Date(+m[1], +m[2] - 1, +m[3]); return DAYS[x.getDay()] + ' ' + +m[3] + ' ' + MONTHS[+m[2] - 1]; }
+function money(n, c) { var v = Math.round(Number(n) * 100) / 100; return (v % 1 ? v.toFixed(2) : String(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' ' + c; }
+
+function draw(p) {
+  var c = p.currency, html = '<div class="brand">Mr Zein\'s Tutoring Groups</div><h1>' + esc(p.name) + '</h1>' + (p.nameAr ? '<div class="ar">' + esc(p.nameAr) + '</div>' : '') +
+    (p.group ? '<div class="sub">' + esc(p.group) + '</div>' : '');
+  html += '<h2>Financials</h2>';
+  if (p.due) {
+    html += '<div class="card due"><div class="sub">Amount due</div><div class="big">' + money(p.due.amount, c) + '</div>' +
+      '<div>by ' + esc(day(p.due.by)) + '</div>' +
+      (p.type === 2 ? '<div class="sub">Paid as the EGP equivalent on the transfer day' + (p.due.egpToday ? ' (about ' + money(p.due.egpToday, 'EGP') + ' at today\'s rate)' : '') + '.</div>' : '') +
+      (p.type === 3 ? '<div class="sub">Covers the sessions taken and the next 4 sessions.</div>' : '') +
+      (p.due.transferSent ? '<div class="sub">Noted that the transfer is on its way. Thank you.</div>' : '') + '</div>';
+  } else {
+    html += '<div class="card clear"><div class="big">Nothing to pay now</div>' +
+      (p.aheadSessions ? '<div>' + p.aheadSessions + ' session' + (p.aheadSessions > 1 ? 's' : '') + ' already paid in advance.</div>' : '') +
+      (p.sessionsSinceLastPayment ? '<div class="sub">' + p.sessionsSinceLastPayment + ' session' + (p.sessionsSinceLastPayment > 1 ? 's' : '') + ' since the last payment; a payment request comes after 4 sessions.</div>' : '') + '</div>';
+  }
+  if (p.unpaid && p.unpaid.length) html += '<div class="card"><div class="sub">Sessions not yet paid</div>' + p.unpaid.map(function (u) {
+    return '<div class="row"><span>' + esc(day(u.date)) + '</span><span>' + money(u.amount, c) + '</span></div>'; }).join('') + '</div>';
+  if (p.lastPayment) html += '<div class="card"><div class="row"><span>Last payment</span><span>' + money(p.lastPayment.amount, c) + ' · ' + esc(d(p.lastPayment.date)) + '</span></div></div>';
+  if (p.recent && p.recent.length) html += '<h2>Recent sessions</h2><div class="card">' + p.recent.map(function (r) {
+    return '<div class="row"><span>' + esc(day(r.date)) + '</span><span>' + (r.attended ? (r.late ? '<span class="late">Attended, ' + r.late + ' min late</span>' : '<span class="ok">Attended</span>') : '<span class="miss">Absent (recording sent)</span>') +
+      (r.participation ? ' · ' + esc(r.participation) : '') + '</span></div>'; }).join('') + '</div>';
+  if (p.homework && p.homework.length) html += '<h2>Homework</h2><div class="card">' + p.homework.map(function (h) {
+    var cls = h.status === 'On time' ? 'ok' : h.status === 'Late' ? 'late' : h.status === 'Missing' ? 'miss' : '';
+    return '<div class="row"><span>' + esc(h.title) + '<div class="sub">due ' + esc(d(h.due)) + '</div></span><span class="' + cls + '">' + esc(h.status) + '</span></div>'; }).join('') + '</div>';
+  html += '<footer>Updated ' + esc(d(p.updated)) + '. If a student is absent, the recording is sent and the session is charged.</footer>';
+  document.getElementById('main').innerHTML = html;
+  document.title = p.name + ' · Mr Zein\'s Tutoring Groups';
+}
+
+if (!KEY) document.getElementById('main').innerHTML = '<div class="card">This link is not complete.</div>';
+else fetch(READ + '/p/' + KEY, { credentials: 'omit', cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
+  .then(function (p) { if (p) draw(p); else document.getElementById('main').innerHTML = '<div class="card">This link is not valid.</div>'; })
+  .catch(function () { document.getElementById('main').innerHTML = '<div class="card">Could not load the page. Please check the internet and try again.</div>'; });
+</script>
+</body>
+</html>
