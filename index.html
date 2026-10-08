@@ -1671,7 +1671,7 @@ function afterLogged(r) {
   var html = '<div class="sub">' + r.charged + ' charged.' + (r.homeworkFolder ? ' Homework folder created: <a href="' + esc(r.homeworkFolder.url) + '" target="_blank">' + esc(r.homeworkFolder.name) + '</a>.' : '') +
     (r.homeworkError ? ' Homework folder not created: ' + esc(r.homeworkError) + '.' : '') + '</div>';
   if (r.absent && r.absent.length) {
-    html += r.recording ? '<div style="margin-top:10px">Recording: <a href="' + esc(r.recording.url) + '" target="_blank">' + esc(r.recording.name) + '</a></div>' +
+    html += r.recording && r.recording.length ? '<div style="margin-top:10px">Recording: ' + r.recording.map(function (x) { return '<a href="' + esc(x.url) + '" target="_blank">' + esc(x.name) + '</a>'; }).join(', ') + '</div>' +
       r.absent.map(function (a, i) { return '<button style="width:100%;margin-top:6px" onclick="sendRecording(' + i + ')">💬 Send the recording to ' + esc(a.first) + (a.phone ? '' : ' (pick the chat)') + '</button>'; }).join('')
       : '<div class="sub" style="margin-top:10px">No recording found yet (Meet takes a while to save it). Absent: ' + r.absent.map(function (a) { return esc(a.first); }).join(', ') + '.</div>';
   }
@@ -1679,8 +1679,8 @@ function afterLogged(r) {
 }
 function sendRecording(i) {
   var a = LOGGED.absent[i], rec = LOGGED.recording;
-  call('shareRecording', { fileId: rec.id }, function () {}, { optimistic: function () {} });
-  waSend(a.phone, 'Hi ' + a.first + ', here is the recording of today\'s session: ' + rec.url + '\nPlease watch it before the next session.', 'Recording to absent student', { studentId: a.id });
+  rec.forEach(function (x) { call('shareRecording', { fileId: x.id }, function () {}, { optimistic: function () {}, quiet: true }); });
+  waSend(a.phone, 'Hi ' + a.first + ', here is the recording of the session you missed:\n' + rec.map(function (x) { return x.url; }).join('\n') + '\nPlease watch it before the next session.', 'Recording to absent student', { studentId: a.id });
 }
 </script>
 
