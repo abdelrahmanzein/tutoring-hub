@@ -250,7 +250,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var NO_CACHE = WRITES.concat(['todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
@@ -1151,10 +1151,35 @@ function sessionCard(s) {
     }).join('') || '<span class="sub">No students</span>') + '</div>' +
     '<div class="actions">' +
     (s.reminder ? '<button onclick="sendReminder(' + i + ')">💬 Send reminder</button>' : s.upcoming ? '<button disabled>💬 Preparing reminder…</button>' : '') +
+    (s.status === 'Did not happen' ? '<button class="secondary" onclick="undoSess(\'' + esc(s.sessionId) + '\')">Undo "didn\'t happen"</button>' : '') +
     (s.status === 'Logged' || s.status === 'Did not happen' ? '' :
-      '<button class="primary"' + (s.canLog ? '' : ' disabled') + ' onclick="sessionForm(' + i + ')">Log session</button>') +
+      '<button class="primary"' + (s.canLog ? '' : ' disabled') + ' onclick="sessionForm(' + i + ')">Log session</button>' +
+      '<button class="secondary" onclick="notHeldForm(' + i + ')">Didn\'t happen</button>') +
     '</div></div>';
 }
+
+// "Didn't happen": not charged, with the reason, and optionally a make-up session added to the calendar.
+function notHeldForm(i) {
+  var s = WEEK[i];
+  sheet(s.group + ' · ' + fmtDate(s.day), '<div class="sub">Nobody is charged for it, and it stays off the list of sessions to log.</div>' +
+    '<div class="sub" style="margin-top:8px">Why</div>' + sel('nhr', 'Cancelled by me', [['Cancelled by me', 'Cancelled by me'], ['Students couldn\'t attend', 'Students couldn\'t attend'], ['Holiday or school event', 'Holiday or school event'], ['Technical problem', 'Technical problem']]) +
+    '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="nhm" style="width:auto" onchange="document.getElementById(\'nhmk\').style.display=this.checked?\'\':\'none\'"> Make it up on another day</label>' +
+    '<div id="nhmk" style="display:none"><div class="filters" style="margin:6px 0 0"><input id="nhd" type="date" value="' + today() + '"><input id="nht" type="time" value="' + esc(s.start || '19:00') + '"></div>' +
+    '<div class="sub">Adds "' + esc(s.group) + ' - make-up" to the Tutoring calendar (Cairo time), so it shows here and in reminders.</div></div>' +
+    '<button class="primary" style="width:100%;margin-top:12px" onclick="hold(this);saveNotHeld(' + i + ')">Save</button>');
+}
+function saveNotHeld(i) {
+  var s = WEEK[i], mk = document.getElementById('nhm').checked;
+  call('markNotHeld', { group: s.group, day: s.day, eventId: s.eventId, reason: document.getElementById('nhr').value,
+    makeupDate: mk ? document.getElementById('nhd').value : '', makeupTime: mk ? document.getElementById('nht').value : '' }, function (r) {
+    var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove();
+    goBack();
+    NH_MSG = r.message;
+    sheet('Tell the group?', '<div class="card" style="white-space:pre-wrap;font-size:14px">' + esc(r.message) + '</div>' +
+      '<button class="primary" style="width:100%" onclick="window.open(\'https://wa.me/?text=\' + encodeURIComponent(NH_MSG), \'_blank\')">💬 Send on WhatsApp</button>');
+  });
+}
+var NH_MSG = '';
 
 // Redraws just the session cards (after the live homework/past-papers part arrives).
 function redrawSessionCards() {
@@ -1471,7 +1496,9 @@ function showTodo() {
     TODO = d;
     var parts = [];
     if (d.toLog.length) parts.push('<h2>Sessions to log</h2>' + d.toLog.map(function (s) {
-      return '<div class="card nav-row" onclick="logFromTodo(\'' + esc(s.sessionId) + '\')"><span><b>' + esc(s.group) + '</b><div class="sub">' + esc(fmtDate(s.day)) + ' · ' + esc(s.start) + '</div></span><span class="tag owe">Log ›</span></div>';
+      return '<div class="card"><div class="item"><span><b>' + esc(s.group) + '</b><div class="sub">' + esc(fmtDate(s.day)) + ' · ' + esc(s.start) + '</div></span></div>' +
+        '<div class="actions"><button class="primary" onclick="logFromTodo(\'' + esc(s.sessionId) + '\')">Log session</button>' +
+        '<button class="secondary" onclick="todoNotHeld(\'' + esc(s.sessionId) + '\')">Didn\'t happen</button></div></div>';
     }).join(''));
     if (d.joins.length) parts.push('<h2>Joining forms to review</h2>' + d.joins.map(function (j, i) {
       return '<div class="card nav-row" onclick="newStudentForm(TODO.joins[' + i + '])"><span><b>' + esc(j.name) + '</b><div class="sub">' + esc(j.group) + ' · filled ' + esc(fmtDate(j.filledAt)) + '</div></span><span>Review ›</span></div>';
@@ -1499,6 +1526,14 @@ function logFromTodo(sessionId) {
   if (i < 0) { WEEK.push({ sessionId: s.sessionId, group: s.group, day: s.day, eventId: s.eventId }); i = WEEK.length - 1; }
   var go = function () { sessionForm(i); };
   if (sessData) go(); else call('sessionForm', {}, function (d) { sessData = d; go(); }, { part: true });
+}
+
+// "Didn't happen" for a past session from the list.
+function todoNotHeld(sessionId) {
+  var s = TODO.toLog.filter(function (x) { return x.sessionId === sessionId; })[0];
+  var i = WEEK.map(function (w) { return w.sessionId; }).indexOf(sessionId);
+  if (i < 0) { WEEK.push({ sessionId: s.sessionId, group: s.group, day: s.day, eventId: s.eventId, start: s.start }); i = WEEK.length - 1; }
+  notHeldForm(i);
 }
 
 function scanNow() {
