@@ -1297,7 +1297,8 @@ function showProfile(id) {
       '<div class="profile-head"><div class="pname"><span class="cur ' + esc(st.currency) + '">' + esc(st.currency) + '</span> ' + esc(st.name) + '</div>' +
       '<div class="parabic">' + esc(i['Arabic first name'] + ' ' + i['Arabic last name']) + '</div>' +
       '<div class="sub">' + esc(group) + ' · ' + esc(st.paymentType) + '</div></div>' +
-      '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button><button onclick="moveFromProfile(\'' + esc(id) + '\')">Move group</button></div>' +
+      '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button><button onclick="moveFromProfile(\'' + esc(id) + '\')">Move group</button>' +
+        (p.detail.livePage ? '<button onclick="window.open(\'' + esc(p.detail.livePage) + '\',\'_blank\')">Parent page</button>' : '') + '</div>' +
       '<h2>Money</h2>' + money +
       '<button class="secondary" style="margin:0 0 10px" onclick="adjustForm(\'' + esc(id) + '\')">✎ Waive, correct or refund</button>' +
       '<div class="card" id="ledger">' + ledgerRows(entries.slice(0, 10), id) +
