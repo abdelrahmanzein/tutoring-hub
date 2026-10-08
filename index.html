@@ -243,6 +243,7 @@ function openTab(tab) {
   if (tab === 'Sessions') return showToday();
   if (tab === 'Groups') return showGroups();
   if (tab === 'To do') return showTodo();
+  if (tab === 'Settings') return showSettings();
   refreshView = null; fetchedAt = null; showAge();
   document.getElementById('main').innerHTML = '<div class="soon">' + tab + ' comes in a later stage.</div>';
 }
@@ -259,7 +260,7 @@ function goBack() { BACK.fn(); }
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
 var WRITES = ['markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'importLogNow', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
-var NO_CACHE = WRITES.concat(['todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
+var NO_CACHE = WRITES.concat(['health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
 function newView() { VIEW++; refreshView = null; return VIEW; }
@@ -434,6 +435,7 @@ function refreshFromServer() {
   setRefreshing(true);
   google.script.run.withSuccessHandler(function () { setRefreshing(false); loadSnapshots(); })
     .withFailureHandler(function () { setRefreshing(false); showAge(true); }).api(TOKEN, 'publishNow', {});
+  google.script.run.withSuccessHandler(function () { loadSnapshots(); }).withFailureHandler(function () {}).api(TOKEN, 'refreshLive', {});
 }
 
 // Calls the server. opts.form: draw once only (never redraw a form the user is typing in). opts.part: a piece of a screen.
@@ -577,6 +579,18 @@ function notice(msg) {
   }
   el.textContent = msg; el.style.display = 'block';
   setTimeout(function () { el.style.display = 'none'; }, 8000);
+}
+
+// The moment "yyyy-mm-dd" + "HH:MM" Cairo time happens, whatever time zone the phone is in.
+function cairoTime(day, hhmm) {
+  var guess = new Date(day + 'T' + (hhmm || '00:00') + ':00Z').getTime() - 2 * 3600e3;
+  var fmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  for (var i = 0; i < 2; i++) {
+    var p = {}; fmt.formatToParts(new Date(guess)).forEach(function (x) { p[x.type] = x.value; });
+    var shown = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute), want = new Date(day + 'T' + (hhmm || '00:00') + ':00Z').getTime();
+    guess += want - shown;
+  }
+  return new Date(guess);
 }
 
 // 2026-10-06 -> 06/10/2026 (dates are shown day/month/year everywhere).
@@ -1349,7 +1363,7 @@ var WEEK = [];
 // The prepared data can be some minutes old, so the time-based status is worked out again from the clock here.
 function liveStatus(s) {
   if (s.status === 'Logged' || s.status === 'Did not happen' || !s.start || !s.end) return s;
-  var now = new Date(), a = new Date(s.day + 'T' + s.start + ':00'), b = new Date(s.day + 'T' + s.end + ':00');
+  var now = new Date(), a = cairoTime(s.day, s.start), b = cairoTime(s.day, s.end);
   var st = now < a ? 'Upcoming' : now <= b ? 'In progress' : 'Needs review';
   return Object.assign({}, s, { status: st, upcoming: st !== 'Needs review', canLog: st !== 'Upcoming' });
 }
@@ -1390,7 +1404,7 @@ function notHeldForm(i) {
 function saveNotHeld(i) {
   var s = WEEK[i], mk = document.getElementById('nhm').checked;
   call('markNotHeld', { group: s.group, day: s.day, eventId: s.eventId, reason: document.getElementById('nhr').value,
-    makeupDate: mk ? document.getElementById('nhd').value : '', makeupTime: mk ? document.getElementById('nht').value : '' }, function () {}, {
+    makeupDate: mk ? document.getElementById('nhd').value : '', makeupTime: mk ? document.getElementById('nht').value : '', sessionId: s.sessionId }, function () {}, {
     optimistic: function () {
       var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove();
       patchLocal(function () {
@@ -1466,19 +1480,19 @@ function undoSess(id) {
 
 // The log form, opened from a session card (group and date filled in): who attended, amounts, and a note for next time.
 // From a card, Meet fills in attendance, lateness and participation; you check and change anything before saving.
-var sessMeet = null, sessEvent = null;
+var sessMeet = null, sessEvent = null, SESS_ID = '';
 function sessionForm(i) {
   if (sessData.source !== 'App') return notice('Sessions are still logged through the old script until the switch-over. After it, this button logs the session here.');
   newView();
   var d = sessData, s = typeof i === 'number' ? WEEK[i] : null;
-  sessMeet = null; sessEvent = s ? s.eventId : null;
+  sessMeet = null; sessEvent = s ? s.eventId : null; SESS_ID = s ? s.sessionId : '';
   document.getElementById('main').innerHTML = '<button class="back" onclick="showToday()">‹ Cancel</button><h2>Log ' + (s ? esc(s.group) + ' · ' + esc(fmtDate(s.day)) : 'a session') + '</h2>' +
     '<div class="card"><div class="sub">Group</div>' + sel('sg', s ? s.group : '', [['', 'Pick a group']].concat(d.groups.map(function (g) { return [g, g]; }))) +
     '<div class="sub" style="margin-top:8px">Date</div><input id="sd" type="date" value="' + (s ? s.day : today()) + '">' +
     '<div class="sub" style="margin-top:8px">What was it</div><input id="st" list="stl" value="Group Session"><datalist id="stl"><option>Group Session</option><option>Recorded Session</option><option>Quiz Session</option><option>1-on-1 Session</option></datalist>' +
     '<div class="sub" style="margin-top:8px">Note for next session (shows on its card)</div><textarea id="sn" rows="2" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)"></textarea></div>' +
     '<div id="smeet"></div><div id="srows"></div>';
-  document.getElementById('sg').onchange = function () { sessEvent = null; sessMeet = null; drawMeetBox(); fillSessionRows(); };
+  document.getElementById('sg').onchange = function () { sessEvent = null; sessMeet = null; SESS_ID = ''; drawMeetBox(); fillSessionRows(); };
   document.getElementById('sd').onchange = document.getElementById('sg').onchange;
   if (s) { fillSessionRows(); loadMeet(); }
 }
@@ -1594,10 +1608,10 @@ function toggleNote(i, btn) {
 // Saves the session; the server refuses a second log of the same group and date.
 function saveSession() {
   var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value,
-    noteNext: document.getElementById('sn').value, rows: sessRows, eventId: sessEvent || '', meetHeld: sessMeet ? sessMeet.held : undefined };
+    noteNext: document.getElementById('sn').value, rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined };
   call('logSession', args, function (r) {
     if (r.queued) {
-      var sid = args.date + ' ' + args.group;
+      var sid = args.sessionId || args.date + ' ' + args.group;
       patchLocal(function () {
         var w = cached('week'); if (w) w.forEach(function (x) { if (x.sessionId === sid) x.status = 'Logged'; });
         var t = cached('todo'); if (t) t.toLog = t.toLog.filter(function (x) { return x.sessionId !== sid; });
@@ -1774,7 +1788,7 @@ function drawUpcomingHomework() {
       var now = Date.now(), soon = now + 2 * 864e5, seen = {};
       UP_HW = week.map(function (s) { var x = live[s.sessionId]; return x && x.homework ? { s: s, x: x } : null; }).filter(function (o) {
         if (!o) return false;
-        var due = new Date(String(o.x.homework.due).replace(' ', 'T') + ':00').getTime();
+        var due = cairoTime(String(o.x.homework.due).slice(0, 10), String(o.x.homework.due).slice(11, 16) || '23:59').getTime();
         if (!(due > now && due <= soon) || seen[o.s.group + o.x.homework.title]) return false;
         return (seen[o.s.group + o.x.homework.title] = true);
       });
@@ -1850,6 +1864,29 @@ function assignUpload(i) {
     patchLocal(function () { var t = cached('todo'); if (t) t.uploads = t.uploads.filter(function (x) { return x.owner !== u.owner; }); });
     showTodo(); notice(u.owner + ' saved. Homework is re-checked in the background.');
   } });
+}
+</script>
+
+  <script>
+// ---------- Settings: the app's health (background jobs) and, below, settings you can change ----------
+
+function showSettings() {
+  newView();
+  refreshView = showSettings;
+  document.getElementById('title').textContent = 'Settings';
+  document.getElementById('main').innerHTML = '<div id="health"><div class="skeleton"></div></div><div id="settings-more"></div>';
+  call('health', {}, function (h) {
+    var used = Math.round(h.minutesToday / h.limit * 100);
+    var NAMES = { publish: 'Screens uploaded', live: 'Sessions homework (Drive)', homework: 'Homework check (nightly)', backup: 'Nightly backup', email: '7 AM email', queue: 'Saves processed', check: 'Save check (every 5 min)' };
+    document.getElementById('health').innerHTML = '<h2>Health</h2><div class="card">' +
+      '<div class="item"><span>Background time today</span><span class="tag ' + (used > 80 ? 'owe' : used > 60 ? 'warn' : 'good') + '">' + h.minutesToday + ' of ~' + h.limit + ' min</span></div>' +
+      '<div class="sub" style="margin:4px 0 8px">Google stops background jobs for the day if this runs out.</div>' +
+      h.jobs.map(function (j) {
+        return '<div class="item"><span>' + esc(NAMES[j.job] || j.job) + '<div class="sub">' + esc(fmtDate(j.at)) + (j.seconds ? ' · ' + j.seconds + ' s' : '') + (j.info ? ' · ' + esc(j.info) : '') + '</div></span>' +
+          '<span class="tag ' + (j.late || /FAILED/.test(j.info) ? 'owe' : 'good') + '">' + (j.late ? 'late' : /FAILED/.test(j.info) ? 'failed' : 'ok') + '</span></div>';
+      }).join('') + '</div>';
+    if (typeof drawSettingsMore === 'function') drawSettingsMore();
+  });
 }
 </script>
 
