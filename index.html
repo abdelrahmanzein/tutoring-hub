@@ -258,7 +258,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -357,7 +357,7 @@ function cached(action, args) { var c = CACHE[action + '|' + JSON.stringify(args
 // then "Saved ✓". If Google refuses one (e.g. the balance changed meanwhile), you get "Not saved: why".
 var QUEUE_ACTIONS = ['setHomework', 'updateGroup', 'assignUpload', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession',
   'undoSession', 'updateStudent', 'addAccount', 'confirmAccount', 'undoStudentEdit', 'moveStudent', 'joinCancel',
-  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate'];
+  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate', 'shareRecording', 'logMessage'];
 var QUEUE_LABEL = { recordPayment: 'payment', addAdjustment: 'adjustment', logSession: 'session', undoSession: 'undo', updateStudent: 'student edit', setHomework: 'homework' };
 
 function newId() {
@@ -367,16 +367,17 @@ function newId() {
 
 function queueSave(action, args, done, opts) {
   var id = newId(), clean = Object.assign({}, args); delete clean.fresh;
-  savingMark(1);
+  if (!opts.quiet) savingMark(1);
   fetch(READ_URL + '/q', { method: 'POST', credentials: 'omit', headers: { Authorization: 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: id, action: action, args: clean }) })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function () {
       document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
       if (opts.optimistic) opts.optimistic(); else done({ queued: true });
-      waitForSave(id, action, opts);
+      if (!opts.quiet) waitForSave(id, action, opts);           // quiet ones (e.g. the message log) aren't followed up
     })
     .catch(function () {                                     // the read service is unreachable: save through Google directly
+      if (opts.quiet) return;
       savingMark(-1);
       var q = QUEUE_ACTIONS; QUEUE_ACTIONS = [];
       try { call(action, args, done, opts); } finally { QUEUE_ACTIONS = q; }
@@ -406,6 +407,14 @@ function waitForSave(id, action, opts) {
         loadSnapshots();                                      // the server uploaded the new data right after saving
       }).catch(function () {});
   }, 4000);
+}
+
+// Opens WhatsApp with a message (to a number, or you pick the chat) and notes it in the Messages log.
+function waSend(phone, text, kind, ids) {
+  var num = String(phone || '').replace(/[^0-9]/g, '');
+  window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(text), '_blank');
+  ids = ids || {};
+  call('logMessage', { kind: kind, text: text, to: num, studentId: ids.studentId || '', prospectId: ids.prospectId || '' }, function () {}, { optimistic: function () {}, quiet: true });
 }
 
 // A homework status changed on this phone: the To do list and the student's page show it at once.
@@ -1473,7 +1482,7 @@ function redrawSessionCards() {
 
 // Opens WhatsApp with the reminder ready; you pick the group chat.
 function sendReminder(i) {
-  window.open('https://wa.me/?text=' + encodeURIComponent(WEEK[i].reminder), '_blank');
+  waSend('', WEEK[i].reminder, 'Session reminder (group)');
 }
 
 // "2026-10-08 23:59" -> "Thu 8 Oct, 11:59 PM".
@@ -1522,6 +1531,7 @@ function sessionForm(i) {
     '<div class="card"><div class="sub">Group</div>' + sel('sg', s ? s.group : '', [['', 'Pick a group']].concat(d.groups.map(function (g) { return [g, g]; }))) +
     '<div class="sub" style="margin-top:8px">Date</div><input id="sd" type="date" value="' + (s ? s.day : today()) + '">' +
     '<div class="sub" style="margin-top:8px">What was it</div><input id="st" list="stl" value="Group Session"><datalist id="stl"><option>Group Session</option><option>Recorded Session</option><option>Quiz Session</option><option>1-on-1 Session</option></datalist>' +
+    '<div class="sub" style="margin-top:8px">Next homework title (optional: creates its "N. Title" folder)</div><input id="snh" placeholder="e.g. Rational Functions">' +
     '<div class="sub" style="margin-top:8px">Note for next session (shows on its card)</div><textarea id="sn" rows="2" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)"></textarea></div>' +
     '<div id="smeet"></div><div id="srows"></div>';
   document.getElementById('sg').onchange = function () { sessEvent = null; sessMeet = null; SESS_ID = ''; drawMeetBox(); fillSessionRows(); };
@@ -1640,7 +1650,7 @@ function toggleNote(i, btn) {
 // Saves the session; the server refuses a second log of the same group and date.
 function saveSession() {
   var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value,
-    noteNext: document.getElementById('sn').value, rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined };
+    noteNext: document.getElementById('sn').value, nextHomework: (document.getElementById('snh') || {}).value || '', rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined };
   call('logSession', args, function (r) {
     if (r.queued) {
       var sid = args.sessionId || args.date + ' ' + args.group;
@@ -1651,7 +1661,26 @@ function saveSession() {
       showToday(); return;
     }
     showToday(); notice('Logged ' + r.sessionId + ': ' + r.charged + ' charged.');
-  }, { confirmed: function (r) { notice('Logged ' + r.sessionId + ': ' + r.charged + ' charged.'); } });
+  }, { confirmed: afterLogged });
+}
+
+// After a session is saved: the new homework folder, and the recording for absent students.
+var LOGGED = null;
+function afterLogged(r) {
+  LOGGED = r;
+  var html = '<div class="sub">' + r.charged + ' charged.' + (r.homeworkFolder ? ' Homework folder created: <a href="' + esc(r.homeworkFolder.url) + '" target="_blank">' + esc(r.homeworkFolder.name) + '</a>.' : '') +
+    (r.homeworkError ? ' Homework folder not created: ' + esc(r.homeworkError) + '.' : '') + '</div>';
+  if (r.absent && r.absent.length) {
+    html += r.recording ? '<div style="margin-top:10px">Recording: <a href="' + esc(r.recording.url) + '" target="_blank">' + esc(r.recording.name) + '</a></div>' +
+      r.absent.map(function (a, i) { return '<button style="width:100%;margin-top:6px" onclick="sendRecording(' + i + ')">💬 Send the recording to ' + esc(a.first) + (a.phone ? '' : ' (pick the chat)') + '</button>'; }).join('')
+      : '<div class="sub" style="margin-top:10px">No recording found yet (Meet takes a while to save it). Absent: ' + r.absent.map(function (a) { return esc(a.first); }).join(', ') + '.</div>';
+  }
+  sheet('Logged ' + r.sessionId, html);
+}
+function sendRecording(i) {
+  var a = LOGGED.absent[i], rec = LOGGED.recording;
+  call('shareRecording', { fileId: rec.id }, function () {}, { optimistic: function () {} });
+  waSend(a.phone, 'Hi ' + a.first + ', here is the recording of today\'s session: ' + rec.url + '\nPlease watch it before the next session.', 'Recording to absent student', { studentId: a.id });
 }
 </script>
 
@@ -1906,7 +1935,7 @@ function hwReminder(i) {
   var list = function (a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; };
   var text = '📝 Homework reminder: ' + o.x.homework.title + ' is due ' + dueLabel(o.x.homework.due) + ' (Cairo time).' +
     (done.length ? '\nThank you ' + list(done) + ' for submitting ✅' : '') + (left.length ? '\nStill waiting for ' + list(left) + '.' : '');
-  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  waSend('', text, 'Homework reminder (group)');
 }
 
 // A student who hasn't submitted: set the status by hand, or send them a nudge.
@@ -1927,8 +1956,7 @@ function nudge(hi, pi) {
   var h = TODO.homework[hi], p = h.missing[pi];
   var text = 'Hi ' + p.first + ', I haven\'t seen homework ' + h.title + ' in the folder yet. If you upload it by tonight, it will still count. ' +
     'Please send me a message once it\'s uploaded so I can check it 🙂' + (h.link ? '\n' + h.link : '');
-  var num = String(p.phone || '').replace(/[^0-9]/g, '');
-  window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(text), '_blank');
+  waSend(p.phone, text, 'Homework nudge', { studentId: p.id });
 }
 
 // Opens the log form for a session from the list (finds it among the loaded week, else a blank form for it).
@@ -1994,7 +2022,7 @@ function drawPayments() {
 // Opens WhatsApp with the request and records it as sent.
 function sendRequest(i) {
   var r = TODO.payments.ready[i];
-  window.open('https://wa.me/' + (r.phone || '') + '?text=' + encodeURIComponent(r.message), '_blank');
+  waSend(r.phone, r.message, 'Payment request', { studentId: r.id });
   if (!r.phone) notice('No WhatsApp number saved: pick the chat in WhatsApp.');
   call('statementSent', { id: r.id, amount: r.amount, currency: r.currency, sessions: r.sessions, due: r.due, message: r.message }, function () {}, { optimistic: function () {
     patchLocal(function () {
@@ -2008,7 +2036,7 @@ function sendRequest(i) {
 
 function sendReminderPay(i) {
   var r = TODO.payments.reminders[i];
-  window.open('https://wa.me/' + (r.phone || '') + '?text=' + encodeURIComponent(r.message), '_blank');
+  waSend(r.phone, r.message, 'Payment reminder', { studentId: r.id });
   call('reminderSent', { statementId: r.statementId }, function () {}, { optimistic: function () {
     patchLocal(function () {
       var t = cached('todo'); if (!t) return;
@@ -2265,7 +2293,7 @@ function bookTrial(i) {
 // Opens WhatsApp with a ready message, and moves the stage on if given.
 function prospectSend(i, kind, next) {
   var p = PROS[i];
-  window.open('https://wa.me/' + (p.phone || '') + '?text=' + encodeURIComponent(p.messages[kind]), '_blank');
+  waSend(p.phone, p.messages[kind], kind === 'trial' ? 'Trial invitation' : 'Details', { prospectId: p['Prospect ID'] });
   if (!p.phone) notice('No number saved: pick the chat in WhatsApp.');
   if (next && p['Stage'] !== next) call('updateProspect', { id: p['Prospect ID'], changes: { 'Stage': next } }, function () {}, { optimistic: function () {
     patchLocal(function () { var l = cached('prospects'); if (l) l.forEach(function (x) { if (x['Prospect ID'] === p['Prospect ID']) x['Stage'] = next; }); });
