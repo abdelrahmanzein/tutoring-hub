@@ -52,8 +52,9 @@ var google = { script: { get run() {
             setTimeout(function () { if (j.ok) ok(j.res); else fail(new Error(j.error)); }, 0);
           })
           .catch(function (e) {
-            if (n < 2 && retry) return setTimeout(function () { attempt(n + 1); }, 1500);
-            fail(new Error(retry ? 'No connection to the app (' + e.message + '). Check the internet and tap Refresh.'
+            // Google sometimes answers with an error page instead of data ("The string did not match the expected pattern").
+            if (n < 3 && retry) return setTimeout(function () { attempt(n + 1); }, 1500 * n);
+            fail(new Error(retry ? 'Google didn\'t answer just now. Tap Refresh in a moment.'
               : 'Not sure this was saved (connection problem). Tap Refresh and check before trying again.'));
           });
       };

@@ -51,6 +51,9 @@ function draw(p) {
       (p.aheadSessions ? '<div>' + p.aheadSessions + ' session' + (p.aheadSessions > 1 ? 's' : '') + ' already paid in advance.</div>' : '') +
       (p.sessionsSinceLastPayment ? '<div class="sub">' + p.sessionsSinceLastPayment + ' session' + (p.sessionsSinceLastPayment > 1 ? 's' : '') + ' since the last payment; a payment request comes after ' + (p.every || 4) + ' sessions.</div>' : '') + '</div>';
   }
+  if (p.due && p.pay) html += '<div class="card"><div class="sub">How to pay</div>' + (p.pay.kind === 'instapay'
+      ? '<a href="' + esc(p.pay.link) + '" style="display:block;text-align:center;margin-top:8px;padding:12px;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none">Pay with InstaPay</a>'
+      : '<div style="white-space:pre-wrap;margin-top:6px;font-size:15px">' + esc(p.pay.text) + '</div>') + '</div>';
   if (p.unpaid && p.unpaid.length) html += '<div class="card"><div class="sub">' + (p.due ? 'Sessions in this amount' : 'Sessions since the last payment') + '</div>' + p.unpaid.map(function (u) {
     return '<div class="row"><span>' + esc(day(u.date)) + '</span><span>' + money(u.amount, c) + '</span></div>'; }).join('') + '</div>';
   if (p.lastPayment) html += '<div class="card"><div class="row"><span>Last payment</span><span>' + money(p.lastPayment.amount, c) + ' · ' + esc(d(p.lastPayment.date)) + '</span></div></div>';
