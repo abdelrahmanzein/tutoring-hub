@@ -54,8 +54,12 @@ function draw(p) {
   if (p.due && p.pay) html += '<div class="card"><div class="sub">How to pay</div>' + (p.pay.kind === 'instapay'
       ? '<a href="' + esc(p.pay.link) + '" style="display:block;text-align:center;margin-top:8px;padding:12px;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none">Pay with InstaPay</a>'
       : '<div style="white-space:pre-wrap;margin-top:6px;font-size:15px">' + esc(p.pay.text) + '</div>') + '</div>';
-  if (p.unpaid && p.unpaid.length) html += '<div class="card"><div class="sub">' + (p.due ? 'Sessions in this amount' : 'Sessions since the last payment') + '</div>' + p.unpaid.map(function (u) {
-    return '<div class="row"><span>' + esc(day(u.date)) + '</span><span>' + money(u.amount, c) + '</span></div>'; }).join('') + '</div>';
+  var att = function (u) { return u.attended === undefined ? '' : u.attended ? (u.late ? '<span class="late">Attended, ' + u.late + ' min late</span>' : '<span class="ok">Attended</span>') : '<span class="miss">Absent (recording sent)</span>'; };
+  var hwc = function (s) { return s === 'On time' || s === 'Excused' ? 'ok' : s === 'Late' ? 'late' : s === 'Missing' ? 'miss' : ''; };
+  if (p.unpaid && p.unpaid.length) html += '<div class="card"><div class="sub">' + (p.due ? 'Sessions in this amount (' + p.unpaid.length + ')' : 'Sessions since the last payment') + '</div>' + p.unpaid.map(function (u) {
+    return '<div class="row"><span>' + esc(day(u.date)) + (p.due ? '<div class="sub">' + att(u) + (u.participation ? ' · ' + esc(u.participation) : '') +
+      (u.homework ? '<br>Homework ' + esc(u.homework.title) + ': <span class="' + hwc(u.homework.status) + '">' + esc(u.homework.status) + '</span>' : '') + '</div>' : '') +
+      '</span><span>' + money(u.amount, c) + '</span></div>'; }).join('') + '</div>';
   if (p.lastPayment) html += '<div class="card"><div class="row"><span>Last payment</span><span>' + money(p.lastPayment.amount, c) + ' · ' + esc(d(p.lastPayment.date)) + '</span></div></div>';
   if (p.note && p.note.text) html += '<h2>A note from Mr Zein</h2><div class="card"><div style="white-space:pre-wrap">' + esc(p.note.text) + '</div>' + (p.note.date ? '<div class="sub">' + esc(d(p.note.date)) + '</div>' : '') + '</div>';
   if (p.coverNotes && p.coverNotes.length) html += '<h2>1-on-1 sessions</h2>' + p.coverNotes.map(function (c) {
@@ -65,11 +69,11 @@ function draw(p) {
     var r = x.value / x.of, cls = r >= 0.85 ? 'ok' : r >= 0.6 ? 'late' : 'miss', dot = r >= 0.85 ? '🟢' : r >= 0.6 ? '🟡' : '🔴';
     return '<div class="row"><span>' + dot + ' ' + label + '</span><span class="' + cls + '">' + x.value + ' of ' + x.of + '</span></div>';
   };
-  if (sm.attendance || sm.homework) html += '<h2>At a glance</h2><div class="card">' + light('Sessions attended', sm.attendance) + light('On time to sessions', sm.punctuality) + light('Homework on time', sm.homework) + '</div>';
-  if (p.recent && p.recent.length) html += '<h2>Recent sessions</h2><div class="card">' + p.recent.map(function (r) {
+  if (sm.attendance || sm.homework) html += '<h2>At a glance' + (p.reportCovers === 'amount' ? ': these ' + p.unpaid.length + ' sessions' : '') + '</h2><div class="card">' + light('Sessions attended', sm.attendance) + light('On time to sessions', sm.punctuality) + light('Homework on time', sm.homework) + '</div>';
+  if (p.reportCovers !== 'amount' && p.recent && p.recent.length) html += '<h2>Recent sessions</h2><div class="card">' + p.recent.map(function (r) {
     return '<div class="row"><span>' + esc(day(r.date)) + '</span><span>' + (r.attended ? (r.late ? '<span class="late">Attended, ' + r.late + ' min late</span>' : '<span class="ok">Attended</span>') : '<span class="miss">Absent (recording sent)</span>') +
       (r.participation ? ' · ' + esc(r.participation) : '') + '</span></div>'; }).join('') + '</div>';
-  if (p.homework && p.homework.length) html += '<h2>Homework</h2><div class="card">' + p.homework.map(function (h) {
+  if (p.reportCovers !== 'amount' && p.homework && p.homework.length) html += '<h2>Homework</h2><div class="card">' + p.homework.map(function (h) {
     var cls = h.status === 'On time' ? 'ok' : h.status === 'Late' ? 'late' : h.status === 'Missing' ? 'miss' : '';
     return '<div class="row"><span>' + esc(h.title) + '<div class="sub">due ' + esc(d(h.due)) + '</div></span><span class="' + cls + '">' + esc(h.status) + '</span></div>'; }).join('') + '</div>';
   html += '<footer>Updated ' + esc(d(p.updated)) + '. If a student is absent, the recording is sent and the session is charged.</footer>';
