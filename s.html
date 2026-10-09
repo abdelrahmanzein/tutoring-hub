@@ -22,6 +22,12 @@
     .sub { color:var(--sub); font-size:14px; }
     .ok { color:var(--ok); } .late { color:var(--due); } .miss { color:var(--bad); }
     footer { margin-top:24px; font-size:12px; color:var(--sub); }
+    .tbl { padding:6px 0; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .tbl table { border-collapse:collapse; width:100%; min-width:560px; font-size:14px; }
+    .tbl th { text-align:left; font-size:12px; font-weight:600; color:var(--sub); padding:6px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
+    .tbl td { padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap; vertical-align:top; }
+    .tbl tr:last-child td { border-bottom:0; } .tbl .num { text-align:right; }
+    .key p { font-size:14px; margin:8px 0; color:var(--text); } .key summary { cursor:pointer; }
   </style>
 </head>
 <body>
@@ -54,28 +60,38 @@ function draw(p) {
   if (p.due && p.pay) html += '<div class="card"><div class="sub">How to pay</div>' + (p.pay.kind === 'instapay'
       ? '<a href="' + esc(p.pay.link) + '" style="display:block;text-align:center;margin-top:8px;padding:12px;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none">Pay with InstaPay</a>'
       : '<div style="white-space:pre-wrap;margin-top:6px;font-size:15px">' + esc(p.pay.text) + '</div>') + '</div>';
-  var att = function (u) { return u.attended === undefined ? '' : u.attended ? (u.late ? '<span class="late">Attended, ' + u.late + ' min late</span>' : '<span class="ok">Attended</span>') : '<span class="miss">Absent (recording sent)</span>'; };
-  var hwc = function (s) { return s === 'On time' || s === 'Excused' ? 'ok' : s === 'Late' ? 'late' : s === 'Missing' ? 'miss' : ''; };
-  if (p.unpaid && p.unpaid.length) html += '<div class="card"><div class="sub">' + (p.due ? 'Sessions in this amount (' + p.unpaid.length + ')' : 'Sessions since the last payment') + '</div>' + p.unpaid.map(function (u) {
-    return '<div class="row"><span>' + esc(day(u.date)) + (p.due ? '<div class="sub">' + att(u) + (u.participation ? ' · ' + esc(u.participation) : '') +
-      (u.homework ? '<br>Homework ' + esc(u.homework.title) + ': <span class="' + hwc(u.homework.status) + '">' + esc(u.homework.status) + '</span>' : '') + '</div>' : '') +
-      '</span><span>' + money(u.amount, c) + '</span></div>'; }).join('') + '</div>';
   if (p.lastPayment) html += '<div class="card"><div class="row"><span>Last payment</span><span>' + money(p.lastPayment.amount, c) + ' · ' + esc(d(p.lastPayment.date)) + '</span></div></div>';
   if (p.note && p.note.text) html += '<h2>A note from Mr Zein</h2><div class="card"><div style="white-space:pre-wrap">' + esc(p.note.text) + '</div>' + (p.note.date ? '<div class="sub">' + esc(d(p.note.date)) + '</div>' : '') + '</div>';
   if (p.coverNotes && p.coverNotes.length) html += '<h2>1-on-1 sessions</h2>' + p.coverNotes.map(function (c) {
     return '<div class="card"><div class="sub">' + esc(d(c.date)) + ' · with ' + esc(c.from) + '</div>' + (c.covered ? '<div><b>Covered:</b> ' + esc(c.covered) + '</div>' : '') + '<div style="white-space:pre-wrap">' + esc(c.text) + '</div></div>'; }).join('');
-  var sm = p.summary || {}, light = function (label, x) {
-    if (!x) return '';
-    var r = x.value / x.of, cls = r >= 0.85 ? 'ok' : r >= 0.6 ? 'late' : 'miss', dot = r >= 0.85 ? '🟢' : r >= 0.6 ? '🟡' : '🔴';
-    return '<div class="row"><span>' + dot + ' ' + label + '</span><span class="' + cls + '">' + x.value + ' of ' + x.of + '</span></div>';
-  };
-  if (sm.attendance || sm.homework) html += '<h2>At a glance' + (p.reportCovers === 'amount' ? ': these ' + p.unpaid.length + ' sessions' : '') + '</h2><div class="card">' + light('Sessions attended', sm.attendance) + light('On time to sessions', sm.punctuality) + light('Homework on time', sm.homework) + '</div>';
-  if (p.reportCovers !== 'amount' && p.recent && p.recent.length) html += '<h2>Recent sessions</h2><div class="card">' + p.recent.map(function (r) {
-    return '<div class="row"><span>' + esc(day(r.date)) + '</span><span>' + (r.attended ? (r.late ? '<span class="late">Attended, ' + r.late + ' min late</span>' : '<span class="ok">Attended</span>') : '<span class="miss">Absent (recording sent)</span>') +
-      (r.participation ? ' · ' + esc(r.participation) : '') + '</span></div>'; }).join('') + '</div>';
-  if (p.reportCovers !== 'amount' && p.homework && p.homework.length) html += '<h2>Homework</h2><div class="card">' + p.homework.map(function (h) {
-    var cls = h.status === 'On time' ? 'ok' : h.status === 'Late' ? 'late' : h.status === 'Missing' ? 'miss' : '';
-    return '<div class="row"><span>' + esc(h.title) + '<div class="sub">due ' + esc(d(h.due)) + '</div></span><span class="' + cls + '">' + esc(h.status) + '</span></div>'; }).join('') + '</div>';
+  // The sessions table (exactly the sessions in the amount due, or the recent ones), then a key to the labels.
+  var rows = p.rows || [];
+  if (rows.length) {
+    var att = function (u) {
+      if (u.attended === undefined) return '<span class="sub">–</span>';
+      return u.attended ? (u.late ? '<span class="late">Late, ' + u.late + ' min</span>' : '<span class="ok">On time</span>') : '<span class="miss">Absent</span>';
+    };
+    var hwc = function (s) { return s === 'On time' || s === 'Excused' ? 'ok' : s === 'Late' ? 'late' : s === 'Missing' ? 'miss' : ''; };
+    var amountCol = p.reportCovers === 'amount';
+    html += '<h2>' + (amountCol ? 'The ' + rows.length + ' sessions in this amount' : 'Recent sessions') + '</h2>' +
+      '<div class="card tbl"><table><thead><tr><th>Session</th><th>Attendance</th><th>Participation</th><th>Homework for this session</th>' + (amountCol ? '<th class="num">Fee</th>' : '') + '</tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr><td>' + esc(day(r.date)) + '</td><td>' + att(r) + '</td><td>' + (r.participation ? esc(r.participation) : '<span class="sub">–</span>') + '</td>' +
+          '<td>' + (r.homework ? '<span class="' + hwc(r.homework.status) + '">' + esc(r.homework.status) + '</span> <span class="sub">' + esc(r.homework.title) + '</span>' : '<span class="sub">–</span>') + '</td>' +
+          (amountCol ? '<td class="num">' + money(r.amount, c) + '</td>' : '') + '</tr>';
+      }).join('') + '</tbody></table></div>';
+    var sm = p.summary || {}, light = function (label, x) {
+      if (!x) return '';
+      var r = x.value / x.of, dot = r >= 0.85 ? '🟢' : r >= 0.6 ? '🟡' : '🔴';
+      return '<div class="row"><span>' + dot + ' ' + label + '</span><span>' + x.value + ' of ' + x.of + '</span></div>';
+    };
+    if (sm.attendance || sm.homework) html += '<div class="card">' + light('Sessions attended', sm.attendance) + light('Arrived on time', sm.punctuality) + light('Homework on time', sm.homework) + '</div>';
+    html += '<details class="card key"><summary><b>What the labels mean</b></summary>' +
+      '<p><b>Attendance.</b> <span class="ok">On time</span>: joined when the session started. <span class="late">Late</span>: joined more than 2 minutes after the start (minutes shown). <span class="miss">Absent</span>: missed the session; the recording is sent and the session is charged.</p>' +
+      '<p><b>Participation</b> (from the session\'s transcript, compared with the rest of the group): <b>Very active</b>: spoke up and asked questions well above the group\'s average. <b>Active</b>: about the group\'s average. <b>Occasional</b>: spoke up a few times. <b>Quiet</b>: hardly spoke. "–" means it wasn\'t measured that session.</p>' +
+      '<p><b>Homework.</b> <span class="ok">On time</span>: uploaded by 11:59 PM (Cairo) the night before the session. <span class="late">Late</span>: uploaded after that. <span class="miss">Missing</span>: not uploaded. Excused: agreed with Mr Zein.</p>' +
+      '<p>🟢 most of the time · 🟡 often · 🔴 needs attention.</p></details>';
+  }
   html += '<footer>Updated ' + esc(d(p.updated)) + '. If a student is absent, the recording is sent and the session is charged.</footer>';
   document.getElementById('main').innerHTML = html;
   document.title = p.name + ' · Mr Zein\'s Tutoring Groups';
