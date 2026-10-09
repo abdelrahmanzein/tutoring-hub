@@ -102,6 +102,9 @@
   /* A tappable number inside a card (e.g. "4 unpaid sessions ›") */
   .link-row { display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding:8px 10px; border-radius:10px; background:var(--bad-soft); color:var(--bad); cursor:pointer; font-weight:600; }
   .link-row:hover { filter:brightness(.97); }
+  .inapp { position:fixed; inset:0; z-index:40; background:var(--bg); display:flex; flex-direction:column; padding-top:env(safe-area-inset-top); }
+  .inapp-bar { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid var(--line); background:var(--card); }
+  .inapp iframe { flex:1; width:100%; border:0; background:#fff; }
   #saving { position:fixed; left:50%; transform:translate(-50%, 20px); bottom:calc(84px + env(safe-area-inset-bottom)); z-index:30; background:var(--text); color:var(--bg);
     padding:7px 14px; border-radius:999px; font-size:14px; opacity:0; transition:opacity .2s, transform .2s; pointer-events:none; }
   #saving.on { opacity:.92; transform:translate(-50%, 0); } #saving.ok { background:var(--good); color:#fff; }
@@ -415,6 +418,16 @@ function waSend(phone, text, kind, ids) {
   window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(text), '_blank');
   ids = ids || {};
   call('logMessage', { kind: kind, text: text, to: num, studentId: ids.studentId || '', prospectId: ids.prospectId || '' }, function () {}, { optimistic: function () {}, quiet: true });
+}
+
+// Shows a page (e.g. what a family sees) inside the app, full screen, with a Close button; the page itself is unchanged.
+// (On the iPhone Home Screen app, a link would replace the app with no way back.)
+function openInApp(url, title) {
+  var bg = document.createElement('div');
+  bg.className = 'inapp';
+  bg.innerHTML = '<div class="inapp-bar"><b>' + esc(title || '') + '</b><button class="small" style="width:auto">Close</button></div><iframe src="' + esc(url) + '"></iframe>';
+  bg.querySelector('button').onclick = function () { bg.remove(); };
+  document.body.appendChild(bg);
 }
 
 // A homework status changed on this phone: the To do list and the student's page show it at once.
@@ -1092,7 +1105,7 @@ function newStudentForm(join) {
     var groupOpts = [['', 'Pick a group']].concat(f.groups.map(function (g) { return [g.group, g.group]; }));
     document.getElementById('main').innerHTML = '<button class="back" onclick="showStudents()">‹ Cancel</button><h2>New student</h2>' +
       (join ? '<div class="card sub">From ' + esc(join.answers.parentName) + '\'s joining form (' + esc(fmtDate(join.filledAt)) + '). Check everything, set the payment type and rate, then add.</div>' :
-      '<div class="card"><b>Send the parent a joining form</b><div class="sub">They fill in names (English and Arabic), school, country and phone numbers (<a href="' + JOIN_PREVIEW + '" target="_blank">see what they see</a>). The payment type follows the country; the Google account is learnt from Meet. You set these:</div>' +
+      '<div class="card"><b>Send the parent a joining form</b><div class="sub">They fill in names (English and Arabic), school, country and phone numbers (<a href="#" onclick="openInApp(JOIN_PREVIEW, \'What the parent sees\');return false">see what they see</a>). The payment type follows the country; the Google account is learnt from Meet. You set these:</div>' +
         field('jg', 'Group', sel('jg', '', groupOpts)) +
         field('js', 'In the group since (first session, e.g. the trial)', '<input id="js" type="date" value="' + today() + '">') +
         field('jt', 'Trial session to charge (optional)', '<input id="jt" type="date">') +
@@ -1336,7 +1349,7 @@ function showProfile(id) {
       '<div class="parabic">' + esc(i['Arabic first name'] + ' ' + i['Arabic last name']) + '</div>' +
       '<div class="sub">' + esc(group) + ' · ' + esc(st.paymentType) + '</div></div>' +
       '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button><button onclick="moveFromProfile(\'' + esc(id) + '\')">Move group</button>' +
-        (p.detail.livePage ? '<button onclick="window.open(\'' + esc(p.detail.livePage) + '\',\'_blank\')">Parent page</button>' : '') +
+        (p.detail.livePage ? '<button onclick="openInApp(\'' + esc(p.detail.livePage) + '\', \'What the family sees\')">Parent page</button>' : '') +
         (/^(Active|Trial)$/.test(i['Status']) ? '<button onclick="coverForm(\'' + esc(id) + '\')">1-on-1 with a tutor</button>' : '') +
         (/^(Active|Trial)$/.test(i['Status']) ? '<button class="secondary" onclick="leaveForm(\'' + esc(id) + '\')">Leaving…</button>' : '') + '</div>' +
       '<h2>Money</h2>' + money +
@@ -2036,7 +2049,7 @@ function drawPayments() {
 function previewPay(list, i) {
   var r = TODO.payments[list][i];
   sheet(r.name + ' · ' + amt(r.amount, r.currency), '<div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(r.message) + '</div>' +
-    (r.link ? '<a href="' + esc(r.link) + '" target="_blank" style="display:block;text-align:center;margin-top:6px">Open the page the family will see ›</a>' : '') +
+    (r.link ? '<a href="#" onclick="openInApp(\'' + esc(r.link) + '\', \'What the family sees\');return false" style="display:block;text-align:center;margin-top:6px">Open the page the family will see ›</a>' : '') +
     '<button class="primary" style="width:100%;margin-top:12px" onclick="closeSheet();' + (list === 'ready' ? 'sendRequest(' : 'sendReminderPay(') + i + ')">💬 Send on WhatsApp</button>');
 }
 
