@@ -69,7 +69,7 @@ function draw(p) {
   if (rows.length) {
     var att = function (u) {
       if (u.attended === undefined) return '<span class="sub">No record</span>';
-      return u.attended ? (u.late ? '<span class="late">Late, ' + u.late + ' min</span>' : '<span class="ok">On time</span>') : '<span class="miss">Absent</span>';
+      return u.attended ? (u.lateUnknown ? '<span class="ok">Attended</span>' : u.late ? '<span class="late">Late, ' + u.late + ' min</span>' : '<span class="ok">On time</span>') : '<span class="miss">Absent</span>';
     };
     var hwc = function (s) { return s === 'On time' || s === 'Excused' ? 'ok' : s === 'Late' ? 'late' : s === 'Missing' ? 'miss' : ''; };
     var amountCol = p.reportCovers === 'amount';
@@ -87,7 +87,7 @@ function draw(p) {
     };
     if (sm.attendance || sm.homework) html += '<div class="card">' + light('Sessions attended', sm.attendance) + light('Arrived on time', sm.punctuality) + light('Homework on time', sm.homework) + '</div>';
     html += '<details class="card key"><summary><b>What the labels mean</b></summary>' +
-      '<p><b>Attendance.</b> <span class="ok">On time</span>: joined when the session started. <span class="late">Late</span>: joined more than 2 minutes after the start (minutes shown). <span class="miss">Absent</span>: missed the session; the recording is sent and the session is charged. No record: a session from before attendance was recorded.</p>' +
+      '<p><b>Attendance.</b> <span class="ok">On time</span>: joined when the session started. <span class="late">Late</span>: joined more than 2 minutes after the start (minutes shown). <span class="miss">Absent</span>: missed the session; the recording is sent and the session is charged. Attended: present, from before join times were recorded.</p>' +
       '<p><b>Participation</b> (from the session\'s transcript, compared with the rest of the group): <b>Very active</b>: spoke up and asked questions well above the group\'s average. <b>Active</b>: about the group\'s average. <b>Occasional</b>: spoke up a few times. <b>Quiet</b>: hardly spoke. "–" means it wasn\'t measured that session.</p>' +
       '<p><b>Homework.</b> <span class="ok">On time</span>: uploaded by 11:59 PM (Cairo) the night before the session. <span class="late">Late</span>: uploaded after that. <span class="miss">Missing</span>: not uploaded. Excused: agreed with Mr Zein.</p>' +
       '<p>🟢 most of the time · 🟡 often · 🔴 needs attention.</p></details>';
