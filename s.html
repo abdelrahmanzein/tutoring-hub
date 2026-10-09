@@ -68,7 +68,7 @@ function draw(p) {
   var rows = p.rows || [];
   if (rows.length) {
     var att = function (u) {
-      if (u.attended === undefined) return '<span class="sub">–</span>';
+      if (u.attended === undefined) return '<span class="sub">No record</span>';
       return u.attended ? (u.late ? '<span class="late">Late, ' + u.late + ' min</span>' : '<span class="ok">On time</span>') : '<span class="miss">Absent</span>';
     };
     var hwc = function (s) { return s === 'On time' || s === 'Excused' ? 'ok' : s === 'Late' ? 'late' : s === 'Missing' ? 'miss' : ''; };
@@ -82,12 +82,12 @@ function draw(p) {
       }).join('') + '</tbody></table></div>';
     var sm = p.summary || {}, light = function (label, x) {
       if (!x) return '';
-      var r = x.value / x.of, dot = r >= 0.85 ? '🟢' : r >= 0.6 ? '🟡' : '🔴';
-      return '<div class="row"><span>' + dot + ' ' + label + '</span><span>' + x.value + ' of ' + x.of + '</span></div>';
+      var known = x.of - (x.unknown || 0), r = known ? x.value / known : 1, dot = !known ? '⚪' : r >= 0.85 ? '🟢' : r >= 0.6 ? '🟡' : '🔴';
+      return '<div class="row"><span>' + dot + ' ' + label + (x.unknown ? '<div class="sub">' + x.unknown + ' of these session' + (x.unknown > 1 ? 's are' : ' is') + ' from before attendance was recorded</div>' : '') + '</span><span>' + x.value + ' of ' + x.of + '</span></div>';
     };
     if (sm.attendance || sm.homework) html += '<div class="card">' + light('Sessions attended', sm.attendance) + light('Arrived on time', sm.punctuality) + light('Homework on time', sm.homework) + '</div>';
     html += '<details class="card key"><summary><b>What the labels mean</b></summary>' +
-      '<p><b>Attendance.</b> <span class="ok">On time</span>: joined when the session started. <span class="late">Late</span>: joined more than 2 minutes after the start (minutes shown). <span class="miss">Absent</span>: missed the session; the recording is sent and the session is charged.</p>' +
+      '<p><b>Attendance.</b> <span class="ok">On time</span>: joined when the session started. <span class="late">Late</span>: joined more than 2 minutes after the start (minutes shown). <span class="miss">Absent</span>: missed the session; the recording is sent and the session is charged. No record: a session from before attendance was recorded.</p>' +
       '<p><b>Participation</b> (from the session\'s transcript, compared with the rest of the group): <b>Very active</b>: spoke up and asked questions well above the group\'s average. <b>Active</b>: about the group\'s average. <b>Occasional</b>: spoke up a few times. <b>Quiet</b>: hardly spoke. "–" means it wasn\'t measured that session.</p>' +
       '<p><b>Homework.</b> <span class="ok">On time</span>: uploaded by 11:59 PM (Cairo) the night before the session. <span class="late">Late</span>: uploaded after that. <span class="miss">Missing</span>: not uploaded. Excused: agreed with Mr Zein.</p>' +
       '<p>🟢 most of the time · 🟡 often · 🔴 needs attention.</p></details>';
