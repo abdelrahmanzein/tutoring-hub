@@ -2038,7 +2038,7 @@ function drawPayments() {
   }).join('');
   if (p.waiting.length) html += '<details class="card"><summary><b>Waiting for payment (' + p.waiting.length + ')</b></summary>' + p.waiting.map(function (r, i) {
     return '<div class="item" style="margin-top:8px;cursor:pointer" onclick="payActions(\'waiting\',' + i + ')"><span>' + cur(r) + ' ' + esc(r.name) +
-      '<div class="sub">Sent ' + esc(fmtDate(r.sent)) + (r.status === 'Transfer sent' ? ' · transfer on its way' : '') + (r.reminders ? ' · ' + r.reminders + ' reminders' : '') + '</div></span><span>' + amt(r.amount, r.currency) + ' ›</span></div>';
+      '<div class="sub">Sent ' + esc(fmtDate(r.sent)) + (r.sentAmount && r.sentAmount !== r.amount ? ' as ' + amt(r.sentAmount, r.currency) + ', now ' + r.sessions + ' sessions' : '') + (r.status === 'Transfer sent' ? ' · transfer on its way' : '') + (r.reminders ? ' · ' + r.reminders + ' reminders' : '') + '</div></span><span>' + amt(r.amount, r.currency) + ' ›</span></div>';
   }).join('') + '</details>';
   html += '<div id="todo-sms"></div>';
   box.innerHTML = html;
