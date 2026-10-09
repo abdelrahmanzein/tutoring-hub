@@ -2033,7 +2033,7 @@ function drawPayments() {
       '<div class="actions"><button onclick="previewPay(\'ready\',' + i + ')">Preview</button><button class="primary" onclick="sendRequest(' + i + ')">💬 Send on WhatsApp</button></div></div>';
   }).join('');
   if (p.reminders.length) html += '<h2>Payment reminders due</h2>' + p.reminders.map(function (r, i) {
-    return '<div class="card"><div class="item"><span>' + cur(r) + ' <b>' + esc(r.name) + '</b><div class="sub">Sent ' + esc(fmtDate(r.sent)) + (r.reminders ? ' · ' + r.reminders + ' reminder' + (r.reminders > 1 ? 's' : '') + ' so far' : '') + '</div></span><b>' + amt(r.amount, r.currency) + '</b></div>' +
+    return '<div class="card"><div class="item"><span>' + cur(r) + ' <b>' + esc(r.name) + '</b><div class="sub">Sent ' + esc(fmtDate(r.sent)) + (r.sentAmount && r.sentAmount !== r.amount ? ' as ' + amt(r.sentAmount, r.currency) + ', now ' + r.sessions + ' sessions' : '') + (r.reminders ? ' · ' + r.reminders + ' reminder' + (r.reminders > 1 ? 's' : '') + ' so far' : '') + '</div></span><b>' + amt(r.amount, r.currency) + '</b></div>' +
       '<div class="actions"><button onclick="previewPay(\'reminders\',' + i + ')">Preview</button><button class="primary" onclick="sendReminderPay(' + i + ')">💬 Send reminder</button><button class="secondary" onclick="payActions(\'reminders\',' + i + ')">More…</button></div></div>';
   }).join('');
   if (p.waiting.length) html += '<details class="card"><summary><b>Waiting for payment (' + p.waiting.length + ')</b></summary>' + p.waiting.map(function (r, i) {
