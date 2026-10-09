@@ -83,9 +83,9 @@ function draw(p) {
     var sm = p.summary || {}, light = function (label, x) {
       if (!x) return '';
       var known = x.of - (x.unknown || 0), r = known ? x.value / known : 1, dot = !known ? '⚪' : r >= 0.85 ? '🟢' : r >= 0.6 ? '🟡' : '🔴';
-      return '<div class="row"><span>' + dot + ' ' + label + (x.unknown ? '<div class="sub">' + x.unknown + ' of these session' + (x.unknown > 1 ? 's are' : ' is') + ' from before attendance was recorded</div>' : '') + '</span><span>' + x.value + ' of ' + x.of + '</span></div>';
+      return '<div class="row"><span>' + dot + ' ' + label + (x.unknown ? '<div class="sub">' + x.unknown + ' of these session' + (x.unknown > 1 ? 's are' : ' is') + ' from before attendance was recorded</div>' : '') + (x.note ? '<div class="sub">' + esc(x.note) + '</div>' : '') + '</span><span>' + x.value + ' of ' + x.of + '</span></div>';
     };
-    if (sm.attendance || sm.homework) html += '<div class="card">' + light('Sessions attended', sm.attendance) + light('Arrived on time', sm.punctuality) + light('Homework on time', sm.homework) + '</div>';
+    if (sm.attendance || sm.homework) html += '<div class="card">' + light('Sessions attended', sm.attendance) + light('Arrived on time', sm.punctuality && sm.attendance && sm.punctuality.of < sm.attendance.value ? Object.assign({ note: 'counted over the ' + sm.punctuality.of + ' sessions with recorded join times' }, sm.punctuality) : sm.punctuality) + light('Homework on time', sm.homework) + '</div>';
     html += '<details class="card key"><summary><b>What the labels mean</b></summary>' +
       '<p><b>Attendance.</b> <span class="ok">On time</span>: joined when the session started. <span class="late">Late</span>: joined more than 2 minutes after the start (minutes shown). <span class="miss">Absent</span>: missed the session; the recording is sent and the session is charged. Attended: present, from before join times were recorded.</p>' +
       '<p><b>Participation</b> (from the session\'s transcript, compared with the rest of the group): <b>Very active</b>: spoke up and asked questions well above the group\'s average. <b>Active</b>: about the group\'s average. <b>Occasional</b>: spoke up a few times. <b>Quiet</b>: hardly spoke. "–" means it wasn\'t measured that session.</p>' +
