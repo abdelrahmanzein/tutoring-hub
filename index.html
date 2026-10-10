@@ -1537,7 +1537,7 @@ function undoSess(id) {
 
 // The log form, opened from a session card (group and date filled in): who attended, amounts, and a note for next time.
 // From a card, Meet fills in attendance, lateness and participation; you check and change anything before saving.
-var sessMeet = null, sessEvent = null, SESS_ID = '';
+var sessMeet = null, sessEvent = null, SESS_ID = '', SESS_HW = null;
 function sessionForm(i) {
   newView();
   var d = sessData, s = typeof i === 'number' ? WEEK[i] : null;
@@ -1565,6 +1565,9 @@ function loadNextHomework() {
   call('nextHomework', { group: g, day: d }, function (r) {
     if (!document.getElementById('snhn')) return;
     document.getElementById('snhn').textContent = r.number + '.';
+    // The homework due for this session: each student can be excused from it.
+    SESS_HW = r.due || null;
+    if (SESS_HW && document.getElementById('srows') && sessRows.length) drawSessionRows();
     document.getElementById('snhx').innerHTML = r.existing ? 'A student already created "' + esc(r.existing.name) + '"' + (r.existing.by ? ' (' + esc(r.existing.by) + ')' : '') +
       ' with their work in it: it will be renamed to your title, nothing is lost. <a href="' + esc(r.existing.url) + '" target="_blank">Open it</a>' : '';
   }, { part: true });
@@ -1647,20 +1650,20 @@ function meetLine(m) {
 // Draws the student lines (status, amount, participation, teacher notes) and the save button.
 function drawSessionRows() {
   var others = sessData.people.filter(function (p) { return !sessRows.some(function (r) { return r.id === p.id; }); });
-  document.getElementById('srows').innerHTML = '<h2>' + sessRows.length + ' students</h2><div class="sub" style="margin:-4px 0 8px">Fee = what each student is charged for this session (their usual rate, filled in). Change it only if this session is priced differently; "Not charged" charges nothing.</div>' + sessRows.map(function (r, i) {
+  document.getElementById('srows').innerHTML = '<h2>' + sessRows.length + ' students</h2>' + sessRows.map(function (r, i) {
     return '<div class="card cur-' + esc(r.currency) + '"><div><span class="cur ' + esc(r.currency) + '">' + esc(r.currency) + '</span> <b>' + esc(r.name) + '</b>' + (r.visiting ? ' <span class="tag">visiting</span>' : '') + '</div>' +
       meetLine(r.meet) +
       '<div class="filters" style="margin:8px 0 0">' +
       '<select onchange="sessRows[' + i + '].status=this.value">' + ['Attended', 'Absent', 'Not charged'].map(function (s) {
         return '<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + (s === 'Absent' ? 'Absent (charged)' : s) + '</option>';
       }).join('') + '</select>' +
-      '<label class="sub" style="display:flex;align-items:center;gap:6px;margin:0" title="What this student is charged for this session (their usual rate). Change it only for this session if needed.">Fee <input type="number" step="any" inputmode="decimal" value="' + esc(r.amount) + '" onchange="sessRows[' + i + '].amount=this.value" style="max-width:90px"> ' + esc(r.currency) + '</label>' +
       '<select onchange="sessRows[' + i + '].participation=this.value"><option value="">Participation…</option>' + PARTICIPATION.map(function (p) {
         return '<option' + (r.participation === p ? ' selected' : '') + '>' + p + '</option>';
       }).join('') + '</select></div>' +
       '<div class="chips">' + TEACHER_NOTES.map(function (n) {
         return '<button class="chip' + (r.notes.indexOf(n) >= 0 ? ' on' : '') + '" onclick="toggleNote(' + i + ',this)">' + n + '</button>';
       }).join('') + '</div>' +
+      (SESS_HW ? '<div class="chips"><button class="chip' + (r.excuse ? ' on' : '') + '" onclick="sessRows[' + i + '].excuse=!sessRows[' + i + '].excuse;this.classList.toggle(\'on\')">🙏 Excused from homework ' + esc(SESS_HW.number) + '</button></div>' : '') +
       '<input placeholder="Note about ' + esc(r.name.split(' ')[0]) + ' (optional)" value="' + esc(r.freeNote || '') + '" onchange="sessRows[' + i + '].freeNote=this.value" style="width:100%;margin-top:6px"></div>';
   }).join('') +
     '<div class="filters">' + sel('sadd', '', [['', '＋ Add a visiting student']].concat(others.map(function (p) { return [p.id, p.name]; }))) + '</div>' +
@@ -1681,7 +1684,7 @@ function toggleNote(i, btn) {
 // Saves the session; the server refuses a second log of the same group and date.
 function saveSession() {
   var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value,
-    noteNext: document.getElementById('sn').value, nextHomework: (document.getElementById('snh') || {}).value || '', rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined };
+    noteNext: document.getElementById('sn').value, excuseHomework: SESS_HW ? SESS_HW.number : '', nextHomework: (document.getElementById('snh') || {}).value || '', rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined };
   call('logSession', args, function (r) {
     if (r.queued) {
       var sid = args.sessionId || args.date + ' ' + args.group;
