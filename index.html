@@ -1444,7 +1444,7 @@ function sessionCard(s) {
     (s.note ? '<div class="note">📌 Note from ' + esc(fmtDate(s.note.from)) + ': ' + esc(s.note.text) + '</div>' : '') +
     (s.trials && s.trials.length ? '<div class="note">🆕 Trial: ' + s.trials.map(function (t) { return esc(t.name); }).join(', ') + '</div>' : '') +
     '<div class="chips">' + (s.students.map(function (p) {
-      return '<button class="chip hw-' + (HW_CLASS[p.hw] || 'none') + '" title="' + esc(p.detail || p.hw || '') + '" onclick="showProfile(\'' + esc(p.id) + '\')">' +
+      return '<button class="chip hw-' + (HW_CLASS[p.hw] || 'none') + '" title="' + esc(p.detail || p.hw || '') + '" onclick="studentChip(' + i + ',\'' + esc(p.id) + '\')">' +
         (HW_ICON[p.hw] ? HW_ICON[p.hw] + ' ' : '') + esc(p.name) + (p.detail ? ' <span class="sub">' + esc(p.detail) + '</span>' : '') + '</button>';
     }).join('') || '<span class="sub">No students</span>') + '</div>' +
     '<div class="actions">' +
@@ -1487,6 +1487,30 @@ function saveNotHeld(i) {
   });
 }
 var NH_MSG = '';
+
+// Tapping a student on a session card: open their page, or set the homework status for this session's homework.
+function studentChip(i, id) {
+  var s = WEEK[i], p = s.students.filter(function (x) { return x.id === id; })[0] || { name: id };
+  var m = s.homework && String(s.homework.title).match(/^\s*(\d+)/);
+  var opts = m ? [['On time', 'On time'], ['Late', 'Late'], ['Missing', 'Not submitted'], ['Excused', 'Excused'], ['', 'Back to automatic (as uploaded)']] : [];
+  sheet(p.name, '<button class="primary" style="width:100%" onclick="closeSheet();showProfile(\'' + esc(id) + '\')">Open ' + esc(p.name) + '\'s page</button>' +
+    (m ? '<div class="sub" style="margin-top:14px">Homework ' + esc(s.homework.title) + (p.hw ? ' · now: ' + esc(p.hw) : '') + '</div><div class="actions">' +
+      opts.map(function (o) { return '<button' + (o[0] ? '' : ' class="secondary"') + ' onclick="chipHomework(' + i + ',\'' + esc(id) + '\',' + m[1] + ',\'' + o[0] + '\')">' + o[1] + '</button>'; }).join('') + '</div>' : ''));
+}
+function chipHomework(i, id, number, status) {
+  var s = WEEK[i];
+  call('setHomework', { assignmentId: s.group + ' #' + number, id: id, status: status, reason: 'Set from Sessions' }, function () {}, { optimistic: function () {
+    closeSheet();
+    var show = status === 'Missing' ? 'Missing' : status;
+    patchLocal(function () {
+      var l = cached('weekLive'); var x = l && l[s.sessionId];
+      if (x && x.students) x.students.forEach(function (p) { if (p.id === id && status) p.hw = show; });
+    });
+    s.students.forEach(function (p) { if (p.id === id && status) p.hw = show; });
+    redrawSessionCards();
+    if (!status) notice('Back to automatic: the next homework check decides.');
+  } });
+}
 
 // Redraws just the session cards (after the live homework/past-papers part arrives).
 function redrawSessionCards() {

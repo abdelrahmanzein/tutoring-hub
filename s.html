@@ -61,6 +61,7 @@ function draw(p) {
       ? '<a href="' + esc(p.pay.link) + '" style="display:block;text-align:center;margin-top:8px;padding:12px;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none">Pay with InstaPay</a>'
       : '<div style="white-space:pre-wrap;margin-top:6px;font-size:15px">' + esc(p.pay.text) + '</div>') + '</div>';
   if (p.lastPayment) html += '<div class="card"><div class="row"><span>Last payment</span><span>' + money(p.lastPayment.amount, c) + ' · ' + esc(d(p.lastPayment.date)) + '</span></div></div>';
+  if (p.notesText) html += '<h2>From the sessions</h2><div class="card">' + esc(p.notesText) + '</div>';
   if (p.note && p.note.text) html += '<h2>A note from Mr Zein</h2><div class="card"><div style="white-space:pre-wrap">' + esc(p.note.text) + '</div>' + (p.note.date ? '<div class="sub">' + esc(d(p.note.date)) + '</div>' : '') + '</div>';
   if (p.coverNotes && p.coverNotes.length) html += '<h2>1-on-1 sessions</h2>' + p.coverNotes.map(function (c) {
     return '<div class="card"><div class="sub">' + esc(d(c.date)) + ' · with ' + esc(c.from) + '</div>' + (c.covered ? '<div><b>Covered:</b> ' + esc(c.covered) + '</div>' : '') + '<div style="white-space:pre-wrap">' + esc(c.text) + '</div></div>'; }).join('');
