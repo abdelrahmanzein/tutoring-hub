@@ -1670,7 +1670,7 @@ function meetLine(m) {
     ' · ' + m.minutesInClass + ' min' + (m.contributions !== '' ? ' · ' + m.contributions + ' contributions, ' + m.questions + ' questions' : '') + '</div>';
 }
 
-// Draws the student lines (attendance, participation, homework, a private note) and the save button.
+// Draws the student lines (attendance, participation, homework) and the save button.
 function drawSessionRows() {
   var others = sessData.people.filter(function (p) { return !sessRows.some(function (r) { return r.id === p.id; }); });
   document.getElementById('srows').innerHTML = '<h2>' + sessRows.length + ' students</h2>' + sessRows.map(function (r, i) {
@@ -1685,8 +1685,7 @@ function drawSessionRows() {
       }).join('') + '</select></div>' +
       (SESS_HW ? '<div class="filters" style="margin:6px 0 0;align-items:center"><span class="sub" style="flex:none">Homework ' + esc(SESS_HW.number) + '</span>' +
         '<select onchange="sessRows[' + i + '].homeworkStatus=this.value">' + [['', 'As uploaded (automatic)'], ['On time', 'On time'], ['Late', 'Late'], ['Missing', 'Not submitted'], ['Excused', 'Excused']].map(function (o) {
-          return '<option value="' + o[0] + '"' + ((r.homeworkStatus || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' : '') +
-      '<input placeholder="Private note about ' + esc(r.name.split(' ')[0]) + ' (optional, never shown to parents)" value="' + esc(r.freeNote || '') + '" onchange="sessRows[' + i + '].freeNote=this.value" style="width:100%;margin-top:6px"></div>';
+          return '<option value="' + o[0] + '"' + ((r.homeworkStatus || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' : '') + '</div>';
   }).join('') +
     '<div class="filters">' + sel('sadd', '', [['', '＋ Add a visiting student']].concat(others.map(function (p) { return [p.id, p.name]; }))) + '</div>' +
     '<button class="primary" style="width:100%;margin-top:6px" onclick="hold(this);saveSession()">Save session and charges</button>';
@@ -1928,8 +1927,7 @@ function editSession(id) {
     sheet(id, d.rows.map(function (r, i) {
       return '<div class="card"><b>' + esc(r.name) + '</b><div class="filters" style="margin:6px 0 0">' +
         sel('ea' + i, r.attended ? '1' : '0', [['1', 'Attended'], ['0', 'Absent']]) + '<input id="el' + i + '" type="number" min="0" placeholder="min late" value="' + esc(r.late || '') + '" style="max-width:110px">' +
-        sel('ep' + i, r.participation || '', [['', 'Participation…'], ['Very active', 'Very active'], ['Active', 'Active'], ['Occasional', 'Occasional'], ['Quiet', 'Quiet']]) + '</div>' +
-        '<input id="en' + i + '" placeholder="Note" value="' + esc(r.free || '') + '" style="width:100%;margin-top:6px"></div>';
+        sel('ep' + i, r.participation || '', [['', 'Participation…'], ['Very active', 'Very active'], ['Active', 'Active'], ['Occasional', 'Occasional'], ['Quiet', 'Quiet']]) + '</div>' + '</div>';
     }).join('') + '<div class="sub">Charges stay as they are (absent sessions are charged too). To change charges, undo the session or use the ledger.</div>' +
       '<button class="primary" style="width:100%;margin-top:8px" onclick="saveSessionEdit()">Save changes</button>');
   }, { part: true });
@@ -1937,7 +1935,7 @@ function editSession(id) {
 function saveSessionEdit() {
   var d = SESS_EDIT;
   d.rows.forEach(function (r, i) {
-    var a = document.getElementById('ea' + i).value === '1', late = document.getElementById('el' + i).value, p = document.getElementById('ep' + i).value, f = document.getElementById('en' + i).value;
+    var a = document.getElementById('ea' + i).value === '1', late = document.getElementById('el' + i).value, p = document.getElementById('ep' + i).value, f = r.free || '';
     if (a === r.attended && String(late || '') === String(r.late || '') && p === (r.participation || '') && f === (r.free || '')) return;
     call('updateAttendance', { sessionId: d.session['Session ID'], id: r.id, attended: a, late: late, participation: p, free: f }, function () {}, { optimistic: function () {} });
   });
