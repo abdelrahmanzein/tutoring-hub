@@ -2301,6 +2301,9 @@ function showSettings() {
   refreshView = showSettings;
   document.getElementById('title').textContent = 'Settings';
   document.getElementById('main').innerHTML = '<div id="health"><div class="skeleton"></div></div><div id="tutors"></div><div id="settings-more"></div>';
+  // Settings and tutors are on the phone already; the health part (live from Google) fills in when it arrives.
+  if (typeof drawSettingsMore === 'function') drawSettingsMore();
+  if (typeof drawTutors === 'function') drawTutors();
   call('health', {}, function (h) {
     var used = Math.round(h.minutesToday / h.limit * 100);
     var NAMES = { publish: 'Screens uploaded', live: 'Sessions homework (Drive)', homework: 'Homework check (nightly)', backup: 'Nightly backup', email: '7 AM email', queue: 'Saves processed', check: 'Save check (every 5 min)' };
@@ -2311,9 +2314,7 @@ function showSettings() {
         return '<div class="item"><span>' + esc(NAMES[j.job] || j.job) + '<div class="sub">' + esc(fmtDate(j.at)) + (j.seconds ? ' · ' + j.seconds + ' s' : '') + (j.info ? ' · ' + esc(j.info) : '') + '</div></span>' +
           '<span class="tag ' + (j.late || /FAILED/.test(j.info) ? 'owe' : 'good') + '">' + (j.late ? 'late' : /FAILED/.test(j.info) ? 'failed' : 'ok') + '</span></div>';
       }).join('') + '</div>';
-    if (typeof drawSettingsMore === 'function') drawSettingsMore();
-    if (typeof drawTutors === 'function') drawTutors();
-  });
+  }, { part: true });
 }
 </script>
 <script>
