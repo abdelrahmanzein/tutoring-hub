@@ -1614,7 +1614,7 @@ function applyMeet() {
     if (!r && m.attended) {
       var p = sessData.people.filter(function (x) { return x.id === m.id; })[0];
       if (!p) return;
-      r = { id: p.id, name: p.name, currency: p.currency, amount: p.rate, visiting: true, notes: [] };
+      r = { id: p.id, name: p.name, currency: p.currency, amount: p.rate, visiting: true };
       sessRows.push(r);
     }
     if (!r) return;
@@ -1655,14 +1655,12 @@ function fillSessionRows() {
   var g = document.getElementById('sg').value, date = document.getElementById('sd').value;
   if (!g) { document.getElementById('srows').innerHTML = ''; return; }
   sessRows = sessData.people.filter(function (p) { return p.memberships.some(function (m) { return inGroupOn(m, g, date); }); })
-    .map(function (p) { return { id: p.id, name: p.name, currency: p.currency, amount: p.rate, status: 'Attended', visiting: false, notes: [] }; });
+    .map(function (p) { return { id: p.id, name: p.name, currency: p.currency, amount: p.rate, status: 'Attended', visiting: false }; });
   applyMeet();
   drawSessionRows();
 }
 
 var PARTICIPATION = ['Very active', 'Active', 'Occasional', 'Quiet'];
-// Note chips come from Settings (note_chips); this list is only used if the server sends none.
-var TEACHER_NOTES = ["Focused", "Understood well", "Solved independently", "Good questions", "Clear working", "Well prepared", "Improving", "Found today's topic hard", "Not prepared", "Distracted", "Camera off"];
 
 // What Meet saw for one student, in one short line.
 function meetLine(m) {
@@ -1672,7 +1670,7 @@ function meetLine(m) {
     ' · ' + m.minutesInClass + ' min' + (m.contributions !== '' ? ' · ' + m.contributions + ' contributions, ' + m.questions + ' questions' : '') + '</div>';
 }
 
-// Draws the student lines (status, amount, participation, teacher notes) and the save button.
+// Draws the student lines (attendance, participation, homework, a private note) and the save button.
 function drawSessionRows() {
   var others = sessData.people.filter(function (p) { return !sessRows.some(function (r) { return r.id === p.id; }); });
   document.getElementById('srows').innerHTML = '<h2>' + sessRows.length + ' students</h2>' + sessRows.map(function (r, i) {
@@ -1685,27 +1683,17 @@ function drawSessionRows() {
       '<select onchange="sessRows[' + i + '].participation=this.value"><option value="">Participation…</option>' + PARTICIPATION.map(function (p) {
         return '<option' + (r.participation === p ? ' selected' : '') + '>' + p + '</option>';
       }).join('') + '</select></div>' +
-      '<div class="chips">' + ((sessData && sessData.chips) || TEACHER_NOTES).map(function (n) {
-        return '<button class="chip' + (r.notes.indexOf(n) >= 0 ? ' on' : '') + '" onclick="toggleNote(' + i + ',this)">' + n + '</button>';
-      }).join('') + '</div>' +
       (SESS_HW ? '<div class="filters" style="margin:6px 0 0;align-items:center"><span class="sub" style="flex:none">Homework ' + esc(SESS_HW.number) + '</span>' +
         '<select onchange="sessRows[' + i + '].homeworkStatus=this.value">' + [['', 'As uploaded (automatic)'], ['On time', 'On time'], ['Late', 'Late'], ['Missing', 'Not submitted'], ['Excused', 'Excused']].map(function (o) {
           return '<option value="' + o[0] + '"' + ((r.homeworkStatus || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' : '') +
-      '<input placeholder="Note about ' + esc(r.name.split(' ')[0]) + ' (optional)" value="' + esc(r.freeNote || '') + '" onchange="sessRows[' + i + '].freeNote=this.value" style="width:100%;margin-top:6px"></div>';
+      '<input placeholder="Private note about ' + esc(r.name.split(' ')[0]) + ' (optional, never shown to parents)" value="' + esc(r.freeNote || '') + '" onchange="sessRows[' + i + '].freeNote=this.value" style="width:100%;margin-top:6px"></div>';
   }).join('') +
     '<div class="filters">' + sel('sadd', '', [['', '＋ Add a visiting student']].concat(others.map(function (p) { return [p.id, p.name]; }))) + '</div>' +
     '<button class="primary" style="width:100%;margin-top:6px" onclick="hold(this);saveSession()">Save session and charges</button>';
   document.getElementById('sadd').onchange = function () {
     var p = sessData.people.filter(function (x) { return x.id === this.value; }, this)[0];
-    if (p) { sessRows.push({ id: p.id, name: p.name, currency: p.currency, amount: p.rate, status: 'Attended', visiting: true, notes: [] }); drawSessionRows(); }
+    if (p) { sessRows.push({ id: p.id, name: p.name, currency: p.currency, amount: p.rate, status: 'Attended', visiting: true }); drawSessionRows(); }
   };
-}
-
-// Turns a teacher-note chip on or off.
-function toggleNote(i, btn) {
-  var n = btn.textContent, list = sessRows[i].notes, k = list.indexOf(n);
-  if (k >= 0) list.splice(k, 1); else list.push(n);
-  btn.classList.toggle('on', k < 0);
 }
 
 // Saves the session; the server refuses a second log of the same group and date.
@@ -1951,7 +1939,7 @@ function saveSessionEdit() {
   d.rows.forEach(function (r, i) {
     var a = document.getElementById('ea' + i).value === '1', late = document.getElementById('el' + i).value, p = document.getElementById('ep' + i).value, f = document.getElementById('en' + i).value;
     if (a === r.attended && String(late || '') === String(r.late || '') && p === (r.participation || '') && f === (r.free || '')) return;
-    call('updateAttendance', { sessionId: d.session['Session ID'], id: r.id, attended: a, late: late, participation: p, notes: r.notes || '', free: f }, function () {}, { optimistic: function () {} });
+    call('updateAttendance', { sessionId: d.session['Session ID'], id: r.id, attended: a, late: late, participation: p, free: f }, function () {}, { optimistic: function () {} });
   });
   closeSheet();
 }
