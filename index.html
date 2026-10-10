@@ -107,6 +107,8 @@
   .inapp iframe { flex:1; width:100%; border:0; background:#fff; }
   #saving { display:none; font-size:13px; font-weight:600; padding:4px 10px; border-radius:999px; margin-right:6px; background:var(--accent-soft); color:var(--accent); }
   #saving.on { display:inline-block; } #saving.on + .updated { display:none; } #saving.ok { background:var(--good); color:#fff; }
+  .chip.act { text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:600; color:var(--accent); border-color:var(--accent); background:var(--accent-soft); cursor:pointer; }
+  .chip.act.danger { color:var(--bad); border-color:var(--bad); background:var(--bad-soft); }
   .folder-chip { text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:600; color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
   .nav-row { display:flex; justify-content:space-between; align-items:center; gap:10px; cursor:pointer; }
 
@@ -743,7 +745,7 @@ function saveStudent(id) {
 // WhatsApp link for a phone number.
 function wa(phone) {
   var digits = String(phone || '').replace(/[^0-9]/g, '');
-  return digits ? '<a href="https://wa.me/' + digits + '" target="_blank">' + esc(phone) + '</a>' : '-';
+  return digits ? '<a class="chip act" href="https://wa.me/' + digits + '" target="_blank">💬 ' + esc(phone) + '</a>' : '-';
 }
 </script>
 
@@ -928,7 +930,7 @@ function rateBox(studentCur) {
     var hint = document.getElementById('rhint');
     if (r.rate) {
       document.getElementById('prate').value = r.rate;
-      hint.innerHTML = 'Converted at today\'s reference rate (' + r.rate + ' EGP per $1). <a href="#" onclick="document.getElementById(\'prate\').style.display=\'block\';return false">Use another rate</a>';
+      hint.innerHTML = 'Converted at today\'s reference rate (' + r.rate + ' EGP per $1).<div class="chips" style="margin-top:4px"><a class="chip act" href="#" onclick="document.getElementById(\'prate\').style.display=\'block\';return false">✏️ Use another rate</a></div>';
     } else {
       hint.textContent = 'Could not get the reference rate. Type the rate:';
       document.getElementById('prate').style.display = 'block';
@@ -1147,7 +1149,8 @@ function newStudentForm(join) {
     var groupOpts = [['', 'Pick a group']].concat(f.groups.map(function (g) { return [g.group, g.group]; }));
     document.getElementById('main').innerHTML = '<button class="back" onclick="showStudents()">‹ Cancel</button><h2>New student</h2>' +
       (join ? '<div class="card sub">From ' + esc(join.answers.parentName) + '\'s joining form (' + esc(fmtDate(join.filledAt)) + '). Check everything, set the payment type and rate, then add.</div>' :
-      '<div class="card"><b>Send the parent a joining form</b><div class="sub">They fill in names (English and Arabic), school, country and phone numbers (<a href="#" onclick="openInApp(JOIN_PREVIEW, \'What the parent sees\');return false">see what they see</a>). The payment type follows the country; the Google account is learnt from Meet. You set these:</div>' +
+      '<div class="card"><b>Send the parent a joining form</b><div class="sub">They fill in names (English and Arabic), school, country and phone numbers. The payment type follows the country; the Google account is learnt from Meet. You set these:</div>' +
+        '<div class="chips"><a class="chip act" href="#" onclick="openInApp(JOIN_PREVIEW, \'What the parent sees\');return false">👀 See what the parent sees</a></div>' +
         field('jg', 'Group', sel('jg', '', groupOpts)) +
         field('js', 'In the group since (first session, e.g. the trial)', '<input id="js" type="date" value="' + today() + '">') +
         field('jt', 'Trial session to charge (optional)', '<input id="jt" type="date">') +
@@ -1304,7 +1307,7 @@ function hwKey(s) { return s === 'Not due yet' ? 'Not yet' : s; }
 // Sets one homework by hand (with a reason), or hands it back to the scan.
 function hwEdit(i, id) {
   var h = HW_LIST[i];
-  sheet(h.number + '. ' + h.title, (h.file ? '<div class="sub"><a href="' + esc(h.file) + '" target="_blank">Open the uploaded file</a></div>' : '') +
+  sheet(h.number + '. ' + h.title, (h.file ? '<div class="chips"><a class="chip act" href="' + esc(h.file) + '" target="_blank">📄 Open the upload</a></div>' : '') +
     '<div class="sub" style="margin-top:8px">Status</div>' + sel('hws', h.status, [['On time', 'On time'], ['Late', 'Late'], ['Missing', 'Missing'], ['Excused', 'Excused']]) +
     '<div class="sub" style="margin-top:8px">Reason (e.g. sent on WhatsApp, used a sibling\'s account)</div><input id="hwr">' +
     '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);hwSave(' + i + ',\'' + esc(id) + '\',false)">Save</button>' +
@@ -1483,7 +1486,7 @@ function sessionCard(s) {
     '<div class="sub">' + esc(s.start) + '–' + esc(s.end) + ' (Cairo)</div>' +
     (s.homework ? '<div class="sub">Homework: ' + esc(s.homework.title) + ' · due ' + esc(dueLabel(s.homework.due)) + '</div>' +
       (s.homework.link ? '<div class="chips" style="margin-top:6px"><a class="chip folder-chip" href="' + esc(s.homework.link) + '" target="_blank">🗂️ Submissions</a></div>' : '') : '') +
-    (s.pastPapers ? '<div class="sub">Past papers · <a href="' + esc(s.pastPapers.link) + '" target="_blank">open follow-up sheet</a></div>' : '') +
+    (s.pastPapers ? '<div class="sub">Past papers</div><div class="chips" style="margin-top:6px"><a class="chip act" href="' + esc(s.pastPapers.link) + '" target="_blank">📊 Follow-up sheet</a></div>' : '') +
     (s.note ? '<div class="note">📌 Note from ' + esc(fmtDate(s.note.from)) + ': ' + esc(s.note.text) + '</div>' : '') +
     (s.trials && s.trials.length ? '<div class="note">🆕 Trial: ' + s.trials.map(function (t) { return esc(t.name); }).join(', ') + '</div>' : '') +
     '<div class="chips">' + (s.students.map(function (p) {
@@ -1496,7 +1499,7 @@ function sessionCard(s) {
     (s.status === 'Logged' || s.status === 'Did not happen' ? '' :
       '<button class="primary"' + (s.canLog ? '' : ' disabled') + ' onclick="sessionForm(' + i + ')">Log session</button>' +
       (s.status === 'Upcoming' ? '' : '<button class="secondary" onclick="notHeldForm(' + i + ')">Didn\'t happen</button>')) +
-    '</div>' + (s.status === 'Upcoming' ? '<div style="text-align:right;margin-top:6px"><a href="#" class="sub" onclick="notHeldForm(' + i + ');return false">Cancel this session</a></div>' : '') + '</div>';
+    '</div>' + (s.status === 'Upcoming' ? '<div class="chips" style="justify-content:flex-end;margin-top:8px"><a class="chip act danger" href="#" onclick="notHeldForm(' + i + ');return false">🚫 Cancel this session</a></div>' : '') + '</div>';
 }
 
 // "Didn't happen": not charged, with the reason, and optionally a make-up session added to the calendar.
@@ -1648,7 +1651,7 @@ function loadNextHomework() {
     SESS_HW = r.due || null;
     if (SESS_HW && document.getElementById('srows') && sessRows.length) drawSessionRows();
     document.getElementById('snhx').innerHTML = r.existing ? 'A student already created "' + esc(r.existing.name) + '"' + (r.existing.by ? ' (' + esc(r.existing.by) + ')' : '') +
-      ' with their work in it: it will be renamed to your title, nothing is lost. <a href="' + esc(r.existing.url) + '" target="_blank">Open it</a>' : '';
+      ' with their work in it: it will be renamed to your title, nothing is lost.<div class="chips" style="margin-top:4px"><a class="chip act" href="' + esc(r.existing.url) + '" target="_blank">🗂️ Open their folder</a></div>' : '';
   }, { part: true });
 }
 
@@ -1778,10 +1781,10 @@ function saveSession() {
 var LOGGED = null;
 function afterLogged(r) {
   LOGGED = r;
-  var html = '<div class="sub">' + r.charged + ' charged.' + (r.homeworkFolder ? (r.homeworkFolder.renamed ? ' The student\'s folder "' + esc(r.homeworkFolder.renamed) + '" is now ' : ' Homework folder created: ') + '<a href="' + esc(r.homeworkFolder.url) + '" target="_blank">' + esc(r.homeworkFolder.name) + '</a>.' : '') +
+  var html = '<div class="sub">' + r.charged + ' charged.' + (r.homeworkFolder ? (r.homeworkFolder.renamed ? ' The student\'s folder "' + esc(r.homeworkFolder.renamed) + '" is now ' : ' Homework folder created: ') + '<b>' + esc(r.homeworkFolder.name) + '</b>.<div class="chips" style="margin-top:4px"><a class="chip act" href="' + esc(r.homeworkFolder.url) + '" target="_blank">🗂️ Open the folder</a></div>' : '') +
     (r.homeworkError ? ' Homework folder not created: ' + esc(r.homeworkError) + '.' : '') + '</div>';
   if (r.absent && r.absent.length) {
-    html += r.recording && r.recording.length ? '<div style="margin-top:10px">Recording: ' + r.recording.map(function (x) { return '<a href="' + esc(x.url) + '" target="_blank">' + esc(x.name) + '</a>'; }).join(', ') + '</div>' +
+    html += r.recording && r.recording.length ? '<div class="chips" style="margin-top:10px">' + r.recording.map(function (x, k) { return '<a class="chip act" href="' + esc(x.url) + '" target="_blank">🎥 Recording' + (r.recording.length > 1 ? ' ' + (k + 1) : '') + '</a>'; }).join('') + '</div>' +
       r.absent.map(function (a, i) { return '<button style="width:100%;margin-top:6px" onclick="sendRecording(' + i + ')">💬 Send the recording to ' + esc(a.first) + (a.phone ? '' : ' (pick the chat)') + '</button>'; }).join('')
       : '<div class="sub" style="margin-top:10px">No recording found yet (Meet takes a while to save it). Absent: ' + r.absent.map(function (a) { return esc(a.first); }).join(', ') + '.</div>';
   }
@@ -1836,16 +1839,17 @@ function showGroup(name) {
           '<button class="small" style="width:auto;flex:none" onclick="moveForm(' + i + ')">Move</button></div><div id="mv' + i + '"></div></div>';
       }).join('') +
       '<h2>Recent sessions</h2>' + sessionsTable(d) +
-      (d.sessions.length ? '<div class="sub" style="margin:-4px 0 8px">Correct a session: ' + d.sessions.filter(function (s) { return s.status === 'Logged'; }).map(function (s) {
-        return '<a href="#" onclick="editSession(\'' + esc(s.id) + '\');return false">' + esc(fmtDate(s.date).slice(0, 5)) + '</a>'; }).join(' · ') + '</div>' : '') +
+      (d.sessions.length ? '<div class="sub" style="margin:-4px 0 4px">Correct a session:</div><div class="chips" style="margin:0 0 8px">' + d.sessions.filter(function (s) { return s.status === 'Logged'; }).map(function (s) {
+        return '<a class="chip act" href="#" onclick="editSession(\'' + esc(s.id) + '\');return false">✏️ ' + esc(fmtDate(s.date).slice(0, 5)) + '</a>'; }).join('') + '</div>' : '') +
       '<div class="card"><b>Details</b>' +
         '<div class="sub" style="margin-top:8px">Status</div>' + sel('gst', paused ? 'Paused' : 'Active', [['Active', 'Active'], ['Paused', 'Paused (off Sessions and reminders, no charges)']]) +
         '<div class="sub" style="margin-top:8px">WhatsApp group link</div><input id="gwa" value="' + esc(g['WhatsApp link'] || '') + '">' +
         '<div class="sub" style="margin-top:8px">Notes</div><input id="gno" value="' + esc(g['Notes'] || '') + '">' +
         '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);saveGroup()">Save</button>' +
-        '<div class="sub" style="margin-top:14px">Homework: ' + (d.pastPapersLink ? 'past papers (<a href="' + esc(d.pastPapersLink) + '" target="_blank">follow-up sheet</a>) · <a href="#" onclick="ppOff();return false">back to homework folders</a>'
-          : 'homework folders · <a href="#" onclick="ppForm();return false">switch to past papers</a>') + '</div><div id="ppbox"></div>' +
-        '<div class="sub" style="margin-top:14px"><a href="#" onclick="archiveForm();return false">Archive this group…</a></div></div>';
+        '<div class="sub" style="margin-top:14px">Homework: ' + (d.pastPapersLink ? 'past papers' : 'homework folders') + '</div><div class="chips">' + (d.pastPapersLink
+          ? '<a class="chip act" href="' + esc(d.pastPapersLink) + '" target="_blank">📊 Follow-up sheet</a><a class="chip act" href="#" onclick="ppOff();return false">↩️ Back to homework folders</a>'
+          : '<a class="chip act" href="#" onclick="ppForm();return false">📝 Switch to past papers</a>') + '</div><div id="ppbox"></div>' +
+        '<div class="chips" style="margin-top:14px"><a class="chip act danger" href="#" onclick="archiveForm();return false">🗄️ Archive this group…</a></div></div>';
   });
 }
 
@@ -1863,7 +1867,7 @@ function sessionsTable(d) {
 var HW_COUNT_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Excused': '🙏', 'Not yet': '⏳' };
 function assignmentsBox(d) {
   var list = d.assignments || [];
-  return '<details class="card"><summary><b>Assignments (' + list.length + ')</b>' + (d.folder ? ' · <a href="' + esc(d.folder) + '" target="_blank" onclick="event.stopPropagation()">open the folder</a>' : '') + '</summary>' +
+  return '<details class="card"><summary><b>Assignments (' + list.length + ')</b>' + (d.folder ? ' <a class="chip act" style="margin-left:6px" href="' + esc(d.folder) + '" target="_blank" onclick="event.stopPropagation()">🗂️ Folder</a>' : '') + '</summary>' +
     (list.length ? list.map(function (a, i) {
       var c = {};
       a.students.forEach(function (s) { if (s.status) c[s.status] = (c[s.status] || 0) + 1; });
@@ -1873,7 +1877,7 @@ function assignmentsBox(d) {
         '<div class="chips">' + a.students.map(function (s) {
           return '<button class="chip hw-' + (HW_CLASS[s.status] || 'none') + '" onclick="groupHw(' + i + ',\'' + esc(s.id) + '\')">' + (HW_ICON[s.status] || '') + ' ' + esc(s.name) + (s.manual ? ' ✎' : '') + '</button>';
         }).join('') + '</div>' +
-        (a.url ? '<div class="sub" style="margin-top:6px"><a href="' + esc(a.url) + '" target="_blank">📁 Open this homework\'s folder</a></div>' : '') + '</details>';
+        (a.url ? '<div class="chips"><a class="chip act" href="' + esc(a.url) + '" target="_blank">🗂️ Open this homework\'s folder</a></div>' : '') + '</details>';
     }).join('') : '<div class="sub" style="margin-top:6px">No homework recorded yet.</div>') + '</details>';
 }
 
@@ -1881,7 +1885,7 @@ function assignmentsBox(d) {
 function groupHw(i, id) {
   var a = GROUP.assignments[i], s = a.students.filter(function (x) { return x.id === id; })[0];
   sheet(s.name + ' · ' + a.number + '. ' + a.title, '<div class="sub">' + (s.status ? 'Now: ' + esc(s.status) + (s.manual ? ' (set by hand)' : '') : 'No record yet') + '</div>' +
-    (s.file ? '<div style="margin-top:6px"><a href="' + esc(s.file) + '" target="_blank">Open their upload</a></div>' : '') +
+    (s.file ? '<div class="chips"><a class="chip act" href="' + esc(s.file) + '" target="_blank">📄 Open their upload</a></div>' : '') +
     '<div class="actions">' + [['On time', 'On time'], ['Late', 'Late'], ['Missing', 'Not submitted'], ['Excused', 'Excused']].map(function (o) {
       return '<button onclick="groupHwSet(' + i + ',\'' + esc(id) + '\',\'' + o[0] + '\')">' + o[1] + '</button>'; }).join('') +
     (s.manual ? '<button class="secondary" onclick="groupHwSet(' + i + ',\'' + esc(id) + '\',\'\')">Back to automatic</button>' : '') + '</div>' +
@@ -2043,7 +2047,7 @@ function showTodo() {
     }).join(''));
     if (d.uploads.length) parts.push('<h2>Who uploaded this?</h2>' + d.uploads.map(function (u, i) {
       var members = d.people.filter(function (p) { return p.groups.indexOf(u.group) >= 0; });
-      return '<div class="card"><div><b>' + esc(u.owner || 'unknown account') + '</b></div><div class="sub">' + esc(u.assignment) + ' · <a href="' + esc(u.url) + '" target="_blank">' + esc(u.file) + '</a> · ' + esc(u.created) + '</div>' +
+      return '<div class="card"><div><b>' + esc(u.owner || 'unknown account') + '</b></div><div class="sub">' + esc(u.assignment) + ' · ' + esc(u.created) + '</div><div class="chips"><a class="chip act" href="' + esc(u.url) + '" target="_blank">📄 ' + esc(u.file) + '</a></div>' +
         (u.owner ? '<div class="filters" style="margin:6px 0 0">' + sel('up' + i, '', [['', 'Which ' + esc(u.group) + ' student?']].concat(members.map(function (p) { return [p.id, p.name]; }))) +
           '<button onclick="hold(this);assignUpload(' + i + ')">Save</button></div>' : '') + '</div>';
     }).join(''));
@@ -2181,7 +2185,7 @@ function drawPayments() {
 function previewPay(list, i) {
   var r = TODO.payments[list][i];
   sheet(r.name + ' · ' + amt(r.amount, r.currency), '<div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(r.message) + '</div>' +
-    (r.link ? '<a href="#" onclick="openInApp(\'' + esc(r.link) + '\', \'What the family sees\');return false" style="display:block;text-align:center;margin-top:6px">Open the page the family will see ›</a>' : '') +
+    (r.link ? '<div class="chips" style="justify-content:center"><a class="chip act" href="#" onclick="openInApp(\'' + esc(r.link) + '\', \'What the family sees\');return false">👀 Open the page the family will see</a></div>' : '') +
     '<button class="primary" style="width:100%;margin-top:12px" onclick="closeSheet();' + (list === 'ready' ? 'sendRequest(' : 'sendReminderPay(') + i + ')">💬 Send on WhatsApp</button>');
 }
 
