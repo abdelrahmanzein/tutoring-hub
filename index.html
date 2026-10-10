@@ -302,7 +302,7 @@ function persist() {
 // fraction of a second instead of asking Google for each screen. Right after a save, screens ask Google directly
 // (as before) until the new data has been uploaded (usually within a minute).
 var READ_URL = 'https://tutoring-hub.abdelrahmanzein.workers.dev';
-var SNAP_ACTIONS = ['prospects', 'money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
+var SNAP_ACTIONS = ['meetDraft', 'prospects', 'money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
 var SNAP_AT = {}, STALE_SINCE = 0, SNAP_LOADING = null, POLL_T = null;
 
 // Downloads the three blobs; redraws the screen you're on if anything changed.
@@ -1598,10 +1598,12 @@ function loadNextHomework() {
 }
 
 // Asks Meet who came (takes a few seconds), then fills the student lines.
-function loadMeet() {
+function loadMeet(fresh) {
   if (!sessEvent) return;
   document.getElementById('smeet').innerHTML = '<div class="card sub">Reading Meet…</div>';
-  call('meetDraft', { eventId: sessEvent, day: document.getElementById('sd').value, group: document.getElementById('sg').value }, function (m) {
+  var margs = { eventId: sessEvent, day: document.getElementById('sd').value, group: document.getElementById('sg').value };
+  if (fresh) margs.fresh = true;
+  call('meetDraft', margs, function (m) {
     sessMeet = m; applyMeet(); drawMeetBox(); drawSessionRows();
   }, { part: true });
 }
@@ -1642,7 +1644,7 @@ function drawMeetBox() {
 function assignWho(k) {
   var u = sessMeet.unknown[k], id = document.getElementById('wk' + k).value;
   if (!id) return notice('Pick the student first.');
-  call('assignMeetPerson', { id: id, meetId: u.id, name: u.name }, function () { notice(u.name + ' is now linked.'); loadMeet(); });
+  call('assignMeetPerson', { id: id, meetId: u.id, name: u.name, sessionId: SESS_ID }, function () { notice(u.name + ' is now linked.'); loadMeet(true); });
 }
 
 // True if a membership covers the date.
