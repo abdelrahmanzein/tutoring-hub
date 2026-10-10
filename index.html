@@ -263,7 +263,7 @@ function goBack() { BACK.fn(); }
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
 var WRITES = ['addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
-var NO_CACHE = WRITES.concat(['tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
+var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
 function newView() { VIEW++; refreshView = null; return VIEW; }
@@ -1546,12 +1546,28 @@ function sessionForm(i) {
     '<div class="card"><div class="sub">Group</div>' + sel('sg', s ? s.group : '', [['', 'Pick a group']].concat(d.groups.map(function (g) { return [g, g]; }))) +
     '<div class="sub" style="margin-top:8px">Date</div><input id="sd" type="date" value="' + (s ? s.day : today()) + '">' +
     '<div class="sub" style="margin-top:8px">What was it</div><input id="st" list="stl" value="Group Session"><datalist id="stl"><option>Group Session</option><option>Recorded Session</option><option>Quiz Session</option><option>1-on-1 Session</option></datalist>' +
-    '<div class="sub" style="margin-top:8px">Next homework title (optional: creates its "N. Title" folder)</div><input id="snh" placeholder="e.g. Rational Functions">' +
+    '<div class="sub" style="margin-top:8px">Next homework (optional: its folder is made with this title)</div>' +
+    '<div class="filters" style="margin:0;align-items:center"><b id="snhn" style="flex:none;min-width:2em">…</b><input id="snh" placeholder="Title, e.g. Rational Functions"></div><div id="snhx" class="sub"></div>' +
     '<div class="sub" style="margin-top:8px">Note for next session (shows on its card)</div><textarea id="sn" rows="2" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)"></textarea></div>' +
     '<div id="smeet"></div><div id="srows"></div>';
-  document.getElementById('sg').onchange = function () { sessEvent = null; sessMeet = null; SESS_ID = ''; drawMeetBox(); fillSessionRows(); };
+  document.getElementById('sg').onchange = function () { sessEvent = null; sessMeet = null; SESS_ID = ''; loadNextHomework(); drawMeetBox(); fillSessionRows(); };
   document.getElementById('sd').onchange = document.getElementById('sg').onchange;
   if (s) { fillSessionRows(); loadMeet(); }
+  loadNextHomework();
+}
+
+// The next homework number for the chosen group (and a folder a student may already have made for it).
+function loadNextHomework() {
+  var g = document.getElementById('sg').value, d = document.getElementById('sd').value, n = document.getElementById('snhn');
+  if (!n) return;
+  if (!g) { n.textContent = '…'; return; }
+  n.textContent = '…';
+  call('nextHomework', { group: g, day: d }, function (r) {
+    if (!document.getElementById('snhn')) return;
+    document.getElementById('snhn').textContent = r.number + '.';
+    document.getElementById('snhx').innerHTML = r.existing ? 'A student already created "' + esc(r.existing.name) + '"' + (r.existing.by ? ' (' + esc(r.existing.by) + ')' : '') +
+      ' with their work in it: it will be renamed to your title, nothing is lost. <a href="' + esc(r.existing.url) + '" target="_blank">Open it</a>' : '';
+  }, { part: true });
 }
 
 // Asks Meet who came (takes a few seconds), then fills the student lines.
@@ -1683,7 +1699,7 @@ function saveSession() {
 var LOGGED = null;
 function afterLogged(r) {
   LOGGED = r;
-  var html = '<div class="sub">' + r.charged + ' charged.' + (r.homeworkFolder ? ' Homework folder created: <a href="' + esc(r.homeworkFolder.url) + '" target="_blank">' + esc(r.homeworkFolder.name) + '</a>.' : '') +
+  var html = '<div class="sub">' + r.charged + ' charged.' + (r.homeworkFolder ? (r.homeworkFolder.renamed ? ' The student\'s folder "' + esc(r.homeworkFolder.renamed) + '" is now ' : ' Homework folder created: ') + '<a href="' + esc(r.homeworkFolder.url) + '" target="_blank">' + esc(r.homeworkFolder.name) + '</a>.' : '') +
     (r.homeworkError ? ' Homework folder not created: ' + esc(r.homeworkError) + '.' : '') + '</div>';
   if (r.absent && r.absent.length) {
     html += r.recording && r.recording.length ? '<div style="margin-top:10px">Recording: ' + r.recording.map(function (x) { return '<a href="' + esc(x.url) + '" target="_blank">' + esc(x.name) + '</a>'; }).join(', ') + '</div>' +
