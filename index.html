@@ -105,9 +105,8 @@
   .inapp { position:fixed; inset:0; z-index:40; background:var(--bg); display:flex; flex-direction:column; padding-top:env(safe-area-inset-top); }
   .inapp-bar { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid var(--line); background:var(--card); }
   .inapp iframe { flex:1; width:100%; border:0; background:#fff; }
-  #saving { position:fixed; left:50%; transform:translate(-50%, 20px); bottom:calc(84px + env(safe-area-inset-bottom)); z-index:30; background:var(--text); color:var(--bg);
-    padding:7px 14px; border-radius:999px; font-size:14px; opacity:0; transition:opacity .2s, transform .2s; pointer-events:none; }
-  #saving.on { opacity:.92; transform:translate(-50%, 0); } #saving.ok { background:var(--good); color:#fff; }
+  #saving { display:none; font-size:13px; font-weight:600; padding:4px 10px; border-radius:999px; margin-right:6px; background:var(--accent-soft); color:var(--accent); }
+  #saving.on { display:inline-block; } #saving.on + .updated { display:none; } #saving.ok { background:var(--good); color:#fff; }
   .nav-row { display:flex; justify-content:space-between; align-items:center; gap:10px; cursor:pointer; }
 
   /* Bottom sheet overlay for details */
@@ -203,7 +202,7 @@
   <header>
     <div class="row">
       <h1 id="title">To do</h1>
-      <div><span class="updated" id="updated"></span> <button id="refresh">Refresh</button></div>
+      <div><span id="saving"></span><span class="updated" id="updated"></span> <button id="refresh">Refresh</button></div>
     </div>
   </header>
   <main id="main"></main>
@@ -302,7 +301,7 @@ function persist() {
 // fraction of a second instead of asking Google for each screen. Right after a save, screens ask Google directly
 // (as before) until the new data has been uploaded (usually within a minute).
 var READ_URL = 'https://tutoring-hub.abdelrahmanzein.workers.dev';
-var SNAP_ACTIONS = ['nextHomework', 'meetDraft', 'prospects', 'money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
+var SNAP_ACTIONS = ['adminData', 'tutors', 'joinList', 'rate', 'nextHomework', 'meetDraft', 'prospects', 'money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
 var SNAP_AT = {}, STALE_SINCE = 0, SNAP_LOADING = null, POLL_T = null;
 
 // Downloads the three blobs; redraws the screen you're on if anything changed.
@@ -449,11 +448,11 @@ function patchHomework(assignmentId, id, status) {
 var SAVING = 0;
 function savingMark(delta, done) {
   SAVING = Math.max(0, SAVING + delta);
-  var el = document.getElementById('saving');
-  if (!el) { el = document.createElement('div'); el.id = 'saving'; document.body.appendChild(el); }
+  var el = document.getElementById('saving');                 // in the top bar, next to Refresh, on every screen
+  if (!el) return;
   el.className = SAVING ? 'on' : done ? 'on ok' : '';
-  el.textContent = SAVING ? 'Saving' + (SAVING > 1 ? ' ' + SAVING + ' changes' : '') + '…' : done ? 'Saved ✓' : '';
-  if (!SAVING) setTimeout(function () { if (!SAVING) el.className = ''; }, 1800);
+  el.textContent = SAVING ? 'Saving' + (SAVING > 1 ? ' ' + SAVING : '') + '…' : done ? 'Saved ✓' : '';
+  if (!SAVING) setTimeout(function () { if (!SAVING) { el.className = ''; el.textContent = ''; } }, 2500);
 }
 
 // Refresh: download now, and ask Google to rebuild everything (picks up changes typed into the Sheet), then download again.
@@ -644,7 +643,13 @@ function esc(s) {
 // Adds an account to the student, then reloads the page.
 function addAcc(id) {
   var type = document.getElementById('at').value, value = document.getElementById('av').value;
-  call('addAccount', { id: id, type: type, value: value }, function () { showStudent(id); });
+  call('addAccount', { id: id, type: type, value: value }, function () {
+    patchLocal(function () {
+      var pr = cached('profile', { id: id });
+      if (pr && !pr.detail.accounts.some(function (a) { return a['Type'] === type && a['Value'] === value; })) pr.detail.accounts.push({ 'Student ID': id, 'Type': type, 'Value': value, 'Whose': '', 'Confirmed': true });
+    });
+    showStudent(id);
+  });
 }
 
 // Lists recent changes with an Undo button where possible.
@@ -716,6 +721,15 @@ function saveStudent(id) {
   moneyConfirmed = false;
   call('updateStudent', { id: id, changes: changes, seen: seen, reason: document.getElementById('reason').value }, function (r) {
     if (r.conflict) { editStudent(id); return notice('Changed elsewhere since you opened it: ' + r.fields.join(', ') + '. Showing the latest values.'); }
+    // The new values show at once (the server re-checks that nobody changed them meanwhile).
+    if (r.queued) patchLocal(function () {
+      var pr = cached('profile', { id: id }); if (pr) Object.keys(changes).forEach(function (f) { pr.detail.info[f] = changes[f]; });
+      var l = cached('money'); if (l) l.students.forEach(function (s) { if (s.id === id) {
+        if (changes['First name'] !== undefined || changes['Last name'] !== undefined) s.name = ((changes['First name'] !== undefined ? changes['First name'] : s.name.split(' ')[0]) + ' ' + (changes['Last name'] !== undefined ? changes['Last name'] : s.name.split(' ').slice(1).join(' '))).trim();
+        if (changes['Status'] !== undefined) s.status = changes['Status'];
+        if (changes['Payment type'] !== undefined) s.paymentType = changes['Payment type'];
+      } });
+    });
     showStudent(id);
   });
 }
@@ -857,7 +871,14 @@ function toggleEntry(entryId, deleted, studentId) {
     return notice('Deleting ' + entryId + ' re-opens whatever it covered (a deleted payment makes sessions unpaid again). Tap Delete again to confirm.');
   }
   pendingToggle = '';
-  call('setEntryDeleted', { entryId: entryId, deleted: deleted }, function () { showMoneyStudent(studentId); });
+  call('setEntryDeleted', { entryId: entryId, deleted: deleted }, function () {
+    patchLocal(function () {
+      var pr = cached('profile', { id: studentId }); if (!pr || !pr.money) return;
+      pr.money.entries.forEach(function (e) { if (e['Entry ID'] === entryId) e['Deleted'] = deleted ? today() : ''; });
+      recomputeStudent(studentId);
+    });
+    showMoneyStudent(studentId);
+  });
 }
 
 // Record payment form.
@@ -922,7 +943,8 @@ function checkPayment(id, studentCur) {
   var arrived = document.getElementById('short').checked ? Number(document.getElementById('parr').value) : received;
   if (!(arrived > 0) || arrived > received) return notice('Enter the amount that arrived (less than or equal to what was sent).');
   var fee = Math.round((received - arrived) * 100) / 100;
-  call('previewPayment', args, function (p) {
+  var localP = localPreview(args, id);
+  (localP ? function (cb) { cb(localP); } : function (cb) { call('previewPayment', args, cb); })(function (p) {
     document.getElementById('pv').innerHTML = '<div class="card">' +
       (cur !== studentCur
         ? (p.rounding
@@ -938,7 +960,7 @@ function checkPayment(id, studentCur) {
       '</div><button class="primary" onclick=\'hold(this);savePayment(' + JSON.stringify(Object.assign({}, args, {
         note: document.getElementById('pn').value, receivedCurrency: cur, sentAmount: received, arrivedAmount: arrived, bankFee: fee,
         reference: PAY_PRE && PAY_PRE.reference || '', smsKey: PAY_PRE && PAY_PRE.smsKey || '',
-        expectedBalance: p.before })) + ')\'>Confirm and save</button>';
+        expectedBalance: p.before, credited: p.credited })) + ')\'>Confirm and save</button>';
   });
 }
 
@@ -950,7 +972,10 @@ function savePayment(args) {
   // A payment from a forwarded text: the text is cleared from To do once the payment is handed over.
   if (args.smsKey) { forgetSms(args.smsKey); delete args.smsKey; }
   call('recordPayment', args, function (r) {
-    if (r.queued) { showMoneyStudent(args.id); return notice('Payment sent. The balance updates in about a minute.'); }
+    if (r.queued) {
+      addLocalEntries(args.id, [localEntry({ 'Date': args.date, 'Student ID': args.id, 'Type': 'Payment', 'Description': args.note || 'Payment', 'Amount': Number(args.credited || args.amount), 'Currency': args.currency })]);
+      return showMoneyStudent(args.id);
+    }
     if (r.changed) { notice('The balance changed since you checked (' + amt(r.now.before, args.currency) + '). Check again.'); return checkPayment(args.id, args.currency); }
     showMoneyStudent(args.id); notice('Payment saved (' + r.saved + ').');
   });
@@ -981,7 +1006,14 @@ function adjustForm(id, pre) {
 // Saves the adjustment.
 function saveAdjust(id) {
   call('addAdjustment', { id: id, type: document.getElementById('at2').value, amount: document.getElementById('aa').value, currency: document.getElementById('ac').value,
-    date: document.getElementById('ad').value, reason: document.getElementById('ar').value }, function (r) { showMoneyStudent(id); if (!r.queued) notice('Saved (' + r.saved + ').'); });
+    date: document.getElementById('ad').value, reason: document.getElementById('ar').value }, function (r) {
+    if (r.queued) {
+      var t = document.getElementById('at2') ? document.getElementById('at2').value : 'Adjustment', a = Number(document.getElementById('aa') ? document.getElementById('aa').value : 0);
+      addLocalEntries(id, [localEntry({ 'Date': document.getElementById('ad').value, 'Student ID': id, 'Type': t === 'Refund' ? 'Refund' : 'Adjustment',
+        'Description': document.getElementById('ar').value, 'Amount': t === 'Refund' ? -Math.abs(a) : a, 'Currency': document.getElementById('ac').value })]);
+    } else notice('Saved (' + r.saved + ').');
+    showMoneyStudent(id);
+  });
 }
 </script>
 
@@ -1293,8 +1325,9 @@ function moveFromProfile(id) {
 function moveFromProfileSave(id, from) {
   var to = document.getElementById('pmg').value;
   if (!to) return notice('Pick the new group.');
-  call('moveStudent', { id: id, group: from, to: to, from: document.getElementById('pmd').value }, function () {
-    var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove(); showProfile(id); notice('Moved to ' + to + '.');
+  var date = document.getElementById('pmd').value;
+  call('moveStudent', { id: id, group: from, to: to, from: date }, function () {
+    var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove(); patchMove(id, from, to, date); showProfile(id);
   });
 }
 
@@ -1560,7 +1593,19 @@ var pendingUndo = '';
 function undoSess(id) {
   if (pendingUndo !== id) { pendingUndo = id; return notice('Undo removes this session\'s charges and attendance. Tap Undo again to confirm.'); }
   pendingUndo = '';
-  call('undoSession', { sessionId: id }, function () { showToday(); notice('Session undone.'); });
+  call('undoSession', { sessionId: id }, function () {
+    // Its charges disappear from balances at once.
+    patchLocal(function () {
+      (cached('sessionForm') || { people: [] }).people.forEach(function (p) {
+        var pr = cached('profile', { id: p.id }); if (!pr || !pr.money) return;
+        var hit = false;
+        pr.money.entries.forEach(function (e) { if (e['Session ID'] === id && e['Type'] === 'Charge' && !e['Deleted']) { e['Deleted'] = today(); hit = true; } });
+        if (hit) recomputeStudent(p.id);
+      });
+      var w = cached('week'); if (w) w.forEach(function (x) { if (x.sessionId === id) x.status = 'Needs review'; });
+    });
+    goBack();
+  });
 }
 
 // The log form, opened from a session card (group and date filled in): who attended, amounts, and a note for next time.
@@ -1712,7 +1757,12 @@ function saveSession() {
         var w = cached('week'); if (w) w.forEach(function (x) { if (x.sessionId === sid) x.status = 'Logged'; });
         var t = cached('todo'); if (t) t.toLog = t.toLog.filter(function (x) { return x.sessionId !== sid; });
       });
-      showToday(); return;
+      // Each charge shows in the student's balance at once.
+      args.rows.filter(function (r) { return r.status !== 'Not charged' && Number(r.amount) > 0; }).forEach(function (r) {
+        addLocalEntries(r.id, [localEntry({ 'Date': args.date, 'Student ID': r.id, 'Type': 'Charge', 'Description': (args.title || 'Group Session') + (r.status === 'Absent' ? ' (absent)' : ''),
+          'Session ID': sid, 'Amount': -Math.abs(Number(r.amount)), 'Currency': r.currency })]);
+      });
+      goBack(); return;
     }
     showToday(); notice('Logged ' + r.sessionId + ': ' + r.charged + ' charged.');
   }, { confirmed: afterLogged });
@@ -1892,7 +1942,8 @@ function moveForm(i) {
 function moveIt(i) {
   var m = GROUP.members[i], name = GROUP.group['Group'], to = document.getElementById('mvg' + i).value;
   if (!to) { document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; b.textContent = 'Move'; }); return notice('Pick the new group.'); }
-  call('moveStudent', { id: m.id, group: name, to: to, from: document.getElementById('mvd' + i).value }, function () { showGroup(name); notice(m.name + ' moved to ' + to + '.'); });
+  var date = document.getElementById('mvd' + i).value;
+  call('moveStudent', { id: m.id, group: name, to: to, from: date }, function () { patchMove(m.id, name, to, date); showGroup(name); });
 }
 
 // A new group: name from batch, course, level and number; a weekly calendar series; its Assignments folder.
@@ -2508,6 +2559,119 @@ function closeProspect(i) {
     patchLocal(function () { var l = cached('prospects'); if (l) l.forEach(function (x) { if (x['Prospect ID'] === p['Prospect ID']) { x['Stage'] = 'Closed'; x['Reason'] = reason; } }); });
     closeSheet(); showStudents();
   } });
+}
+</script>
+
+  <script>
+// ---------- Changes shown at once ----------
+// The money rules run on the phone too (the same as the server's Money.gs), so a session, payment, adjustment or
+// deleted entry shows in the balance the moment you save it. The server re-checks everything when it saves, and its
+// answer replaces these local figures a few seconds later.
+
+function r2(n) { return Math.round(Number(n) * 100) / 100; }
+
+// One currency's position from ledger entries (dates 'yyyy-mm-dd'): balance, owed, credit, unpaid sessions, last payment.
+function localPosition(entries) {
+  var live = entries.filter(function (e) { return !e['Deleted']; });
+  var charges = live.filter(function (e) { return e['Type'] === 'Charge'; }).sort(function (a, b) {
+    return String(a['Date']).localeCompare(String(b['Date'])) || String(a['Entry ID']).localeCompare(String(b['Entry ID'])); });
+  var byId = {}; charges.forEach(function (c) { byId[c['Entry ID']] = c; });
+  var covered = {}, pool = 0, last = null;
+  live.filter(function (e) { return e['Type'] !== 'Charge'; }).forEach(function (e) {
+    var rest = Number(e['Amount']);
+    if (e['Type'] === 'Payment') String(e['Allocated to'] || '').split(/[,;\s]+/).filter(String).forEach(function (cid) {
+      var c = byId[cid]; if (c && !covered[cid]) { covered[cid] = true; rest += Number(c['Amount']); } });
+    pool += rest;
+    if (e['Type'] === 'Payment' && (!last || String(e['Date']) >= String(last['Date']))) last = e;
+  });
+  var unpaid = [];
+  charges.forEach(function (c) {
+    if (covered[c['Entry ID']]) return;
+    var amount = -Number(c['Amount']), paid = Math.max(0, Math.min(pool, amount));
+    pool -= paid;
+    if (paid < amount - 0.005) unpaid.push({ entry: c, left: r2(amount - paid) });
+  });
+  return { balance: r2(live.reduce(function (s, e) { return s + Number(e['Amount']); }, 0)),
+    owed: r2(unpaid.reduce(function (s, u) { return s + u.left; }, 0) + Math.max(0, -pool)), credit: r2(Math.max(0, pool)), unpaid: unpaid, lastPayment: last };
+}
+
+// Recomputes a student's money (their page and their line in the Students list) from their entries on the phone.
+function recomputeStudent(id) {
+  var pr = cached('profile', { id: id });
+  if (!pr || !pr.money) return;
+  var m = pr.money, byCur = {};
+  m.entries.forEach(function (e) { (byCur[e['Currency']] = byCur[e['Currency']] || []).push(e); });
+  m.positions = {};
+  var row = null, list = cached('money');
+  if (list) row = list.students.filter(function (s) { return s.id === id; })[0];
+  if (row) row.money = {};
+  Object.keys(byCur).forEach(function (c) {
+    var p = localPosition(byCur[c]);
+    m.positions[c] = { balance: p.balance, owed: p.owed, credit: p.credit,
+      unpaid: p.unpaid.map(function (u) { return { id: u.entry['Entry ID'], date: u.entry['Date'], description: u.entry['Description'], left: u.left }; }) };
+    if (row && (p.balance || p.owed || p.credit || p.lastPayment))
+      row.money[c] = { balance: p.balance, owed: p.owed, credit: p.credit, sessionsOwed: p.unpaid.length,
+        lastPayment: p.lastPayment ? { date: p.lastPayment['Date'], amount: p.lastPayment['Amount'] } : null };
+  });
+}
+
+// Adds ledger entries on the phone (shown at once; replaced by the server's when it answers).
+function addLocalEntries(id, entries) {
+  patchLocal(function () {
+    var pr = cached('profile', { id: id });
+    if (!pr || !pr.money) return;
+    entries.forEach(function (e) {
+      if (pr.money.entries.some(function (x) { return x._local === e._local; })) return;     // already added (patches re-run)
+      pr.money.entries.unshift(e);
+    });
+    pr.money.entryCount = pr.money.entries.length;
+    recomputeStudent(id);
+  });
+}
+var LOCAL_N = 0;
+function localEntry(fields) { LOCAL_N++; return Object.assign({ 'Entry ID': 'NEW-' + LOCAL_N, _local: 'L' + Date.now() + '-' + LOCAL_N, 'Deleted': '', 'Allocated to': '', 'Entered by': 'App (saving…)' }, fields); }
+
+// What a payment would cover, worked out on the phone (as the server's previewPayment_). Needs the student's page data.
+function localPreview(args, studentId) {
+  var pr = cached('profile', { id: studentId });
+  if (!pr || !pr.money) return null;
+  var amount = Number(args.amount), entries = pr.money.entries.filter(function (e) { return e['Currency'] === args.currency; });
+  var before = localPosition(entries), rate = Number(pr.detail.info['Rate']) || 0;
+  var tol = 2;
+  (cached('adminData') || { settings: [] }).settings.forEach(function (s) { if (s.key === 'rate_tolerance_percent') tol = Number(s.value) || 2; });
+  var rounding = 0;
+  if (args.rate) {
+    var targets = [], cum = 0;
+    before.unpaid.forEach(function (u) { cum = r2(cum + u.left); targets.push(cum); });
+    if (rate > 0) for (var k = 1; k <= 8; k++) targets.push(r2(before.owed - before.credit + k * rate));
+    var best = 0, gap = Infinity;
+    targets.filter(function (t) { return t > 0; }).forEach(function (t) { if (Math.abs(t - amount) < gap) { gap = Math.abs(t - amount); best = t; } });
+    var diff = r2(best - amount);
+    rounding = best && Math.abs(diff) >= 0.01 && Math.abs(diff) <= best * tol / 100 ? diff : 0;
+  }
+  var credited = r2(amount + rounding);
+  var after = localPosition(entries.concat([{ 'Entry ID': 'NEW', 'Date': args.date, 'Type': 'Payment', 'Amount': credited, 'Currency': args.currency, 'Allocated to': '', 'Deleted': '' }]));
+  var still = {}; after.unpaid.forEach(function (u) { still[u.entry['Entry ID']] = true; });
+  return { before: before.balance, after: after.balance,
+    covers: before.unpaid.filter(function (u) { return !still[u.entry['Entry ID']]; }).map(function (u) { return u.entry['Date'] + ' ' + u.entry['Description']; }),
+    creditAfter: after.credit, owedAfter: after.owed, sessionsStillUnpaid: after.unpaid.length, rounding: rounding, credited: credited,
+    impliedRate: args.egpReceived && credited ? Math.round(Number(args.egpReceived) / credited * 100) / 100 : '' };
+}
+
+// A student moved to another group: their page, both group pages and the lists show it at once.
+function patchMove(id, from, to, date) {
+  patchLocal(function () {
+    var pr = cached('profile', { id: id });
+    if (pr && !pr.detail.memberships.some(function (m) { return m['Group'] === to && !m['Until']; })) {
+      pr.detail.memberships.forEach(function (m) { if (m['Group'] === from && !m['Until']) m['Until'] = date; });
+      pr.detail.memberships.push({ 'Student ID': id, 'Group': to, 'Since': date, 'Until': '', 'Role': 'Member' });
+    }
+    var gFrom = cached('group', { group: from }), gTo = cached('group', { group: to }), moved = null;
+    if (gFrom) { moved = gFrom.members.filter(function (m) { return m.id === id; })[0]; gFrom.members = gFrom.members.filter(function (m) { return m.id !== id; }); }
+    if (gTo && moved && !gTo.members.some(function (m) { return m.id === id; })) gTo.members.push(Object.assign({}, moved, { since: date }));
+    var l = cached('groups'); if (l) l.forEach(function (g) { if (g.group === from && moved) g.members = Math.max(0, g.members - 1); if (g.group === to && moved) g.members++; });
+    var ml = cached('money'); if (ml) ml.students.forEach(function (s) { if (s.id === id) s.group = to; });
+  });
 }
 </script>
 
