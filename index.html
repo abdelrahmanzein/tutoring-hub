@@ -107,6 +107,7 @@
   .inapp iframe { flex:1; width:100%; border:0; background:#fff; }
   #saving { display:none; font-size:13px; font-weight:600; padding:4px 10px; border-radius:999px; margin-right:6px; background:var(--accent-soft); color:var(--accent); }
   #saving.on { display:inline-block; } #saving.on + .updated { display:none; } #saving.ok { background:var(--good); color:#fff; }
+  .folder-chip { text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:600; color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
   .nav-row { display:flex; justify-content:space-between; align-items:center; gap:10px; cursor:pointer; }
 
   /* Bottom sheet overlay for details */
@@ -1480,8 +1481,8 @@ function sessionCard(s) {
   return '<div class="card"><div class="item"><div class="sess-title">' + esc(s.group) + '</div>' +
     '<span class="tag ' + STATUS_TAG[s.status] + '">' + esc(s.status) + '</span></div>' +
     '<div class="sub">' + esc(s.start) + '–' + esc(s.end) + ' (Cairo)</div>' +
-    (s.homework ? '<div class="sub">Homework: ' + esc(s.homework.title) + ' · due ' + esc(dueLabel(s.homework.due)) +
-      (s.homework.link ? ' · <a href="' + esc(s.homework.link) + '" target="_blank">📁 submissions</a>' : '') + '</div>' : '') +
+    (s.homework ? '<div class="sub">Homework: ' + esc(s.homework.title) + ' · due ' + esc(dueLabel(s.homework.due)) + '</div>' +
+      (s.homework.link ? '<div class="chips" style="margin-top:6px"><a class="chip folder-chip" href="' + esc(s.homework.link) + '" target="_blank">🗂️ Submissions</a></div>' : '') : '') +
     (s.pastPapers ? '<div class="sub">Past papers · <a href="' + esc(s.pastPapers.link) + '" target="_blank">open follow-up sheet</a></div>' : '') +
     (s.note ? '<div class="note">📌 Note from ' + esc(fmtDate(s.note.from)) + ': ' + esc(s.note.text) + '</div>' : '') +
     (s.trials && s.trials.length ? '<div class="note">🆕 Trial: ' + s.trials.map(function (t) { return esc(t.name); }).join(', ') + '</div>' : '') +
