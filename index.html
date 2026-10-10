@@ -1637,7 +1637,8 @@ function fillSessionRows() {
 }
 
 var PARTICIPATION = ['Very active', 'Active', 'Occasional', 'Quiet'];
-var TEACHER_NOTES = ['Understood well', 'Solved well', 'Good questions', 'Explained to others', 'Well prepared', 'Struggled', 'Needs more practice', 'Not prepared', 'Distracted', 'Camera off'];
+// Note chips come from Settings (note_chips); this list is only used if the server sends none.
+var TEACHER_NOTES = ["Focused", "Understood well", "Solved independently", "Good questions", "Clear working", "Well prepared", "Improving", "Found today's topic hard", "Not prepared", "Distracted", "Camera off"];
 
 // What Meet saw for one student, in one short line.
 function meetLine(m) {
@@ -1660,10 +1661,12 @@ function drawSessionRows() {
       '<select onchange="sessRows[' + i + '].participation=this.value"><option value="">Participation…</option>' + PARTICIPATION.map(function (p) {
         return '<option' + (r.participation === p ? ' selected' : '') + '>' + p + '</option>';
       }).join('') + '</select></div>' +
-      '<div class="chips">' + TEACHER_NOTES.map(function (n) {
+      '<div class="chips">' + ((sessData && sessData.chips) || TEACHER_NOTES).map(function (n) {
         return '<button class="chip' + (r.notes.indexOf(n) >= 0 ? ' on' : '') + '" onclick="toggleNote(' + i + ',this)">' + n + '</button>';
       }).join('') + '</div>' +
-      (SESS_HW ? '<div class="chips"><button class="chip' + (r.excuse ? ' on' : '') + '" onclick="sessRows[' + i + '].excuse=!sessRows[' + i + '].excuse;this.classList.toggle(\'on\')">🙏 Excused from homework ' + esc(SESS_HW.number) + '</button></div>' : '') +
+      (SESS_HW ? '<div class="filters" style="margin:6px 0 0;align-items:center"><span class="sub" style="flex:none">Homework ' + esc(SESS_HW.number) + '</span>' +
+        '<select onchange="sessRows[' + i + '].homeworkStatus=this.value">' + [['', 'As uploaded (automatic)'], ['On time', 'On time'], ['Late', 'Late'], ['Missing', 'Not submitted'], ['Excused', 'Excused']].map(function (o) {
+          return '<option value="' + o[0] + '"' + ((r.homeworkStatus || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' : '') +
       '<input placeholder="Note about ' + esc(r.name.split(' ')[0]) + ' (optional)" value="' + esc(r.freeNote || '') + '" onchange="sessRows[' + i + '].freeNote=this.value" style="width:100%;margin-top:6px"></div>';
   }).join('') +
     '<div class="filters">' + sel('sadd', '', [['', '＋ Add a visiting student']].concat(others.map(function (p) { return [p.id, p.name]; }))) + '</div>' +
@@ -1684,7 +1687,7 @@ function toggleNote(i, btn) {
 // Saves the session; the server refuses a second log of the same group and date.
 function saveSession() {
   var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value,
-    noteNext: document.getElementById('sn').value, excuseHomework: SESS_HW ? SESS_HW.number : '', nextHomework: (document.getElementById('snh') || {}).value || '', rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined };
+    noteNext: document.getElementById('sn').value, homeworkNumber: SESS_HW ? SESS_HW.number : '', nextHomework: (document.getElementById('snh') || {}).value || '', rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined };
   call('logSession', args, function (r) {
     if (r.queued) {
       var sid = args.sessionId || args.date + ' ' + args.group;
