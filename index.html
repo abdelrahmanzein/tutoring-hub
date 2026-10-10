@@ -24,7 +24,7 @@
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 -apple-system, system-ui, sans-serif; padding-bottom:76px; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 -apple-system, system-ui, sans-serif; padding-bottom:calc(96px + env(safe-area-inset-bottom)); }
 
   /* Header with a thin loading bar that runs while the app talks to the server */
   header { position:sticky; top:0; background:var(--card); padding:12px 16px 10px; border-bottom:1px solid var(--line); z-index:5; }
@@ -202,7 +202,7 @@
   </div>
   <header>
     <div class="row">
-      <h1 id="title">Sessions</h1>
+      <h1 id="title">To do</h1>
       <div><span class="updated" id="updated"></span> <button id="refresh">Refresh</button></div>
     </div>
   </header>
@@ -212,9 +212,9 @@
 // Page logic. Every screen loads live data when it opens and shows when it was fetched.
 var TOKEN = '', TABS = ['Sessions', 'To do', 'Students', 'Groups', 'Income', 'Settings'];
 var ICONS = { 'Sessions': '📅', 'To do': '✅', 'Students': '👥', 'Groups': '🧑‍🏫', 'Income': '📈', 'Settings': '⚙️' };
-var current = 'Sessions', fetchedAt = null, listCache = null, refreshView = null;
+var current = 'To do', fetchedAt = null, listCache = null, refreshView = null;
 
-// Starts the app: builds the tab bar and opens Sessions.
+// Starts the app: builds the tab bar and opens To do.
 function start(token) {
   TOKEN = token;
   var nav = document.getElementById('nav');
@@ -232,7 +232,7 @@ function start(token) {
   setInterval(showAge, 30000);
   setTimeout(hideSplash, 8000);
   if (READ_URL) loadSnapshots();
-  openTab('Sessions');
+  openTab('To do');
   if (!READ_URL) prefetch();
 }
 
@@ -1647,14 +1647,14 @@ function meetLine(m) {
 // Draws the student lines (status, amount, participation, teacher notes) and the save button.
 function drawSessionRows() {
   var others = sessData.people.filter(function (p) { return !sessRows.some(function (r) { return r.id === p.id; }); });
-  document.getElementById('srows').innerHTML = '<h2>' + sessRows.length + ' students</h2>' + sessRows.map(function (r, i) {
+  document.getElementById('srows').innerHTML = '<h2>' + sessRows.length + ' students</h2><div class="sub" style="margin:-4px 0 8px">Fee = what each student is charged for this session (their usual rate, filled in). Change it only if this session is priced differently; "Not charged" charges nothing.</div>' + sessRows.map(function (r, i) {
     return '<div class="card cur-' + esc(r.currency) + '"><div><span class="cur ' + esc(r.currency) + '">' + esc(r.currency) + '</span> <b>' + esc(r.name) + '</b>' + (r.visiting ? ' <span class="tag">visiting</span>' : '') + '</div>' +
       meetLine(r.meet) +
       '<div class="filters" style="margin:8px 0 0">' +
       '<select onchange="sessRows[' + i + '].status=this.value">' + ['Attended', 'Absent', 'Not charged'].map(function (s) {
         return '<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + (s === 'Absent' ? 'Absent (charged)' : s) + '</option>';
       }).join('') + '</select>' +
-      '<input type="number" step="any" inputmode="decimal" value="' + esc(r.amount) + '" onchange="sessRows[' + i + '].amount=this.value" style="max-width:120px">' +
+      '<label class="sub" style="display:flex;align-items:center;gap:6px;margin:0" title="What this student is charged for this session (their usual rate). Change it only for this session if needed.">Fee <input type="number" step="any" inputmode="decimal" value="' + esc(r.amount) + '" onchange="sessRows[' + i + '].amount=this.value" style="max-width:90px"> ' + esc(r.currency) + '</label>' +
       '<select onchange="sessRows[' + i + '].participation=this.value"><option value="">Participation…</option>' + PARTICIPATION.map(function (p) {
         return '<option' + (r.participation === p ? ' selected' : '') + '>' + p + '</option>';
       }).join('') + '</select></div>' +
