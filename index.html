@@ -302,7 +302,7 @@ function persist() {
 // fraction of a second instead of asking Google for each screen. Right after a save, screens ask Google directly
 // (as before) until the new data has been uploaded (usually within a minute).
 var READ_URL = 'https://tutoring-hub.abdelrahmanzein.workers.dev';
-var SNAP_ACTIONS = ['meetDraft', 'prospects', 'money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
+var SNAP_ACTIONS = ['nextHomework', 'meetDraft', 'prospects', 'money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
 var SNAP_AT = {}, STALE_SINCE = 0, SNAP_LOADING = null, POLL_T = null;
 
 // Downloads the three blobs; redraws the screen you're on if anything changed.
@@ -407,7 +407,11 @@ function waitForSave(id, action, opts) {
           savingMark(-1, true);
           if (opts.confirmed) opts.confirmed(d);
         }
-        loadSnapshots();                                      // the server uploaded the new data right after saving
+        if (r.ok && STALE_WRITES.indexOf(action) >= 0) {
+          // Money or sessions changed: screens read fresh from the server until the new upload arrives (~30 s).
+          staleAll(); afterSave(true);
+          if (refreshView) { var y = window.scrollY; refreshView(); window.scrollTo(0, y); }
+        } else afterSave(false);
       }).catch(function () {});
   }, 4000);
 }
