@@ -2038,7 +2038,7 @@ function showTodo() {
     parts.push('<div id="todo-up"></div>');
     if (d.homework.length) parts.push('<h2>Homework not submitted</h2>' + d.homework.map(function (h, hi) {
       return '<div class="card"><b>' + esc(h.group) + '</b><div class="sub">' + esc(h.title) + ' · was due ' + esc(fmtDate(String(h.due).slice(0, 10))) +
-        (h.link ? ' · <a href="' + esc(h.link) + '" target="_blank">📁 folder</a>' : '') + '</div><div class="chips">' +
+        '</div><div class="chips">' + (h.link ? '<a class="chip folder-chip" href="' + esc(h.link) + '" target="_blank">🗂️ Submissions</a>' : '') +
         h.missing.map(function (p, pi) { return '<button class="chip hw-miss" onclick="missingSheet(' + hi + ',' + pi + ')">❌ ' + esc(p.name) + '</button>'; }).join('') + '</div></div>';
     }).join(''));
     if (d.uploads.length) parts.push('<h2>Who uploaded this?</h2>' + d.uploads.map(function (u, i) {
@@ -2071,7 +2071,7 @@ function drawUpcomingHomework() {
       if (!box) return;
       box.innerHTML = UP_HW.length ? '<h2>Homework due soon</h2>' + UP_HW.map(function (o, i) {
         return '<div class="card"><b>' + esc(o.s.group) + '</b><div class="sub">' + esc(o.x.homework.title) + ' · due ' + esc(dueLabel(o.x.homework.due)) +
-          (o.x.homework.link ? ' · <a href="' + esc(o.x.homework.link) + '" target="_blank">📁 submissions</a>' : '') + '</div><div class="chips">' +
+          '</div><div class="chips">' + (o.x.homework.link ? '<a class="chip folder-chip" href="' + esc(o.x.homework.link) + '" target="_blank">🗂️ Submissions</a>' : '') +
           o.x.students.map(function (p) { return '<span class="chip hw-' + (HW_CLASS[p.hw] || 'none') + '">' + (HW_ICON[p.hw] || '') + ' ' + esc(p.name) + '</span>'; }).join('') + '</div>' +
           '<div class="actions"><button onclick="hwReminder(' + i + ')">💬 Send reminder</button></div></div>';
       }).join('') : '';
