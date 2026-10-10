@@ -468,6 +468,11 @@ function refreshFromServer() {
 function call(action, args, done, opts) {
   opts = opts || {};
   var key = action + '|' + JSON.stringify(args || {}), myView = VIEW, cached = CACHE[key];
+  // A student's money screen (payment and adjustment forms) is part of their page's data, already on the phone.
+  if (action === 'moneyStudent' && !(args && args.fresh)) {
+    var prof = CACHE['profile|' + JSON.stringify({ id: args.id })];
+    if (prof && prof.data && prof.data.money && (prof.snap || prof.at)) { hideSplash(); return done(prof.data.money); }
+  }
   // Fast path: straight from the read service's data (waits for the first download if it's still coming).
   if (READ_URL && !STALE_SINCE && SNAP_ACTIONS.indexOf(action) >= 0 && !(args && args.fresh)) {
     if (cached && cached.snap) { hideSplash(); return done(cached.data); }
