@@ -1778,9 +1778,9 @@ function showGroup(name) {
       '<div class="card"><b>Next sessions</b>' + (d.times.length ? d.times.map(function (t) {
         return '<div class="sub">' + esc(fmtDate(t.slice(0, 10))) + ' · ' + esc(t.slice(11)) + ' (Cairo)</div>'; }).join('') : '<div class="sub">None in the calendar for 3 weeks.</div>') +
         '<div class="actions">' +
-        (d.folder ? '<button onclick="window.open(\'' + esc(d.folder) + '\',\'_blank\')">📁 Assignments</button>' : '') +
         (g['WhatsApp link'] ? '<button onclick="window.open(\'' + esc(g['WhatsApp link']) + '\',\'_blank\')">💬 WhatsApp group</button>' : '') +
         '</div></div>' +
+      assignmentsBox(d) +
       '<h2>' + d.members.length + ' students</h2>' + d.members.map(function (m, i) {
         return '<div class="card"><div class="item"><div class="nav-row" style="flex:1" onclick="showProfile(\'' + esc(m.id) + '\')"><span><b>' + esc(m.name) + '</b>' +
           '<div class="sub">' + esc(m.country || '') + ' · since ' + (m.firstEver || m.since ? esc(fmtDate(m.firstEver || m.since)) : '?') + (m.role && m.role !== 'Member' ? ' · ' + esc(m.role) : '') + '</div></span><span>›</span></div>' +
@@ -1808,6 +1808,43 @@ function sessionsTable(d) {
     d.members.map(function (m) {
       return ['<b>' + esc(m.name.split(' ')[0]) + '</b>'].concat(d.sessions.map(function (s) { return mark(d.attendance[s.id + '|' + m.id]); }));
     }).concat([['<span class="sub">Title</span>'].concat(d.sessions.map(function (s) { return '<span class="sub">' + esc(String(s.title || '').slice(0, 28)) + '</span>'; }))]));
+}
+
+// The group's homework, newest first: tap one for each student's status and its Drive folder.
+var HW_COUNT_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Excused': '🙏', 'Not yet': '⏳' };
+function assignmentsBox(d) {
+  var list = d.assignments || [];
+  return '<details class="card"><summary><b>Assignments (' + list.length + ')</b>' + (d.folder ? ' · <a href="' + esc(d.folder) + '" target="_blank" onclick="event.stopPropagation()">open the folder</a>' : '') + '</summary>' +
+    (list.length ? list.map(function (a, i) {
+      var c = {};
+      a.students.forEach(function (s) { if (s.status) c[s.status] = (c[s.status] || 0) + 1; });
+      return '<details style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px"><summary><b>' + esc(a.number) + '. ' + esc(a.title) + '</b>' +
+        '<div class="sub">' + (a.due ? 'due ' + esc(fmtDate(String(a.due).slice(0, 10))) + ' · ' : '') + ['On time', 'Late', 'Missing', 'Excused', 'Not yet'].filter(function (k) { return c[k]; })
+          .map(function (k) { return HW_COUNT_ICON[k] + ' ' + c[k]; }).join('  ') + '</div></summary>' +
+        '<div class="chips">' + a.students.map(function (s) {
+          return '<button class="chip hw-' + (HW_CLASS[s.status] || 'none') + '" onclick="groupHw(' + i + ',\'' + esc(s.id) + '\')">' + (HW_ICON[s.status] || '') + ' ' + esc(s.name) + (s.manual ? ' ✎' : '') + '</button>';
+        }).join('') + '</div>' +
+        (a.url ? '<div class="sub" style="margin-top:6px"><a href="' + esc(a.url) + '" target="_blank">📁 Open this homework\'s folder</a></div>' : '') + '</details>';
+    }).join('') : '<div class="sub" style="margin-top:6px">No homework recorded yet.</div>') + '</details>';
+}
+
+// A student's homework in the list: open their page, their upload, or set the status.
+function groupHw(i, id) {
+  var a = GROUP.assignments[i], s = a.students.filter(function (x) { return x.id === id; })[0];
+  sheet(s.name + ' · ' + a.number + '. ' + a.title, '<div class="sub">' + (s.status ? 'Now: ' + esc(s.status) + (s.manual ? ' (set by hand)' : '') : 'No record yet') + '</div>' +
+    (s.file ? '<div style="margin-top:6px"><a href="' + esc(s.file) + '" target="_blank">Open their upload</a></div>' : '') +
+    '<div class="actions">' + [['On time', 'On time'], ['Late', 'Late'], ['Missing', 'Not submitted'], ['Excused', 'Excused']].map(function (o) {
+      return '<button onclick="groupHwSet(' + i + ',\'' + esc(id) + '\',\'' + o[0] + '\')">' + o[1] + '</button>'; }).join('') +
+    (s.manual ? '<button class="secondary" onclick="groupHwSet(' + i + ',\'' + esc(id) + '\',\'\')">Back to automatic</button>' : '') + '</div>' +
+    '<button style="width:100%;margin-top:10px" onclick="closeSheet();showProfile(\'' + esc(id) + '\')">Open ' + esc(s.name) + '\'s page</button>');
+}
+function groupHwSet(i, id, status) {
+  var a = GROUP.assignments[i], name = GROUP.group['Group'];
+  call('setHomework', { assignmentId: a.id, id: id, status: status, reason: 'Set from Groups' }, function () {}, { optimistic: function () {
+    closeSheet();
+    patchLocal(function () { var g = cached('group', { group: name }); if (g) g.assignments.forEach(function (x) { if (x.id === a.id) x.students.forEach(function (s) { if (s.id === id) { if (status) { s.status = status; s.manual = true; } else s.manual = false; } }); }); });
+    showGroup(name);
+  } });
 }
 
 // Saves status, WhatsApp link and notes.
