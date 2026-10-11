@@ -263,7 +263,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['planQuiz', 'saveQuizMarks', 'quizSentHome', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -304,7 +304,7 @@ function persist() {
 // fraction of a second instead of asking Google for each screen. Right after a save, screens ask Google directly
 // (as before) until the new data has been uploaded (usually within a minute).
 var READ_URL = 'https://tutoring-hub.abdelrahmanzein.workers.dev';
-var SNAP_ACTIONS = ['adminData', 'tutors', 'joinList', 'rate', 'nextHomework', 'meetDraft', 'prospects', 'money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
+var SNAP_ACTIONS = ['quizzes', 'adminData', 'tutors', 'joinList', 'rate', 'nextHomework', 'meetDraft', 'prospects', 'money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
 var SNAP_AT = {}, STALE_SINCE = 0, SNAP_LOADING = null, POLL_T = null;
 
 // Downloads the three blobs; redraws the screen you're on if anything changed.
@@ -362,8 +362,8 @@ function cached(action, args) { var c = CACHE[action + '|' + JSON.stringify(args
 // then "Saved ✓". If Google refuses one (e.g. the balance changed meanwhile), you get "Not saved: why".
 var QUEUE_ACTIONS = ['setHomework', 'updateGroup', 'assignUpload', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession',
   'undoSession', 'updateStudent', 'addAccount', 'confirmAccount', 'undoStudentEdit', 'moveStudent', 'joinCancel',
-  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate', 'shareRecording', 'logMessage', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment'];
-var QUEUE_LABEL = { recordPayment: 'payment', addAdjustment: 'adjustment', logSession: 'session', undoSession: 'undo', updateStudent: 'student edit', setHomework: 'homework' };
+  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate', 'shareRecording', 'logMessage', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'planQuiz', 'saveQuizMarks', 'quizSentHome'];
+var QUEUE_LABEL = { recordPayment: 'payment', addAdjustment: 'adjustment', logSession: 'session', undoSession: 'undo', updateStudent: 'student edit', setHomework: 'homework', planQuiz: 'quiz', saveQuizMarks: 'quiz marks' };
 
 function newId() {
   var a = new Uint8Array(12); (window.crypto || window.msCrypto).getRandomValues(a);
@@ -1430,7 +1430,7 @@ function showProfile(id) {
       '<button class="secondary" style="margin:0 0 10px" onclick="adjustForm(\'' + esc(id) + '\')">✎ Waive, correct or refund</button>' +
       '<div class="card" id="ledger">' + ledgerRows(entries.slice(0, 10), id) +
       ((m.entryCount || entries.length) > 10 ? '<button class="small" style="margin-top:8px" onclick="document.getElementById(\'ledger\').innerHTML = ledgerRows(lastMoneyStudent.entries, \'' + esc(id) + '\')">Show all ' + (m.entryCount || entries.length) + ' entries</button>' : '') + '</div>' +
-      (p.homework ? homeworkCard(p.homework, id) : '') +
+      (p.homework ? homeworkCard(p.homework, id) : '') + quizCard(id) +
       '<h2>Info</h2><div class="card"><dl>' + info.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + (r[0].indexOf('WhatsApp') >= 0 ? r[1] : esc(r[1])) + '</dd>'; }).join('') + '</dl></div>' +
       '<h2>Accounts</h2><div class="card">' + (p.detail.accounts.map(function (a) {
         return '<div class="item"><div>' + esc(a['Value']) + '<div class="sub">' + esc(a['Type']) + (a['Whose'] ? ' · ' + esc(a['Whose']) : '') + '</div></div>' +
@@ -1514,6 +1514,8 @@ function sessionCard(s) {
     '<div class="sub">' + esc(s.start) + '–' + esc(s.end) + ' (Cairo)</div>' +
     (s.homework ? '<div class="sub">Homework: ' + esc(s.homework.title) + ' · due ' + esc(dueLabel(s.homework.due)) + '</div>' +
       (s.homework.link ? '<div class="chips" style="margin-top:6px"><a class="chip folder-chip" href="' + esc(s.homework.link) + '" target="_blank">🗂️ Submissions</a></div>' : '') : '') +
+    (s.quiz ? '<div class="sub">📝 Quiz: <b>' + esc(s.quiz.topic) + '</b>' + (s.quiz.max ? ' · out of ' + esc(s.quiz.max) : '') + '</div>' : '') +
+    (s.noHomework && !s.homework ? '<div class="sub">No homework due this session</div>' : '') +
     (s.pastPapers ? '<div class="sub">Past papers</div><div class="chips" style="margin-top:6px"><a class="chip act" href="' + esc(s.pastPapers.link) + '" target="_blank">📊 Follow-up sheet</a></div>' : '') +
     (s.note ? '<div class="note">📌 Note from ' + esc(fmtDate(s.note.from)) + ': ' + esc(s.note.text) + '</div>' : '') +
     (s.trials && s.trials.length ? '<div class="note">🆕 Trial: ' + s.trials.map(function (t) { return esc(t.name); }).join(', ') + '</div>' : '') +
@@ -1527,7 +1529,9 @@ function sessionCard(s) {
     (s.status === 'Logged' || s.status === 'Did not happen' ? '' :
       '<button class="primary"' + (s.canLog ? '' : ' disabled') + ' onclick="sessionForm(' + i + ')">Log session</button>' +
       (s.status === 'Upcoming' ? '' : '<button class="secondary" onclick="notHeldForm(' + i + ')">Didn\'t happen</button>')) +
-    '</div>' + (s.status === 'Upcoming' ? '<div class="chips" style="justify-content:flex-end;margin-top:8px"><a class="chip act danger" href="#" onclick="notHeldForm(' + i + ');return false">🚫 Cancel this session</a></div>' : '') + '</div>';
+    '</div>' + (s.status === 'Logged' || s.status === 'Did not happen' ? '' : '<div class="chips" style="justify-content:flex-end;margin-top:8px">' +
+      '<a class="chip act" href="#" onclick="planQuizForm(' + i + ');return false">📝 ' + (s.quiz ? 'Edit the quiz' : 'Plan a quiz') + '</a>' +
+      (s.status === 'Upcoming' ? '<a class="chip act danger" href="#" onclick="notHeldForm(' + i + ');return false">🚫 Cancel this session</a>' : '') + '</div>') + '</div>';
 }
 
 // "Didn't happen": not charged, with the reason, and optionally a make-up session added to the calendar.
@@ -1649,21 +1653,26 @@ function undoSess(id) {
 
 // The log form, opened from a session card (group and date filled in): who attended, amounts, and a note for next time.
 // From a card, Meet fills in attendance, lateness and participation; you check and change anything before saving.
-var sessMeet = null, sessEvent = null, SESS_ID = '', SESS_HW = null;
+var sessMeet = null, sessEvent = null, SESS_ID = '', SESS_HW = null, SESS_QUIZ = null;
 function sessionForm(i) {
   newView();
   var d = sessData, s = typeof i === 'number' ? WEEK[i] : null;
   sessMeet = null; sessEvent = s ? s.eventId : null; SESS_ID = s ? s.sessionId : '';
+  var q = s && s.quiz; SESS_QUIZ = q || null;
   document.getElementById('main').innerHTML = '<button class="back" onclick="showToday()">‹ Cancel</button><h2>Log ' + (s ? esc(s.group) + ' · ' + esc(fmtDate(s.day)) : 'a session') + '</h2>' +
     '<div class="card"><div class="sub">Group</div>' + sel('sg', s ? s.group : '', [['', 'Pick a group']].concat(d.groups.map(function (g) { return [g, g]; }))) +
     '<div class="sub" style="margin-top:8px">Date</div><input id="sd" type="date" value="' + (s ? s.day : today()) + '">' +
     '<div class="sub" style="margin-top:8px">What was it</div><input id="st" list="stl" value="Group Session"><datalist id="stl"><option>Group Session</option><option>Recorded Session</option><option>Quiz Session</option><option>1-on-1 Session</option></datalist>' +
-    '<div class="sub" style="margin-top:8px">Next homework (optional: its folder is made with this title)</div>' +
-    '<div class="filters" style="margin:0;align-items:center"><b id="snhn" style="flex:none;min-width:2em">…</b><input id="snh" placeholder="Title, e.g. Rational Functions"></div><div id="snhx" class="sub"></div>' +
+    '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="sq" style="width:auto"' + (q ? ' checked' : '') + ' onchange="quizToggle()"> 📝 Quiz this session</label>' +
+    '<div id="sqf" style="display:' + (q ? '' : 'none') + '">' + quizFields('sq', q) + '</div>' +
+    '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="snoh" style="width:auto"' + (q ? ' checked' : '') + ' onchange="noHwToggle()"> No homework for next session</label>' +
+    '<div id="snhb" style="display:' + (q ? 'none' : '') + '"><div class="sub" style="margin-top:8px">Next homework (optional: its folder is made with this title)</div>' +
+    '<div class="filters" style="margin:0;align-items:center"><b id="snhn" style="flex:none;min-width:2em">…</b><input id="snh" placeholder="Title, e.g. Rational Functions"></div><div id="snhx" class="sub"></div></div>' +
     '<div class="sub" style="margin-top:8px">Note for next session (shows on its card)</div><textarea id="sn" rows="2" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)"></textarea></div>' +
     '<div id="smeet"></div><div id="srows"></div>';
   document.getElementById('sg').onchange = function () { sessEvent = null; sessMeet = null; SESS_ID = ''; loadNextHomework(); drawMeetBox(); fillSessionRows(); };
   document.getElementById('sd').onchange = document.getElementById('sg').onchange;
+  document.getElementById('st').onchange = function () { var on = /quiz/i.test(this.value); if (on !== document.getElementById('sq').checked) { document.getElementById('sq').checked = on; quizToggle(); } };
   if (s) { fillSessionRows(); loadMeet(); }
   loadNextHomework();
 }
@@ -1787,14 +1796,23 @@ function drawSessionRows() {
 
 // Saves the session; the server refuses a second log of the same group and date.
 function saveSession() {
+  var quiz = quizValues('sq'), noHw = document.getElementById('snoh').checked;
+  if (quiz && !quiz.topic) return notice('Enter the quiz topic (or untick "Quiz this session").');
+  if (quiz) try { localStorage.setItem('quizInstr', quiz.instructions); } catch (e) {}
   var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value,
-    noteNext: document.getElementById('sn').value, homeworkNumber: SESS_HW ? SESS_HW.number : '', nextHomework: (document.getElementById('snh') || {}).value || '', rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined };
+    noteNext: document.getElementById('sn').value, homeworkNumber: SESS_HW ? SESS_HW.number : '', nextHomework: (document.getElementById('snh') || {}).value || '', rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined,
+    noHomework: noHw, quiz: quiz || (SESS_QUIZ ? false : null) };
+  if (noHw) args.nextHomework = '';
   call('logSession', args, function (r) {
     if (r.queued) {
       var sid = args.sessionId || args.date + ' ' + args.group;
       patchLocal(function () {
         var w = cached('week'); if (w) w.forEach(function (x) { if (x.sessionId === sid) x.status = 'Logged'; });
         var t = cached('todo'); if (t) t.toLog = t.toLog.filter(function (x) { return x.sessionId !== sid; });
+        // The quiz now waits for marks (and absent students get it at home, once the server has prepared the message).
+        if (quiz && t && t.quizzes) t.quizzes.marks.unshift({ id: (SESS_QUIZ && SESS_QUIZ.id) || 'Q-' + args.date.replace(/-/g, '') + '-' + args.group.replace(/\s+/g, ''),
+          group: args.group, topic: quiz.topic, date: args.date, max: quiz.max, missing: 0, pending: true,
+          students: args.rows.filter(function (r) { return r.status !== 'Not charged'; }).map(function (r) { return { id: r.id, name: r.name, mark: '', absent: r.status !== 'Attended' }; }) });
       });
       // Each charge shows in the student's balance at once.
       args.rows.filter(function (r) { return r.status !== 'Not charged' && Number(r.amount) > 0; }).forEach(function (r) {
@@ -1824,6 +1842,128 @@ function sendRecording(i) {
   var a = LOGGED.absent[i], rec = LOGGED.recording;
   rec.forEach(function (x) { call('shareRecording', { fileId: x.id }, function () {}, { optimistic: function () {}, quiet: true }); });
   waSend(a.phone, 'Hi ' + a.first + ', here is the recording of the session you missed:\n' + rec.map(function (x) { return x.url; }).join('\n') + '\nPlease watch it before the next session.', 'Recording to absent student', { studentId: a.id });
+}
+
+// ---------- Quizzes ----------
+// One after each chapter: planned on an upcoming session (or ticked when logging). Absent students take it at home
+// (To do prepares the message to their parent with your instructions); marks are entered later from To do.
+var QUIZ_INSTR = 'One sitting, within the time written on the quiz, with no notes or help (calculator only where allowed). Please photograph every page and send it to me on WhatsApp within 2 days.';
+function quizFields(p, q) {
+  q = q || {};
+  var instr = q.instructions; if (!instr) { try { instr = localStorage.getItem('quizInstr'); } catch (e) {} }
+  return '<div class="sub" style="margin-top:6px">Topic (the chapter)</div><input id="' + p + 't" value="' + esc(q.topic || '') + '" placeholder="e.g. Functions">' +
+    '<div class="sub" style="margin-top:6px">Total marks</div><input id="' + p + 'm" type="number" inputmode="numeric" min="1" value="' + esc(q.max || '') + '" placeholder="e.g. 45">' +
+    '<div class="sub" style="margin-top:6px">Instructions for taking it at home (sent to absent students\' parents)</div><textarea id="' + p + 'i" rows="3" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)">' + esc(instr || QUIZ_INSTR) + '</textarea>' +
+    '<div class="sub" style="margin-top:6px">Link to the quiz (optional: a Drive file for absent students)</div><input id="' + p + 'l" value="' + esc(q.link || '') + '" placeholder="https://drive.google.com/…">';
+}
+function quizValues(p) {
+  var on = document.getElementById(p); if (on && on.type === 'checkbox' && !on.checked) return null;
+  return { topic: document.getElementById(p + 't').value.trim(), max: document.getElementById(p + 'm').value, instructions: document.getElementById(p + 'i').value.trim(), link: document.getElementById(p + 'l').value.trim() };
+}
+function quizToggle() {
+  var on = document.getElementById('sq').checked;
+  document.getElementById('sqf').style.display = on ? '' : 'none';
+  document.getElementById('snoh').checked = on; noHwToggle();
+  var st = document.getElementById('st'); if (on && st.value === 'Group Session') st.value = 'Quiz Session'; else if (!on && st.value === 'Quiz Session') st.value = 'Group Session';
+}
+function noHwToggle() { document.getElementById('snhb').style.display = document.getElementById('snoh').checked ? 'none' : ''; }
+
+// "Plan a quiz" on a session card: shows on the card and in the reminder.
+function planQuizForm(i) {
+  var s = WEEK[i];
+  sheet('📝 Quiz · ' + s.group + ' · ' + fmtDate(s.day), quizFields('pq', s.quiz) +
+    '<button class="primary" style="width:100%;margin-top:12px" onclick="savePlanQuiz(' + i + ')">Save</button>');
+}
+function savePlanQuiz(i) {
+  var s = WEEK[i], q = quizValues('pq');
+  if (!q.topic) return notice('Enter the quiz topic.');
+  try { localStorage.setItem('quizInstr', q.instructions); } catch (e) {}
+  call('planQuiz', Object.assign({ group: s.group, day: s.day, sessionId: s.sessionId }, q), function () {}, { optimistic: function () {
+    closeSheet();
+    var had = s.quiz;
+    var add = function (x) {
+      x.quiz = Object.assign({}, x.quiz || { status: 'Planned' }, q);
+      // The reminder gets the quiz line after the times (the server does the same from now on).
+      if (x.reminder) {
+        var t = String(x.reminder).replace(/\n📝 We have a quiz on "[^"]*" \(the whole chapter\)\./, ''), k = t.indexOf('\n\n'), line = '\n📝 We have a quiz on "' + q.topic + '" (the whole chapter).';
+        x.reminder = k < 0 ? t + line : t.slice(0, k) + line + t.slice(k);
+      }
+    };
+    add(s);
+    patchLocal(function () { var w = cached('week'); if (w) w.forEach(function (x) { if (x.sessionId === s.sessionId) add(x); }); });
+    redrawSessionCards();
+    if (!had) notice('Quiz planned. When you log this session, "No homework for next session" is ticked for you.');
+  } });
+}
+
+// Entering marks (from To do): raw marks; levels 1–7 are worked out from everyone who took the same quiz.
+var QM = null;
+function quizMarksForm(k) {
+  QM = TODO.quizzes.marks[k];
+  newView();
+  setBack('To do', 'To do', showTodo);
+  document.getElementById('main').innerHTML = '<button class="back" onclick="showTodo()">‹ To do</button><h2>📝 ' + esc(QM.topic) + ' · ' + esc(QM.group) + '</h2>' +
+    '<div class="sub" style="margin:-4px 0 8px">' + esc(fmtDate(String(QM.date).slice(0, 10))) + (QM.max ? ' · out of ' + esc(QM.max) : '') + '. Leave a mark empty to fill it in later.</div>' +
+    QM.students.map(function (p, j) {
+      return '<div class="card"><div class="item" style="align-items:center"><span><b>' + esc(p.name) + '</b>' + (p.absent ? '<div class="sub">Absent · ' + (p.sentHome ? 'sent home ' + esc(fmtDate(String(p.sentHome).slice(0, 10))) : 'not sent home yet') + '</div>' : '') + '</span>' +
+        '<input id="qm' + j + '" type="number" inputmode="decimal" min="0"' + (QM.max ? ' max="' + esc(QM.max) + '"' : '') + ' step="0.5" value="' + esc(p.mark) + '" style="width:5.5em;flex:none" placeholder="' + (QM.max ? '/' + esc(QM.max) : 'Mark') + '"></div>' +
+        (p.absent ? '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="qh' + j + '" style="width:auto"' + (p.atHome || p.sentHome ? ' checked' : '') + '> Taken at home</label>' : '') + '</div>';
+    }).join('') +
+    '<button class="primary" style="width:100%;margin-top:6px" onclick="hold(this);saveQuizMarks()">Save marks</button>';
+}
+function saveQuizMarks() {
+  var marks = {}, atHome = {}, bad = '';
+  QM.students.forEach(function (p, j) {
+    var v = document.getElementById('qm' + j).value.trim();
+    if (v !== '' && (isNaN(v) || Number(v) < 0 || (QM.max && Number(v) > Number(QM.max)))) bad = p.name;
+    marks[p.id] = v === '' ? '' : Number(v);
+    var h = document.getElementById('qh' + j); if (h && h.checked) atHome[p.id] = true;
+  });
+  if (bad) { document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; b.textContent = 'Save marks'; }); return notice('Check ' + bad + '\'s mark' + (QM.max ? ' (0 to ' + QM.max + ')' : '') + '.'); }
+  var q = QM;
+  call('saveQuizMarks', { quizId: q.id, marks: marks, atHome: atHome }, function () {}, { optimistic: function () {
+    patchLocal(function () {
+      var t = cached('todo'); if (!t || !t.quizzes) return;
+      var all = Object.keys(marks).every(function (id) { return marks[id] !== ''; });
+      t.quizzes.marks = t.quizzes.marks.filter(function (x) { return x.id !== q.id || !all; });
+      t.quizzes.marks.forEach(function (x) { if (x.id === q.id) x.students.forEach(function (p) { p.mark = marks[p.id]; p.atHome = !!atHome[p.id]; }); });
+      // A student with a mark no longer needs the quiz sent home.
+      t.quizzes.home = t.quizzes.home.filter(function (x) { return !(x.quizId === q.id && marks[x.id] !== '' && marks[x.id] !== undefined); });
+    });
+    showTodo();
+  } });
+}
+
+// Sends the quiz to an absent student's parent (WhatsApp, your instructions) and notes it.
+function quizSendHome(k) {
+  var h = TODO.quizzes.home[k];
+  waSend(h.phone, h.message, 'Quiz sent home', { studentId: h.id });
+  call('quizSentHome', { quizId: h.quizId, id: h.id }, function () {}, { optimistic: function () {}, quiet: true });
+  patchLocal(function () { var t = cached('todo'); if (t && t.quizzes) t.quizzes.home = t.quizzes.home.filter(function (x) { return !(x.quizId === h.quizId && x.id === h.id); }); });
+  showTodo();
+}
+
+// A student's quizzes (their page): raw mark and level, like the family sees, plus where they stand.
+function quizCard(id) {
+  var qs = (cached('quizzes') || []).filter(function (q) { return q.marks[id]; });
+  if (!qs.length) return '';
+  return '<h2>Quizzes</h2><div class="card">' + qs.map(function (q) {
+    var m = q.marks[id];
+    return '<div class="item"><span>' + esc(q.topic) + '<div class="sub">' + esc(fmtDate(String(q.date).slice(0, 10))) + (m.atHome ? ' · at home' : m.absent ? ' · absent' : '') + '</div></span><span style="text-align:right">' +
+      (m.mark === '' ? '<span class="sub">no mark yet</span>' : '<b>' + esc(m.mark) + (q.max ? '/' + esc(q.max) : '') + '</b>' + (m.level ? '<div class="sub">Level ' + esc(m.level) + ' of 7</div>' : '')) + '</span></div>';
+  }).join('') + '</div>';
+}
+
+// A group's quizzes (group page): average and how many marks are in.
+function groupQuizzes(group) {
+  var qs = (cached('quizzes') || []).filter(function (q) { return q.group === group; });
+  if (!qs.length) return '';
+  return '<h2>Quizzes</h2><div class="card">' + qs.map(function (q) {
+    var ms = Object.keys(q.marks).map(function (k) { return q.marks[k].mark; }).filter(function (x) { return x !== ''; });
+    var avg = ms.length ? Math.round(ms.reduce(function (a, b) { return a + b; }, 0) / ms.length * 10) / 10 : '';
+    return '<div class="item"><span>' + esc(q.topic) + '<div class="sub">' + esc(fmtDate(String(q.date).slice(0, 10))) + ' · ' + esc(q.status) + '</div></span><span style="text-align:right">' +
+      (ms.length ? 'avg <b>' + avg + (q.max ? '/' + esc(q.max) : '') + '</b><div class="sub">' + ms.length + ' of ' + Object.keys(q.marks).length + ' marked</div>' : '<span class="sub">no marks yet</span>') + '</span></div>';
+  }).join('') + '</div>';
 }
 </script>
 
@@ -1868,6 +2008,7 @@ function showGroup(name) {
           '<div class="sub">' + esc(m.country || '') + ' · since ' + (m.firstEver || m.since ? esc(fmtDate(m.firstEver || m.since)) : '?') + (m.role && m.role !== 'Member' ? ' · ' + esc(m.role) : '') + '</div></span><span>›</span></div>' +
           '<button class="small" style="width:auto;flex:none" onclick="moveForm(' + i + ')">Move</button></div><div id="mv' + i + '"></div></div>';
       }).join('') +
+      groupQuizzes(g['Group']) +
       '<h2>Recent sessions</h2>' + sessionsTable(d) +
       (d.sessions.length ? '<div class="sub" style="margin:-4px 0 4px">Correct a session:</div><div class="chips" style="margin:0 0 8px">' + d.sessions.filter(function (s) { return s.status === 'Logged'; }).map(function (s) {
         return '<a class="chip act" href="#" onclick="editSession(\'' + esc(s.id) + '\');return false">✏️ ' + esc(fmtDate(s.date).slice(0, 5)) + '</a>'; }).join('') + '</div>' : '') +
@@ -2067,6 +2208,16 @@ function showTodo() {
     if (d.recordings && d.recordings.length) parts.push('<h2>Recordings to send</h2>' + d.recordings.map(function (r, i) {
       return '<div class="card"><div class="item"><span><b>' + esc(r.first) + '</b> missed ' + esc(r.group) + '<div class="sub">' + esc(fmtDate(r.date)) + '</div></span></div>' +
         (r.links.length ? '<div class="actions"><button class="primary" onclick="sendRec(' + i + ')">💬 Send the recording</button></div>' : '<div class="sub">Meet hasn\'t saved the recording yet.</div>') + '</div>';
+    }).join(''));
+    var qz = d.quizzes || { marks: [], home: [] };
+    if (qz.home.length) parts.push('<h2>Quizzes to send home</h2>' + qz.home.map(function (h, k) {
+      return '<div class="card"><div class="item"><span><b>' + esc(h.name) + '</b> missed the ' + esc(h.topic) + ' quiz<div class="sub">' + esc(h.group) + (h.phone ? '' : ' · no parent WhatsApp: you pick the chat') + '</div></span></div>' +
+        '<div class="actions"><button class="primary" onclick="quizSendHome(' + k + ')">💬 Send to the parent</button></div></div>';
+    }).join(''));
+    if (qz.marks.length) parts.push('<h2>Quiz marks to enter</h2>' + qz.marks.map(function (q, k) {
+      var left = q.students ? q.students.filter(function (p) { return p.mark === '' || p.mark === undefined; }).length : q.missing;
+      return '<div class="card nav-row" onclick="' + (q.students ? 'quizMarksForm(' + k + ')' : '') + '"><span><b>📝 ' + esc(q.topic) + '</b><div class="sub">' + esc(q.group) + ' · ' + esc(fmtDate(String(q.date).slice(0, 10))) +
+        ' · ' + left + ' mark' + (left === 1 ? '' : 's') + ' to enter</div></span><span>Enter ›</span></div>';
     }).join(''));
     parts.push('<div id="todo-pay"></div>');
     parts.push('<div id="todo-up"></div>');

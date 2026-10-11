@@ -74,10 +74,11 @@ function draw(p) {
     var hwc = function (s) { return s === 'On time' || s === 'Excused' ? 'ok' : s === 'Late' ? 'late' : s === 'Missing' ? 'miss' : ''; };
     var amountCol = p.reportCovers === 'amount';
     html += '<h2>' + (amountCol ? 'The ' + rows.length + ' sessions in this amount' : 'Recent sessions') + '</h2>' +
-      '<div class="card tbl"><table><thead><tr><th>Session</th><th>Attendance</th><th>Participation</th><th>Homework for this session</th>' + (amountCol ? '<th class="num">Fee</th>' : '') + '</tr></thead><tbody>' +
+      '<div class="card tbl"><table><thead><tr><th>Session</th><th>Attendance</th><th>Participation</th><th>Homework for this session</th>' + (rows.some(function (r) { return r.quiz; }) ? '<th>Quiz</th>' : '') + (amountCol ? '<th class="num">Fee</th>' : '') + '</tr></thead><tbody>' +
       rows.map(function (r) {
         return '<tr><td>' + esc(day(r.date)) + '</td><td>' + att(r) + '</td><td>' + (r.participation ? esc(r.participation) : '<span class="sub">–</span>') + '</td>' +
           '<td>' + (r.homework ? '<span class="' + hwc(r.homework.status) + '">' + esc(r.homework.status) + '</span> <span class="sub">' + esc(r.homework.title) + '</span>' : '<span class="sub">–</span>') + '</td>' +
+          (rows.some(function (x) { return x.quiz; }) ? '<td>' + (r.quiz ? esc(r.quiz.topic) + ': <b>' + esc(r.quiz.mark) + (r.quiz.max ? '/' + esc(r.quiz.max) : '') + '</b>' + (r.quiz.level ? ' · Level ' + esc(r.quiz.level) : '') : '<span class="sub">–</span>') + '</td>' : '') +
           (amountCol ? '<td class="num">' + money(r.amount, c) + '</td>' : '') + '</tr>';
       }).join('') + '</tbody></table></div>';
     var sm = p.summary || {}, light = function (label, x) {
@@ -86,10 +87,13 @@ function draw(p) {
       return '<div class="row"><span>' + dot + ' ' + label + (x.unknown ? '<div class="sub">' + x.unknown + ' of these session' + (x.unknown > 1 ? 's are' : ' is') + ' from before attendance was recorded</div>' : '') + (x.note ? '<div class="sub">' + esc(x.note) + '</div>' : '') + '</span><span>' + x.value + ' of ' + x.of + '</span></div>';
     };
     if (sm.attendance || sm.homework) html += '<div class="card">' + light('Sessions attended', sm.attendance) + light('Arrived on time', sm.punctuality && sm.attendance && sm.punctuality.of < sm.attendance.value ? Object.assign({ note: 'counted over the ' + sm.punctuality.of + ' sessions with recorded join times' }, sm.punctuality) : sm.punctuality) + light('Homework on time', sm.homework) + '</div>';
+    if (p.quizzes && p.quizzes.length) html += '<h2>Quizzes</h2><div class="card">' + p.quizzes.map(function (q) {
+      return '<div class="row"><span>' + esc(q.topic) + '<div class="sub">' + esc(d(q.date)) + (q.atHome ? ' · taken at home' : '') + '</div></span><span><b>' + esc(q.mark) + (q.max ? '/' + esc(q.max) : '') + '</b>' + (q.level ? '<div class="sub">Level ' + esc(q.level) + ' of 7</div>' : '') + '</span></div>'; }).join('') + '</div>';
     html += '<details class="card key"><summary><b>What the labels mean</b></summary>' +
       '<p><b>Attendance.</b> <span class="ok">On time</span>: joined when the session started. <span class="late">Late</span>: joined more than 2 minutes after the start (minutes shown). <span class="miss">Absent</span>: missed the session; the recording is sent and the session is charged. Attended: present, from before join times were recorded.</p>' +
       '<p><b>Participation</b> (from the session\'s transcript, compared with the rest of the group): <b>Very active</b>: spoke up and asked questions well above the group\'s average. <b>Active</b>: about the group\'s average. <b>Occasional</b>: spoke up a few times. <b>Quiet</b>: hardly spoke. "–" means it wasn\'t measured that session.</p>' +
       '<p><b>Homework.</b> <span class="ok">On time</span>: uploaded by 11:59 PM (Cairo) the night before the session. <span class="late">Late</span>: uploaded after that. <span class="miss">Missing</span>: not uploaded. Excused: agreed with Mr Zein.</p>' +
+      '<p><b>Quiz level</b> (1 to 7): where the mark falls among everyone who took the same quiz, from 1 (lowest) to 7 (highest). It is not an official IB grade.</p>' +
       '<p>🟢 most of the time · 🟡 often · 🔴 needs attention.</p></details>';
   }
   html += '<footer>Updated ' + esc(d(p.updated)) + '. If a student is absent, the recording is sent and the session is charged.</footer>';
