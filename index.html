@@ -400,7 +400,9 @@ function waitForSave(id, action, opts) {
         if (r.pending) return;
         clearInterval(t);
         var d = r.data || {};
-        if (!r.ok || d.conflict || d.changed || d.similar) {
+        // Refusals: the server said no; a payment whose balance changed meanwhile (changed === true); an edit made
+        // elsewhere (conflict). (Other saves report how many fields changed as a number, which is fine.)
+        if (!r.ok || d.conflict === true || d.changed === true || d.similar) {
           savingMark(-1);
           PATCHES = [];
           notice('Not saved: ' + (r.error || (d.changed ? 'the balance changed in the meantime. Check it and record the payment again.' :
