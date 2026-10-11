@@ -436,6 +436,32 @@ function openInApp(url, title) {
   document.body.appendChild(bg);
 }
 
+// Group messages: WhatsApp can't open a group chat with the text already typed, so with the group's invite link (Groups
+// › Details) the message is copied and the group opened, ready to paste; without one, WhatsApp opens to pick the chat.
+function groupSend(group, text, kind) {
+  var g = cached('group', { group: group }), link = g && g.group && g.group['WhatsApp link'];
+  if (link && /chat\.whatsapp\.com|wa\.me/.test(link)) {
+    var open = function () { window.open(link, '_blank'); };
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { notice('Message copied: paste it in the group.'); open(); }, function () { waSend('', text, kind); });
+    call('logMessage', { kind: kind, text: text, to: 'group ' + group }, function () {}, { optimistic: function () {}, quiet: true });
+  } else waSend('', text, kind);
+}
+
+// Send reminder: the session time, the homework, or both.
+var REM = null;
+function reminderSheet(group, timeText, hwText) {
+  REM = { group: group, time: timeText || '', hw: hwText || '' };
+  sheet('Send reminder · ' + group, '<div class="sub">What to remind them about?</div><div class="actions">' +
+    (REM.time ? '<button onclick="sendRem(\'time\')">🕒 Session time</button>' : '') +
+    (REM.hw ? '<button onclick="sendRem(\'hw\')">📚 Homework</button>' : '') +
+    (REM.time && REM.hw ? '<button class="primary" onclick="sendRem(\'both\')">🕒📚 Both</button>' : '') + '</div>');
+}
+function sendRem(which) {
+  closeSheet();
+  var text = which === 'time' ? REM.time : which === 'hw' ? REM.hw : REM.time + '\n\n' + REM.hw;
+  groupSend(REM.group, text, which === 'time' ? 'Session reminder (group)' : which === 'hw' ? 'Homework reminder (group)' : 'Session + homework reminder (group)');
+}
+
 // A homework status changed on this phone: the To do list and the student's page show it at once.
 function patchHomework(assignmentId, id, status) {
   patchLocal(function () {
@@ -1567,7 +1593,9 @@ function redrawSessionCards() {
 
 // Opens WhatsApp with the reminder ready; you pick the group chat.
 function sendReminder(i) {
-  waSend('', WEEK[i].reminder, 'Session reminder (group)');
+  // The reminder is "time" then (after a blank line) the homework / past-papers part.
+  var t = String(WEEK[i].reminder || ''), k = t.indexOf('\n\n');
+  reminderSheet(WEEK[i].group, k < 0 ? t : t.slice(0, k), k < 0 ? '' : t.slice(k + 2));
 }
 
 // "2026-10-08 23:59" -> "Thu 8 Oct, 11:59 PM".
@@ -2090,7 +2118,8 @@ function hwReminder(i) {
   var list = function (a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; };
   var text = '📝 Homework reminder: ' + o.x.homework.title + ' is due ' + dueLabel(o.x.homework.due) + ' (Cairo time).' +
     (done.length ? '\nThank you ' + list(done) + ' for submitting ✅' : '') + (left.length ? '\nStill waiting for ' + list(left) + '.' : '');
-  waSend('', text, 'Homework reminder (group)');
+  var rt = String(o.x.reminder || ''), k = rt.indexOf('\n\n');
+  reminderSheet(o.s.group, k < 0 ? rt : rt.slice(0, k), text);
 }
 
 // A student who hasn't submitted: set the status by hand, or send them a nudge.
