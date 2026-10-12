@@ -6,28 +6,45 @@
   <meta name="robots" content="noindex">
   <title>Student page · Mr Zein's Tutoring Groups</title>
   <style>
-    :root { --bg:#f3f5f9; --card:#fff; --text:#18202e; --sub:#5b6577; --line:#e3e7ef; --accent:#2457c5; --due:#b45309; --due-bg:#fff7ed; --ok:#15803d; --ok-bg:#f0fdf4; --bad:#b42318; }
-    @media (prefers-color-scheme: dark) { :root { --bg:#10141c; --card:#1a2030; --text:#e8ecf3; --sub:#9aa5b8; --line:#2c3446; --accent:#7aa2ff; --due:#fbbf24; --due-bg:#2a2112; --ok:#4ade80; --ok-bg:#12261a; --bad:#ff8a80; } }
+    :root { --bg:#f3f5f9; --card:#fff; --text:#18202e; --sub:#5b6577; --line:#e3e7ef; --accent:#2457c5; --due:#a16207; --due-bg:#fef9c3; --due-edge:#eab308; --ok:#15803d; --ok-bg:#f0fdf4; --bad:#b42318; --ahead:#1d4ed8; --ahead-bg:#dbeafe; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#10141c; --card:#1a2030; --text:#e8ecf3; --sub:#9aa5b8; --line:#2c3446; --accent:#7aa2ff; --due:#fde047; --due-bg:#2b2610; --due-edge:#ca8a04; --ok:#4ade80; --ok-bg:#12261a; --bad:#ff8a80; --ahead:#93c5fd; --ahead-bg:#14213a; } }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    main { max-width:560px; margin:0 auto; padding:20px 16px 40px; }
+    html[dir=rtl] body { font-family:"Geeza Pro","Noto Naskh Arabic",Tahoma,sans-serif; }
+    main { max-width:560px; margin:0 auto; padding:16px 16px 40px; }
+    .top { display:flex; justify-content:space-between; align-items:center; gap:10px; }
     .brand { color:var(--accent); font-weight:700; }
-    h1 { font-size:24px; margin:4px 0 0; } .ar { direction:rtl; font-family:"Geeza Pro","Noto Naskh Arabic",Tahoma,sans-serif; color:var(--sub); }
+    .lang { font:inherit; font-size:14px; border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:999px; padding:4px 12px; cursor:pointer; }
+    h1 { font-size:24px; margin:4px 0 0; } .alt { color:var(--sub); }
     h2 { font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--sub); margin:22px 0 8px; }
+    .tabs { position:sticky; top:0; z-index:3; display:flex; gap:6px; background:var(--bg); padding:12px 0 8px; margin-top:8px; }
+    .tabs button { flex:1; font:inherit; font-weight:600; border:1px solid var(--line); background:var(--card); color:var(--sub); border-radius:12px; padding:10px; cursor:pointer; }
+    .tabs button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
     .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:10px 0; }
-    .due { background:var(--due-bg); border-color:var(--due); } .due .big { color:var(--due); }
+    .due { background:var(--due-bg); border-color:var(--due-edge); } .due .big { color:var(--due); }
     .clear { background:var(--ok-bg); border-color:var(--ok); } .clear .big { color:var(--ok); }
     .big { font-size:26px; font-weight:700; }
     .row { display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid var(--line); } .row:last-child { border-bottom:0; }
     .sub { color:var(--sub); font-size:14px; }
     .ok { color:var(--ok); } .late { color:var(--due); } .miss { color:var(--bad); }
-    footer { margin-top:24px; font-size:12px; color:var(--sub); }
     .tbl { padding:6px 0; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-    .tbl table { border-collapse:collapse; width:100%; min-width:560px; font-size:14px; }
-    .tbl th { text-align:left; font-size:12px; font-weight:600; color:var(--sub); padding:6px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
+    .tbl table { border-collapse:collapse; width:100%; font-size:14px; }
+    .tbl.wide table { min-width:520px; }
+    .tbl th { text-align:start; font-size:12px; font-weight:600; color:var(--sub); padding:6px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
     .tbl td { padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap; vertical-align:top; }
-    .tbl tr:last-child td { border-bottom:0; } .tbl .num { text-align:right; }
-    .key p { font-size:14px; margin:8px 0; color:var(--text); } .key summary { cursor:pointer; }
+    .tbl tr:last-child td { border-bottom:0; } .num { text-align:end; }
+    tr.due td { background:var(--due-bg); } tr.ahead td { background:var(--ahead-bg); color:var(--ahead); } tr.total td { font-weight:700; }
+    .pill { display:inline-block; font-size:12px; font-weight:600; border-radius:999px; padding:1px 8px; }
+    .pill.due { background:var(--due-edge); color:#1f1a00; } .pill.ahead { background:var(--ahead); color:#fff; }
+    .filter { display:flex; gap:8px; flex-wrap:wrap; }
+    .filter label { font-size:12px; color:var(--sub); display:flex; flex-direction:column; gap:2px; flex:1; min-width:130px; }
+    .filter input { font:inherit; padding:8px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--text); width:100%; min-height:42px; cursor:pointer; }
+    .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+    .chips button { font:inherit; font-size:13px; border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:999px; padding:5px 11px; cursor:pointer; }
+    .chips button.on { border-color:var(--accent); color:var(--accent); font-weight:600; }
+    .key p { font-size:14px; margin:8px 0; } .key summary { cursor:pointer; }
+    svg text { font-family:inherit; }
+    footer { margin-top:24px; font-size:12px; color:var(--sub); }
   </style>
 </head>
 <body>
@@ -35,76 +52,194 @@
 <script>
 var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev';
 var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^0-9a-f]/g, '');
-var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-function d(v) { var m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? +m[3] + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1] : ''; }
-function day(v) { var m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); if (!m) return ''; var x = new Date(+m[1], +m[2] - 1, +m[3]); return DAYS[x.getDay()] + ' ' + +m[3] + ' ' + MONTHS[+m[2] - 1]; }
-function money(n, c) { var v = Math.round(Number(n) * 100) / 100; return (v % 1 ? v.toFixed(2) : String(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' ' + c; }
+var P = null, TAB = 'fin', FROM = '', TO = '', RANGE = 'last8', LANG = 'en';
+try { LANG = localStorage.getItem('lang') === 'ar' ? 'ar' : 'en'; } catch (e) {}
 
-function draw(p) {
-  var c = p.currency, html = '<div class="brand">Mr Zein\'s Tutoring Groups</div><h1>' + esc(p.name) + '</h1>' + (p.nameAr ? '<div class="ar">' + esc(p.nameAr) + '</div>' : '') +
-    (p.group ? '<div class="sub">' + esc(p.group) + '</div>' : '');
-  html += '<h2>Financials</h2>';
+// ---------- words: English (default) and Arabic ----------
+var T = {
+  en: { brand: "Mr Zein's Tutoring Groups", fin: 'Financials', perf: 'Performance', due: 'Amount due', by: 'by', how: 'How to pay', insta: 'Pay with InstaPay', last: 'Last payment',
+    covers: 'What this amount covers', session: 'Session', status: 'Status', fee: 'Fee', total: 'Total', tagDue: 'Due', tagDown: 'Down payment', notYet: 'not held yet', attended: 'Attended', absent: 'Absent',
+    soonReq: 'The payment request with the date comes shortly.', transfer: 'Noted that the transfer is on its way. Thank you.',
+    nothing: 'Nothing to pay now', ahead: function (n) { return n + ' session' + (n > 1 ? 's' : '') + ' already paid in advance.'; },
+    since: function (n, e) { return n + ' session' + (n > 1 ? 's' : '') + ' since the last payment; a payment request comes after ' + e + ' sessions.'; },
+    egp: function (n, f) { return n + ' session' + (n > 1 ? 's' : '') + ' taken since the last payment, ' + f + ' each. Shown in yellow below.'; },
+    usdEgp: function (e) { return 'Paid in Egyptian pounds at the rate on the transfer day' + (e ? ' (about ' + e + ' today)' : '') + '.'; },
+    usd: function (n, a, f) { return n + ' session' + (n > 1 ? 's' : '') + ' taken (yellow)' + (a ? ' + a down payment for the next ' + a + ' sessions (blue)' : '') + ', ' + f + ' each.'; },
+    sessions: 'Sessions', att: 'Attendance', part: 'Participation', hw: 'Homework for this session', from: 'From', to: 'To',
+    lastMonth: 'Last month', last3: 'Last 3 months', all: 'Everything', last8: 'Last 8 sessions', none: 'No sessions in these dates.',
+    onTime: 'On time', lateMin: function (m) { return 'Late, ' + m + ' min'; },
+    sAtt: 'Sessions attended', sTime: 'Arrived on time', sHw: 'Homework on time', of: 'of',
+    timed: function (n) { return 'over the ' + n + ' sessions with recorded join times'; }, early: function (n) { return n + ' of these sessions are from before join times and participation were recorded: attendance only.'; },
+    quizzes: 'Quizzes', levelOf: function (l) { return 'Level ' + l + ' of 7'; }, soon: 'Level coming soon', atHome: 'taken at home', level: 'Level',
+    note: 'A note from Mr Zein', cover: '1-on-1 sessions', with: 'with', covered: 'Covered', labels: 'What the labels mean', updated: 'Updated',
+    foot: 'If a student is absent, the recording is sent and the session is charged.',
+    key: ['<b>Due</b> (yellow): a session already taken and not paid yet. <b>Down payment</b> (blue): the next sessions, paid in advance.',
+      '<b>Attendance.</b> <span class="ok">On time</span>: joined when the session started. <span class="late">Late</span>: joined more than 2 minutes after the start (minutes shown). <span class="miss">Absent</span>: missed the session; the recording is sent and the session is charged. Attended: present, from before join times were recorded.',
+      '<b>Participation</b> (from the session\'s transcript, compared with the rest of the group): <b>Very active</b>: spoke up and asked questions well above the group\'s average. <b>Active</b>: about the group\'s average. <b>Occasional</b>: spoke up a few times. <b>Quiet</b>: hardly spoke. "–" means it wasn\'t measured that session.',
+      '<b>Homework.</b> <span class="ok">On time</span>: uploaded by 11:59 PM (Cairo) the night before the session. <span class="late">Late</span>: uploaded after that. <span class="miss">Missing</span>: not uploaded. Excused: agreed with Mr Zein.',
+      '<b>Quiz level</b> (1 to 7): where the mark falls among all the students who took the same quiz (7 is the highest). It is not an official IB grade, and it appears once everyone has taken the quiz.',
+      '🟢 most of the time · 🟡 often · 🔴 needs attention.'],
+    v: {}, invalid: 'This link is not valid.', incomplete: 'This link is not complete.', offline: 'Could not load the page. Please check the internet and try again.' },
+  ar: { brand: 'مجموعات الأستاذ زين', fin: 'الموقف المالي', perf: 'الأداء', due: 'المبلغ المستحق', by: 'بحد أقصى يوم', how: 'طريقة الدفع', insta: 'الدفع عبر إنستاباي', last: 'آخر دفعة',
+    covers: 'ما يشمله هذا المبلغ', session: 'الحصة', status: 'الحالة', fee: 'الرسوم', total: 'الإجمالي', tagDue: 'مستحق', tagDown: 'دفعة مقدمة', notYet: 'لم تُعقد بعد', attended: 'حضر', absent: 'غائب',
+    soonReq: 'يصلكم طلب الدفع وموعده قريبًا.', transfer: 'تم العلم بأن التحويل في الطريق، شكرًا لحضراتكم.',
+    nothing: 'لا يوجد مبلغ مستحق الآن', ahead: function (k) { return sessAr(k) + ' مدفوعة مقدمًا.'; },
+    since: function (k, e) { return sessAr(k) + ' منذ آخر دفعة، ويصل طلب الدفع بعد ' + sessAr(e) + '.'; },
+    egp: function (k, f) { return sessAr(k) + ' منذ آخر دفعة، ' + f + ' للحصة، موضحة باللون الأصفر بالأسفل.'; },
+    usdEgp: function (e) { return 'يُدفع بما يعادله بالجنيه المصري يوم التحويل' + (e ? ' (حوالي ' + e + ' اليوم)' : '') + '.'; },
+    usd: function (k, a, f) { return sessAr(k) + ' تمت (بالأصفر)' + (a ? ' + دفعة مقدمة لـ' + sessAr(a) + ' قادمة (بالأزرق)' : '') + '، ' + f + ' للحصة.'; },
+    sessions: 'الحصص', att: 'الحضور', part: 'المشاركة', hw: 'واجب هذه الحصة', from: 'من', to: 'إلى',
+    lastMonth: 'آخر شهر', last3: 'آخر ٣ أشهر', all: 'الكل', last8: 'آخر ٨ حصص', none: 'لا توجد حصص في هذه الفترة.',
+    onTime: 'في الموعد', lateMin: function (m) { return 'متأخر ' + m + ' دقائق'; },
+    sAtt: 'الحصص التي حضرها', sTime: 'الحضور في الموعد', sHw: 'تسليم الواجب في الموعد', of: 'من',
+    timed: function (k) { return 'من بين ' + sessAr(k) + ' سُجّل فيها وقت الدخول'; }, early: function (k) { return n(k) + ' من هذه الحصص قبل بدء تسجيل وقت الدخول والمشاركة، فيظهر فيها الحضور فقط.'; },
+    quizzes: 'الاختبارات', levelOf: function (l) { return 'المستوى ' + l + ' من ٧'; }, soon: 'يظهر المستوى قريبًا', atHome: 'أُدّي في المنزل', level: 'المستوى',
+    note: 'ملاحظة من الأستاذ زين', cover: 'حصص فردية', with: 'مع', covered: 'ما تمت تغطيته', labels: 'معنى المصطلحات', updated: 'آخر تحديث',
+    foot: 'عند غياب الطالب يُرسل له تسجيل الحصة، وتُحتسب الحصة.',
+    key: ['<b>مستحق</b> (أصفر): حصة تمت ولم تُدفع بعد. <b>دفعة مقدمة</b> (أزرق): الحصص القادمة، تُدفع مقدمًا.',
+      '<b>الحضور.</b> <span class="ok">في الموعد</span>: دخل عند بدء الحصة. <span class="late">متأخر</span>: دخل بعد بدء الحصة بأكثر من دقيقتين (مع عدد الدقائق). <span class="miss">غائب</span>: لم يحضر الحصة، ويُرسل له التسجيل وتُحتسب الحصة. حضر: حاضر، من قبل بدء تسجيل وقت الدخول.',
+      '<b>المشاركة</b> (من نص الحصة، مقارنةً ببقية المجموعة): <b>نشِط جدًا</b>: شارك وسأل أكثر بكثير من متوسط المجموعة. <b>نشِط</b>: في حدود متوسط المجموعة. <b>أحيانًا</b>: شارك بضع مرات. <b>هادئ</b>: نادرًا ما شارك. "–" تعني أنها لم تُقَس في تلك الحصة.',
+      '<b>الواجب.</b> <span class="ok">في الموعد</span>: رُفع قبل الساعة ١١:٥٩ مساءً (بتوقيت القاهرة) في الليلة السابقة للحصة. <span class="late">متأخر</span>: رُفع بعد ذلك. <span class="miss">لم يُسلَّم</span>: لم يُرفع. معفى: بالاتفاق مع الأستاذ زين.',
+      '<b>مستوى الاختبار</b> (من ١ إلى ٧): موقع الدرجة بين جميع الطلاب الذين أدّوا الاختبار نفسه (٧ هو الأعلى). وهو ليس درجة IB رسمية، ويظهر بعد أن يؤدي الجميع الاختبار.',
+      '🟢 أغلب الوقت · 🟡 كثيرًا · 🔴 يحتاج إلى متابعة.'],
+    v: { 'On time': 'في الموعد', 'Late': 'متأخر', 'Missing': 'لم يُسلَّم', 'Excused': 'معفى', 'Very active': 'نشِط جدًا', 'Active': 'نشِط', 'Occasional': 'أحيانًا', 'Quiet': 'هادئ' },
+    invalid: 'هذا الرابط غير صالح.', incomplete: 'هذا الرابط غير مكتمل.', offline: 'تعذّر تحميل الصفحة، يرجى التأكد من الاتصال بالإنترنت والمحاولة مرة أخرى.' }
+};
+function t(k) { return T[LANG][k]; }
+// Arabic counting: حصة واحدة، حصتان، ٣ حصص، ١١ حصة.
+function sessAr(k) { k = Number(k); return k === 1 ? 'حصة واحدة' : k === 2 ? 'حصتان' : k <= 10 ? n(k) + ' حصص' : n(k) + ' حصة'; }
+function n(v) { return LANG === 'ar' ? String(v).replace(/[0-9]/g, function (c) { return '٠١٢٣٤٥٦٧٨٩'[c]; }).replace(/,/g, '٬').replace(/\./g, '٫') : String(v); }
+function val(v) { return LANG === 'ar' ? (T.ar.v[v] || v) : v; }
+var MONTHS = { en: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], ar: ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'] };
+var DAYS = { en: ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'], ar: ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'] };
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function parts(v) { var m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+function d(v) { var x = parts(v); return x ? n(x.getDate()) + ' ' + MONTHS[LANG][x.getMonth()] + ' ' + n(x.getFullYear()) : ''; }
+function day(v) { var x = parts(v); return x ? DAYS[LANG][x.getDay()] + ' ' + n(x.getDate()) + ' ' + MONTHS[LANG][x.getMonth()] : ''; }
+function money(v, c) { var x = Math.round(Number(v) * 100) / 100, s = (x % 1 ? x.toFixed(2) : String(x)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); return LANG === 'ar' ? n(s) + ' ' + (c === 'EGP' ? 'جنيه' : 'دولار') : s + ' ' + c; }
+function ymd(x) { return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); }
+
+// ---------- Financials tab ----------
+function financials(p) {
+  var c = p.currency, h = '', rows = p.money || [];
   if (p.due) {
-    html += '<div class="card due"><div class="sub">Amount due</div><div class="big">' + money(p.due.amount, c) + '</div>' +
-      (p.due.by ? '<div>by ' + esc(day(p.due.by)) + '</div>' : '<div class="sub">The payment request with the date comes shortly.</div>') +
-      (p.type === 2 ? '<div class="sub">Paid as the EGP equivalent on the transfer day' + (p.due.egpToday ? ' (about ' + money(p.due.egpToday, 'EGP') + ' at today\'s rate)' : '') + '.</div>' : '') +
-      (p.type === 3 ? '<div class="sub">Covers the sessions taken and the next 4 sessions.</div>' : '') +
-      (p.due.transferSent ? '<div class="sub">Noted that the transfer is on its way. Thank you.</div>' : '') + '</div>';
-  } else {
-    html += '<div class="card clear"><div class="big">Nothing to pay now</div>' +
-      (p.aheadSessions ? '<div>' + p.aheadSessions + ' session' + (p.aheadSessions > 1 ? 's' : '') + ' already paid in advance.</div>' : '') +
-      (p.sessionsSinceLastPayment ? '<div class="sub">' + p.sessionsSinceLastPayment + ' session' + (p.sessionsSinceLastPayment > 1 ? 's' : '') + ' since the last payment; a payment request comes after ' + (p.every || 4) + ' sessions.</div>' : '') + '</div>';
-  }
-  if (p.due && p.pay) html += '<div class="card"><div class="sub">How to pay</div>' + (p.pay.kind === 'instapay'
-      ? '<a href="' + esc(p.pay.link) + '" style="display:block;text-align:center;margin-top:8px;padding:12px;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none">Pay with InstaPay</a>'
-      : '<div style="white-space:pre-wrap;margin-top:6px;font-size:15px">' + esc(p.pay.text) + '</div>') + '</div>';
-  if (p.lastPayment) html += '<div class="card"><div class="row"><span>Last payment</span><span>' + money(p.lastPayment.amount, c) + ' · ' + esc(d(p.lastPayment.date)) + '</span></div></div>';
-  if (p.note && p.note.text) html += '<h2>A note from Mr Zein</h2><div class="card"><div style="white-space:pre-wrap">' + esc(p.note.text) + '</div>' + (p.note.date ? '<div class="sub">' + esc(d(p.note.date)) + '</div>' : '') + '</div>';
-  if (p.coverNotes && p.coverNotes.length) html += '<h2>1-on-1 sessions</h2>' + p.coverNotes.map(function (c) {
-    return '<div class="card"><div class="sub">' + esc(d(c.date)) + ' · with ' + esc(c.from) + '</div>' + (c.covered ? '<div><b>Covered:</b> ' + esc(c.covered) + '</div>' : '') + '<div style="white-space:pre-wrap">' + esc(c.text) + '</div></div>'; }).join('');
-  // The sessions table (exactly the sessions in the amount due, or the recent ones), then a key to the labels.
-  var rows = p.rows || [];
-  if (rows.length) {
-    var att = function (u) {
-      if (u.attended === undefined) return '<span class="sub">No record</span>';
-      return u.attended ? (u.lateUnknown ? '<span class="ok">Attended</span>' : u.late ? '<span class="late">Late, ' + u.late + ' min</span>' : '<span class="ok">On time</span>') : '<span class="miss">Absent</span>';
-    };
-    var hwc = function (s) { return s === 'On time' || s === 'Excused' ? 'ok' : s === 'Late' ? 'late' : s === 'Missing' ? 'miss' : ''; };
-    var amountCol = p.reportCovers === 'amount';
-    html += '<h2>' + (amountCol ? 'The ' + rows.length + ' sessions in this amount' : 'Recent sessions') + '</h2>' +
-      '<div class="card tbl"><table><thead><tr><th>Session</th><th>Attendance</th><th>Participation</th><th>Homework for this session</th>' + (rows.some(function (r) { return r.quiz; }) ? '<th>Quiz</th>' : '') + (amountCol ? '<th class="num">Fee</th>' : '') + '</tr></thead><tbody>' +
+    var taken = rows.filter(function (r) { return r.kind === 'due'; }).length, ahead = rows.length - taken, fee = rows.length ? money(rows[0].amount, c) : '';
+    h += '<div class="card due"><div class="sub">' + t('due') + '</div><div class="big">' + money(p.due.amount, c) + '</div>' +
+      (p.due.by ? '<div>' + t('by') + ' ' + esc(day(p.due.by)) + '</div>' : '<div class="sub">' + t('soonReq') + '</div>') +
+      '<div class="sub">' + (p.type === 3 || ahead ? t('usd')(taken, ahead, fee) : t('egp')(taken, fee)) + '</div>' +
+      (p.type === 2 ? '<div class="sub">' + t('usdEgp')(p.due.egpToday ? money(p.due.egpToday, 'EGP') : '') + '</div>' : '') +
+      (p.due.transferSent ? '<div class="sub">' + t('transfer') + '</div>' : '') + '</div>';
+    if (p.pay) h += '<div class="card"><div class="sub">' + t('how') + '</div>' + (p.pay.kind === 'instapay'
+      ? '<a href="' + esc(p.pay.link) + '" style="display:block;text-align:center;margin-top:8px;padding:12px;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none">' + t('insta') + '</a>'
+      : '<div style="white-space:pre-wrap;margin-top:6px;font-size:15px;direction:ltr;text-align:left">' + esc(p.pay.text) + '</div>') + '</div>';
+    if (rows.length) h += '<h2>' + t('covers') + '</h2><div class="card tbl"><table><thead><tr><th>' + t('session') + '</th><th>' + t('status') + '</th><th class="num">' + t('fee') + '</th></tr></thead><tbody>' +
       rows.map(function (r) {
-        return '<tr><td>' + esc(day(r.date)) + '</td><td>' + att(r) + '</td><td>' + (r.participation ? esc(r.participation) : '<span class="sub">–</span>') + '</td>' +
-          '<td>' + (r.homework ? '<span class="' + hwc(r.homework.status) + '">' + esc(r.homework.status) + '</span> <span class="sub">' + esc(r.homework.title) + '</span>' : '<span class="sub">–</span>') + '</td>' +
-          (rows.some(function (x) { return x.quiz; }) ? '<td>' + (r.quiz ? esc(r.quiz.topic) + ': <b>' + esc(r.quiz.mark) + (r.quiz.max ? '/' + esc(r.quiz.max) : '') + '</b>' + (r.quiz.level ? ' · Level ' + esc(r.quiz.level) : '') : '<span class="sub">–</span>') + '</td>' : '') +
-          (amountCol ? '<td class="num">' + money(r.amount, c) + '</td>' : '') + '</tr>';
-      }).join('') + '</tbody></table></div>';
-    var sm = p.summary || {}, light = function (label, x) {
-      if (!x) return '';
-      var known = x.of - (x.unknown || 0), r = known ? x.value / known : 1, dot = !known ? '⚪' : r >= 0.85 ? '🟢' : r >= 0.6 ? '🟡' : '🔴';
-      return '<div class="row"><span>' + dot + ' ' + label + (x.unknown ? '<div class="sub">' + x.unknown + ' of these session' + (x.unknown > 1 ? 's are' : ' is') + ' from before attendance was recorded</div>' : '') + (x.note ? '<div class="sub">' + esc(x.note) + '</div>' : '') + '</span><span>' + x.value + ' of ' + x.of + '</span></div>';
-    };
-    if (sm.attendance || sm.homework) html += '<div class="card">' + light('Sessions attended', sm.attendance) + light('Arrived on time', sm.punctuality && sm.attendance && sm.punctuality.of < sm.attendance.value ? Object.assign({ note: 'counted over the ' + sm.punctuality.of + ' sessions with recorded join times' }, sm.punctuality) : sm.punctuality) + light('Homework on time', sm.homework) + '</div>';
-    if (p.quizzes && p.quizzes.length) html += '<h2>Quizzes</h2><div class="card">' + p.quizzes.map(function (q) {
-      return '<div class="row"><span>' + esc(q.topic) + '<div class="sub">' + esc(d(q.date)) + (q.atHome ? ' · taken at home' : '') + '</div></span><span><b>' + esc(q.mark) + (q.max ? '/' + esc(q.max) : '') + '</b>' + (q.level ? '<div class="sub">Level ' + esc(q.level) + ' of 7</div>' : q.levelSoon ? '<div class="sub">Level coming soon</div>' : '') + '</span></div>'; }).join('') + '</div>';
-    html += '<details class="card key"><summary><b>What the labels mean</b></summary>' +
-      '<p><b>Attendance.</b> <span class="ok">On time</span>: joined when the session started. <span class="late">Late</span>: joined more than 2 minutes after the start (minutes shown). <span class="miss">Absent</span>: missed the session; the recording is sent and the session is charged. Attended: present, from before join times were recorded.</p>' +
-      '<p><b>Participation</b> (from the session\'s transcript, compared with the rest of the group): <b>Very active</b>: spoke up and asked questions well above the group\'s average. <b>Active</b>: about the group\'s average. <b>Occasional</b>: spoke up a few times. <b>Quiet</b>: hardly spoke. "–" means it wasn\'t measured that session.</p>' +
-      '<p><b>Homework.</b> <span class="ok">On time</span>: uploaded by 11:59 PM (Cairo) the night before the session. <span class="late">Late</span>: uploaded after that. <span class="miss">Missing</span>: not uploaded. Excused: agreed with Mr Zein.</p>' +
-      '<p><b>Quiz level</b> (1 to 7): where the mark falls among everyone who took the same quiz, from 1 (lowest) to 7 (highest). It is not an official IB grade.</p>' +
-      '<p>🟢 most of the time · 🟡 often · 🔴 needs attention.</p></details>';
+        var hist = (p.history || []).filter(function (x) { return x.date === r.date; })[0];
+        return '<tr class="' + r.kind + '"><td>' + (r.date ? esc(day(r.date)) : '–') + '</td><td>' + (r.kind === 'ahead' ? '<span class="pill ahead">' + t('tagDown') + '</span> ' + t('notYet') :
+          '<span class="pill due">' + t('tagDue') + '</span>' + (hist ? ' <span class="' + (hist.attended ? 'ok' : 'miss') + '">' + (hist.attended ? t('attended') : t('absent')) + '</span>' : '')) + '</td><td class="num">' + money(r.amount, c) + '</td></tr>';
+      }).join('') + '<tr class="total"><td>' + t('total') + '</td><td></td><td class="num">' + money(p.due.amount, c) + '</td></tr></tbody></table></div>';
+  } else {
+    h += '<div class="card clear"><div class="big">' + t('nothing') + '</div>' + (p.aheadSessions ? '<div>' + t('ahead')(p.aheadSessions) + '</div>' : '') +
+      (p.sessionsSinceLastPayment ? '<div class="sub">' + t('since')(p.sessionsSinceLastPayment, p.every || 4) + '</div>' : '') + '</div>';
   }
-  html += '<footer>Updated ' + esc(d(p.updated)) + '. If a student is absent, the recording is sent and the session is charged.</footer>';
-  document.getElementById('main').innerHTML = html;
-  document.title = p.name + ' · Mr Zein\'s Tutoring Groups';
+  if (p.lastPayment) h += '<div class="card"><div class="row"><span>' + t('last') + '</span><span>' + money(p.lastPayment.amount, c) + ' · ' + esc(d(p.lastPayment.date)) + '</span></div></div>';
+  return h;
 }
 
-if (!KEY) document.getElementById('main').innerHTML = '<div class="card">This link is not complete.</div>';
+// ---------- Performance tab ----------
+function inRange() {
+  var all = P.history || [];
+  if (RANGE === 'last8' && !FROM && !TO) return all.slice(0, 8);
+  return all.filter(function (r) { return (!FROM || r.date >= FROM) && (!TO || r.date <= TO); });
+}
+function setRange(k) {
+  RANGE = k; TO = '';
+  var x = new Date();
+  if (k === 'last8') FROM = '';
+  else if (k === 'all') FROM = (P.history || []).length ? P.history[P.history.length - 1].date : '';
+  else { x.setDate(x.getDate() - (k === 'm1' ? 30 : 91)); FROM = ymd(x); }
+  draw();
+}
+function attCell(r) {
+  if (r.attended === undefined) return '<span class="sub">–</span>';
+  if (!r.attended) return '<span class="miss">' + t('absent') + '</span>';
+  return r.lateUnknown ? '<span class="ok">' + t('attended') + '</span>' : r.late ? '<span class="late">' + t('lateMin')(n(r.late)) + '</span>' : '<span class="ok">' + t('onTime') + '</span>';
+}
+function hwClass(s) { return s === 'On time' || s === 'Excused' ? 'ok' : s === 'Late' ? 'late' : s === 'Missing' ? 'miss' : ''; }
+function summary(list) {
+  var came = list.filter(function (r) { return r.attended; }), timed = came.filter(function (r) { return !r.lateUnknown; }), onTime = timed.filter(function (r) { return !r.late; });
+  var hw = list.filter(function (r) { return r.homework; }), hwOk = hw.filter(function (r) { return /On time|Excused/.test(r.homework.status); });
+  var early = list.filter(function (r) { return r.lateUnknown; }).length;
+  var line = function (label, a, b, note) {
+    if (!b) return '';
+    var x = a / b, dot = x >= 0.85 ? '🟢' : x >= 0.6 ? '🟡' : '🔴';
+    return '<div class="row"><span>' + dot + ' ' + label + (note ? '<div class="sub">' + note + '</div>' : '') + '</span><span>' + n(a) + ' ' + t('of') + ' ' + n(b) + '</span></div>';
+  };
+  return '<div class="card">' + line(t('sAtt'), came.length, list.length) + line(t('sTime'), onTime.length, timed.length, timed.length < came.length ? t('timed')(timed.length) : '') +
+    line(t('sHw'), hwOk.length, hw.length) + (early ? '<div class="sub" style="margin-top:6px">' + t('early')(early) + '</div>' : '') + '</div>';
+}
+// Score bars: one bar per quiz (the mark as a share of the total), the mark on top, the level underneath.
+function quizChart(qs) {
+  var shown = qs.slice(-6), W = 320, H = 150, gap = W / shown.length, rtl = LANG === 'ar';
+  var xAt = function (i) { var c = gap * i + gap / 2; return rtl ? W - c : c; };
+  var s = '<svg viewBox="0 0 ' + W + ' ' + (H + 40) + '" width="100%" role="img" aria-label="' + t('quizzes') + '">';
+  [0, 50, 100].forEach(function (pc) { var y = 20 + (H - 20) * (1 - pc / 100); s += '<line x1="0" x2="' + W + '" y1="' + y + '" y2="' + y + '" stroke="var(--line)"/><text x="' + (rtl ? W : 0) + '" y="' + (y - 3) + '" font-size="10" fill="var(--sub)" text-anchor="' + (rtl ? 'end' : 'start') + '">' + n(pc) + '%</text>'; });
+  shown.forEach(function (q, i) {
+    var pct = q.max ? Math.min(1, q.mark / q.max) : 0, h = (H - 20) * pct, y = 20 + (H - 20) - h, w = Math.min(40, gap * 0.55);
+    s += '<rect x="' + (xAt(i) - w / 2) + '" y="' + y + '" width="' + w + '" height="' + Math.max(h, 1) + '" rx="4" fill="var(--accent)" opacity="' + (q.level ? 1 : 0.55) + '"><title>' + esc(q.topic) + '</title></rect>' +
+      '<text x="' + xAt(i) + '" y="' + (y - 5) + '" font-size="11" text-anchor="middle" fill="var(--text)" font-weight="600">' + n(q.mark) + (q.max ? '/' + n(q.max) : '') + '</text>' +
+      '<text x="' + xAt(i) + '" y="' + (H + 14) + '" font-size="10" text-anchor="middle" fill="var(--sub)">' + esc(String(q.topic).replace(/^chapter\s*\d+\s*[-–:]\s*/i, '').split(/\s+/).slice(0, 2).join(' ').slice(0, 14)) + '</text>' +
+      '<text x="' + xAt(i) + '" y="' + (H + 28) + '" font-size="10" text-anchor="middle" fill="var(--text)">' + (q.level ? t('level') + ' ' + n(q.level) : '…') + '</text>';
+  });
+  return s + '</svg>';
+}
+function performance(p) {
+  var list = inRange(), h = '';
+  if (p.quizzes && p.quizzes.length) h += '<h2>' + t('quizzes') + '</h2><div class="card">' + (p.quizzes.some(function (q) { return q.max; }) ? quizChart(p.quizzes.filter(function (q) { return q.max; })) : '') +
+    p.quizzes.slice().reverse().map(function (q) {
+      return '<div class="row"><span>' + esc(q.topic) + '<div class="sub">' + esc(d(q.date)) + (q.atHome ? ' · ' + t('atHome') : '') + '</div></span><span style="text-align:end"><b>' + n(q.mark) + (q.max ? '/' + n(q.max) : '') + '</b><div class="sub">' + (q.level ? t('levelOf')(n(q.level)) : t('soon')) + '</div></span></div>';
+    }).join('') + '</div>';
+  h += '<h2>' + t('sessions') + '</h2><div class="card"><div class="filter"><label>' + t('from') + '<input type="date" id="f" value="' + FROM + '"></label><label>' + t('to') + '<input type="date" id="t" value="' + TO + '"></label></div>' +
+    '<div class="chips">' + [['last8', t('last8')], ['m1', t('lastMonth')], ['m3', t('last3')], ['all', t('all')]].map(function (o) {
+      return '<button class="' + (RANGE === o[0] ? 'on' : '') + '" onclick="setRange(\'' + o[0] + '\')">' + o[1] + '</button>'; }).join('') + '</div></div>';
+  h += list.length ? '<div class="card tbl wide"><table><thead><tr><th>' + t('session') + '</th><th>' + t('att') + '</th><th>' + t('part') + '</th><th>' + t('hw') + '</th></tr></thead><tbody>' +
+    list.map(function (r) {
+      return '<tr><td>' + esc(day(r.date)) + '</td><td>' + attCell(r) + '</td><td>' + (r.participation ? esc(val(r.participation)) : '<span class="sub">–</span>') + '</td>' +
+        '<td>' + (r.homework ? '<span class="' + hwClass(r.homework.status) + '">' + esc(val(r.homework.status)) + '</span> <span class="sub">' + esc(r.homework.title) + '</span>' : '<span class="sub">–</span>') + '</td></tr>';
+    }).join('') + '</tbody></table></div>' + summary(list) : '<div class="card sub">' + t('none') + '</div>';
+  if (p.coverNotes && p.coverNotes.length) h += '<h2>' + t('cover') + '</h2>' + p.coverNotes.map(function (c) {
+    return '<div class="card"><div class="sub">' + esc(d(c.date)) + ' · ' + t('with') + ' ' + esc(c.from) + '</div>' + (c.covered ? '<div><b>' + t('covered') + ':</b> ' + esc(c.covered) + '</div>' : '') + '<div style="white-space:pre-wrap">' + esc(c.text) + '</div></div>'; }).join('');
+  return h;
+}
+
+function draw() {
+  var p = P;
+  document.documentElement.dir = LANG === 'ar' ? 'rtl' : 'ltr';
+  document.documentElement.lang = LANG;
+  var html = '<div class="top"><div class="brand">' + t('brand') + '</div><button class="lang" onclick="setLang()">' + (LANG === 'en' ? 'العربية' : 'English') + '</button></div>' +
+    '<h1>' + esc(LANG === 'ar' && p.nameAr ? p.nameAr : p.name) + '</h1>' + (p.group ? '<div class="alt">' + esc(p.group) + '</div>' : '') +
+    '<div class="tabs"><button class="' + (TAB === 'fin' ? 'on' : '') + '" onclick="TAB=\'fin\';draw()">' + t('fin') + '</button><button class="' + (TAB === 'perf' ? 'on' : '') + '" onclick="TAB=\'perf\';draw()">' + t('perf') + '</button></div>';
+  if (p.note && p.note.text) html += '<h2>' + t('note') + '</h2><div class="card"><div style="white-space:pre-wrap">' + esc(p.note.text) + '</div>' + (p.note.date ? '<div class="sub">' + esc(d(p.note.date)) + '</div>' : '') + '</div>';
+  html += TAB === 'fin' ? financials(p) : performance(p);
+  html += '<details class="card key"><summary><b>' + t('labels') + '</b></summary>' + t('key').map(function (x) { return '<p>' + x + '</p>'; }).join('') + '</details>' +
+    '<footer>' + t('updated') + ' ' + esc(d(p.updated)) + '. ' + t('foot') + '</footer>';
+  document.getElementById('main').innerHTML = html;
+  document.title = p.name + ' · ' + t('brand');
+  // Tapping anywhere in a date field opens the calendar.
+  ['f', 't'].forEach(function (k) {
+    var el = document.getElementById(k);
+    if (!el) return;
+    el.onclick = function () { try { this.showPicker(); } catch (e) {} };
+    el.onchange = function () { if (k === 'f') FROM = this.value; else TO = this.value; RANGE = ''; draw(); };
+  });
+}
+function setLang() { LANG = LANG === 'en' ? 'ar' : 'en'; try { localStorage.setItem('lang', LANG); } catch (e) {} draw(); }
+function fail(k) { document.getElementById('main').innerHTML = '<div class="card">' + t(k) + '</div>'; }
+
+if (!KEY) fail('incomplete');
 else fetch(READ + '/p/' + KEY, { credentials: 'omit', cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
-  .then(function (p) { if (p) draw(p); else document.getElementById('main').innerHTML = '<div class="card">This link is not valid.</div>'; })
-  .catch(function () { document.getElementById('main').innerHTML = '<div class="card">Could not load the page. Please check the internet and try again.</div>'; });
+  .then(function (p) { if (p) { P = p; draw(); } else fail('invalid'); })
+  .catch(function () { fail('offline'); });
 </script>
 </body>
 </html>

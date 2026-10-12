@@ -263,7 +263,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -1373,11 +1373,12 @@ function leaveForm(id) {
   sheet('Leaving', sel('lvs', 'Left', [['Left', 'Left (stopped)'], ['Alumni', 'Alumni (graduated)']]) +
     '<div class="sub" style="margin-top:8px">Last day (their group membership ends that day)</div><input id="lvd" type="date" value="' + today() + '">' +
     '<div class="sub" style="margin-top:8px">Reason</div><input id="lvr" placeholder="e.g. finished DP, moved school">' +
+    '<div class="sub" style="margin-top:8px">Keep the family page open for</div>' + sel('lvw', '4', [['0', 'Close it now']].concat([1, 2, 3, 4, 5, 6, 7, 8].map(function (w) { return [String(w), w + ' week' + (w > 1 ? 's' : '')]; }))) +
     '<div class="sub" style="margin-top:8px">All history stays. They drop off group lists and reminders.</div>' +
     '<button class="primary" style="width:100%;margin-top:10px" onclick="saveLeave(\'' + esc(id) + '\')">Save</button>');
 }
 function saveLeave(id) {
-  var args = { id: id, status: document.getElementById('lvs').value, date: document.getElementById('lvd').value, reason: document.getElementById('lvr').value };
+  var args = { id: id, status: document.getElementById('lvs').value, date: document.getElementById('lvd').value, reason: document.getElementById('lvr').value, pageWeeks: document.getElementById('lvw').value };
   closeSheet();
   call('leaveStudent', args, function () {}, { optimistic: function () { notice('Saving… then you\'ll see if a refund or a final request is due.'); showProfile(id); },
     confirmed: function (r) {
@@ -1385,6 +1386,12 @@ function saveLeave(id) {
         '<button class="primary" style="width:100%;margin-top:10px" onclick="closeSheet();adjustForm(\'' + esc(id) + '\',{type:\'Refund\',amount:' + r.credit + ',currency:\'' + r.currency + '\',reason:\'Unused advance refunded on leaving\'})">Record the refund</button>');
       else if (r.owed > 0.5) notice(amt(r.owed, r.currency) + ' is still owed: a final payment request is ready in To do.');
     } });
+}
+
+// A new family page link (the old one stops working within minutes): the next payment request carries the new one.
+function resetLink(id) {
+  if (!confirm('Make a new page link for this family? The current link stops working within a few minutes. Their next payment request will carry the new link.')) return;
+  call('resetLivePage', { id: id }, function (r) { notice('New link ready. It goes out with their next payment request.'); });
 }
 
 // Old entry point: the student page is now the profile.
@@ -1423,7 +1430,7 @@ function showProfile(id) {
       '<div class="parabic">' + esc(i['Arabic first name'] + ' ' + i['Arabic last name']) + '</div>' +
       '<div class="sub">' + esc(group) + ' · ' + esc(st.paymentType) + '</div></div>' +
       '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button><button onclick="moveFromProfile(\'' + esc(id) + '\')">Move group</button>' +
-        (p.detail.livePage ? '<button onclick="openInApp(\'' + esc(p.detail.livePage) + '\', \'What the family sees\')">Parent page</button>' : '') +
+        (p.detail.livePage ? '<button onclick="openInApp(\'' + esc(p.detail.livePage) + '\', \'What the family sees\')">Parent page</button><button class="secondary" onclick="resetLink(\'' + esc(id) + '\')">🔄 Reset page link</button>' : '') +
         (/^(Active|Trial)$/.test(i['Status']) ? '<button onclick="coverForm(\'' + esc(id) + '\')">1-on-1 with a tutor</button>' : '') +
         (/^(Active|Trial)$/.test(i['Status']) ? '<button class="secondary" onclick="leaveForm(\'' + esc(id) + '\')">Leaving…</button>' : '') + '</div>' +
       '<h2>Money</h2>' + money +
