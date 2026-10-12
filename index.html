@@ -62,8 +62,9 @@
 
   /* Cards. A card you can tap has a hand cursor, lifts on hover and shows › on the right. */
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; }
-  .col-hide { display:none !important; }
-  .col-toggle { display:inline-block; margin-top:6px; font-size:13px; color:var(--accent); cursor:pointer; user-select:none; }
+  details.fold { margin-top:14px; }
+  details.fold > .card, details.fold .day-cards > .card { border:0; border-top:1px solid var(--line); border-radius:0; margin:0; padding:12px 0 8px; background:transparent; box-shadow:none; }
+  details.fold > summary + .card, details.fold > summary + .day-cards > .card:first-child { margin-top:8px; }
   .card[onclick] { cursor:pointer; transition:border-color .15s, box-shadow .15s, transform .05s; }
   .card[onclick]:hover { border-color:var(--accent); box-shadow:0 2px 10px rgba(36,87,197,.12); }
   .card[onclick]:active { transform:scale(.99); }
@@ -270,7 +271,7 @@ var STALE_WRITES = ['leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryD
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
 // Marks the start of a new screen; replies meant for an older screen are then ignored.
-function newView() { VIEW++; refreshView = null; return VIEW; }
+function newView() { VIEW++; refreshView = null; FOLD_ON = false; return VIEW; }
 
 // Shows/hides the thin loading bar at the top. Only for things you're waiting for (a screen with nothing to show
 // yet, or a save); quiet background refreshes never show it.
@@ -579,37 +580,36 @@ function setRefreshing(on) {
 }
 
 // Fades out the opening logo once the first screen has data (or after 8 seconds at most).
-// ---------- Long screens: cards with more than two things in them start folded ----------
-// When a screen has several cards and scrolls, a card listing more than two things (lines, chips, entries) shows only
-// its first line (and its buttons) with "Show (n)". Cards with tables or with fields to fill in never fold. Opening one
-// is remembered while the app is open.
-var OPEN_CARDS = {};
-function cardKey(c) { return (c.firstElementChild ? c.firstElementChild.textContent : c.textContent).trim().slice(0, 60); }
-function foldCards() {
-  var main = document.getElementById('main'), cards = main.querySelectorAll('.card');
-  if (cards.length < 2 || main.scrollHeight <= window.innerHeight) return;
-  cards.forEach(function (c) {
-    if (c.getAttribute('data-fold') || c.id === 'ledger' || c.tagName === 'DETAILS' || c.querySelector('table, input, select, textarea, iframe, .card')) return;
-    var items = c.querySelectorAll('.row').length + c.querySelectorAll('.chips > *').length + c.querySelectorAll('dl > dt').length + Math.max(0, c.querySelectorAll('.item').length - 1);
-    var kids = [].slice.call(c.children, 1).filter(function (k) { return !k.classList.contains('actions'); });
-    c.setAttribute('data-fold', '1');
-    if (items <= 2 || !kids.length) return;
-    var key = cardKey(c), t = document.createElement('div');
-    t.className = 'col-toggle';
-    var set = function (open) {
-      kids.forEach(function (k) { k.classList.toggle('col-hide', !open); });
-      t.textContent = open ? '▾ Hide' : '▸ Show (' + items + ')';
-      if (open) OPEN_CARDS[key] = true; else delete OPEN_CARDS[key];
-    };
-    t.onclick = function (e) { e.stopPropagation(); set(!!kids[0].classList.contains('col-hide')); };
-    c.firstElementChild.insertAdjacentElement('afterend', t);
-    set(!!OPEN_CARDS[key]);
+// ---------- Folding sections (To do and Sessions) ----------
+// Each section (a heading with its cards, e.g. "Today", "Quiz marks to enter", a day on Sessions) becomes a box
+// that opens and closes like Assignments on a group page: open when it holds one item, folded when it holds more.
+// What you open or close is remembered while the app is open.
+var FOLD_ON = false, OPEN_SECTIONS = {};
+function foldSections() {
+  if (!FOLD_ON) return;
+  var main = document.getElementById('main');
+  [].slice.call(main.querySelectorAll('h2:not([data-fold])')).forEach(function (h) {
+    h.setAttribute('data-fold', '1');
+    if (h.closest('details')) return;
+    var body = [], n = h.nextElementSibling;
+    while (n && n.tagName !== 'H2' && n.tagName !== 'DETAILS' && !n.classList.contains('no-fold') && !n.classList.contains('actions') && !/^todo-/.test(n.id || '')) { body.push(n); n = n.nextElementSibling; }
+    var count = 0;
+    body.forEach(function (x) { count += x.classList.contains('card') ? 1 : x.querySelectorAll('.card').length; });
+    if (!count) return;
+    var title = h.textContent, d = document.createElement('details');
+    d.className = 'card fold';
+    d.open = OPEN_SECTIONS[title] !== undefined ? OPEN_SECTIONS[title] : count <= 1;
+    d.innerHTML = '<summary><b>' + esc(title) + ' (' + count + ')</b></summary>';
+    h.parentNode.insertBefore(d, h);
+    body.forEach(function (x) { d.appendChild(x); });
+    h.remove();
+    d.addEventListener('toggle', function () { OPEN_SECTIONS[title] = d.open; });
   });
 }
 (function () {
   if (typeof MutationObserver === 'undefined' || !document.getElementById('main')) return;
   var pending = false;
-  new MutationObserver(function () { if (pending) return; pending = true; setTimeout(function () { pending = false; foldCards(); }, 30); })
+  new MutationObserver(function () { if (pending) return; pending = true; setTimeout(function () { pending = false; foldSections(); }, 0); })
     .observe(document.getElementById('main'), { childList: true, subtree: true });
 })();
 
@@ -1512,6 +1512,7 @@ function showToday() {
   setBack('Sessions', 'Sessions', showToday);
   refreshView = showToday;
   document.getElementById('title').textContent = 'Sessions';
+  FOLD_ON = true;
   call('week', {}, function (week) {
     week = week.map(liveStatus);
     call('sessionForm', {}, function (d) {
@@ -2339,6 +2340,7 @@ function showTodo() {
   setBack('To do', 'To do', showTodo);
   refreshView = showTodo;
   document.getElementById('title').textContent = 'To do';
+  FOLD_ON = true;
   call('todo', {}, function (d) {
     TODO = d;
     var parts = [];
@@ -2395,8 +2397,8 @@ function showTodo() {
         (u.owner ? '<div class="filters" style="margin:6px 0 0">' + sel('up' + i, '', [['', 'Which ' + esc(u.group) + ' student?']].concat(members.map(function (p) { return [p.id, p.name]; }))) +
           '<button onclick="hold(this);assignUpload(' + i + ')">Save</button></div>' : '') + '</div>';
     }).join(''));
-    document.getElementById('main').innerHTML = parts.join('') + (parts.length > 2 ? '' : '<div class="card sub">Nothing else waiting. 🎉</div>') +
-      '<div class="card sub" style="margin-top:14px">Homework is checked every night at 00:30' + (d.scannedAt ? ' (last: ' + esc(fmtDate(d.scannedAt.slice(0, 10))) + ' ' + esc(new Date(d.scannedAt).toTimeString().slice(0, 5)) + ')' : '') + '.' +
+    document.getElementById('main').innerHTML = parts.join('') + (parts.length > 2 ? '' : '<div class="card sub no-fold">Nothing else waiting. 🎉</div>') +
+      '<div class="card sub no-fold" style="margin-top:14px">Homework is checked every night at 00:30' + (d.scannedAt ? ' (last: ' + esc(fmtDate(d.scannedAt.slice(0, 10))) + ' ' + esc(new Date(d.scannedAt).toTimeString().slice(0, 5)) + ')' : '') + '.' +
       '<div class="actions"><button onclick="hold(this,\'Checking Drive…\');scanNow()">Check homework now</button></div></div>';
     drawUpcomingHomework();
     drawPayments();

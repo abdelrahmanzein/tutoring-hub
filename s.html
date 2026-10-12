@@ -42,7 +42,7 @@
     .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
     .chips button { font:inherit; font-size:13px; border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:999px; padding:5px 11px; cursor:pointer; }
     .chips button.on { border-color:var(--accent); color:var(--accent); font-weight:600; }
-    .key p { font-size:14px; margin:8px 0; } .key summary { cursor:pointer; }
+    .key p { font-size:14px; margin:10px 0; line-height:1.7; } .key summary { cursor:pointer; }
     svg text { font-family:inherit; }
     footer { margin-top:24px; font-size:12px; color:var(--sub); }
   </style>
@@ -73,12 +73,15 @@ var T = {
     markSoon: 'Mark coming soon', quizzes: 'Quizzes', levelOf: function (l) { return 'Level ' + l + ' of 7'; }, soon: 'Level coming soon', atHome: 'taken at home', level: 'Level',
     note: 'A note from Mr Zein', cover: '1-on-1 sessions', with: 'with', covered: 'Covered', labels: 'What the labels mean', updated: 'Updated',
     foot: 'If a student is absent, the recording is sent and the session is charged.',
-    keyFin: ['<b>Amount due</b>: what to pay by the date shown.', '<b>Due</b> (yellow): a session already taken and not paid yet.', '<b>Down payment</b> (blue): the next sessions, paid in advance (for families paying in blocks).',
-      '<b>Absent</b> next to a Due session: the student missed it; the recording was sent and the session is charged.', '<b>Last payment</b>: the most recent payment received.'],
-    key: ['<b>Attendance.</b> <span class="ok">On time</span>: joined when the session started. <span class="late">Late</span>: joined more than 2 minutes after the start (minutes shown). <span class="miss">Absent</span>: missed the session; the recording is sent and the session is charged. Attended: present, from before join times were recorded.',
-      '<b>Participation</b> (from the session\'s transcript, compared with the rest of the group): <b>Very active</b>: spoke up and asked questions well above the group\'s average. <b>Active</b>: about the group\'s average. <b>Occasional</b>: spoke up a few times. <b>Quiet</b>: hardly spoke. "–" means it wasn\'t measured that session.',
-      '<b>Homework.</b> <span class="ok">On time</span>: uploaded by 11:59 PM (Cairo) the night before the session. <span class="late">Late</span>: uploaded after that. <span class="miss">Missing</span>: not uploaded. Excused: agreed with Mr Zein.',
-      '<b>Quiz level</b> (1 to 7): where the mark falls among all the students who took the same quiz (7 is the highest). It is not an official IB grade, and it appears once everyone has taken the quiz.',
+    keyFin: ['<span class="pill due">Due</span> A session already taken and not paid yet.',
+      '<span class="pill ahead">Down payment</span> <span class="sub">not held yet</span> One of the next sessions, paid in advance (for families paying in blocks).',
+      '<span class="pill due">Due</span> <span class="miss">Absent</span> The student missed that session: the recording was sent, and the session is charged.',
+      '<b>Amount due</b> What to pay, by the date shown. <b>Last payment</b> The most recent payment received.'],
+    key: ['<span class="ok">On time</span> Joined when the session started.', '<span class="late">Late, 6 min</span> Joined more than 2 minutes after the start.',
+      '<span class="miss">Absent</span> Missed the session: the recording is sent and the session is charged.', '<span class="ok">Attended</span> Present, from before join times were recorded.',
+      '<b>Participation</b> (from the session\'s transcript, compared with the rest of the group): Very active = well above the group\'s average · Active = about average · Occasional = a few times · Quiet = hardly spoke · <span class="sub">–</span> = not measured that session.',
+      '<span class="ok">On time</span> <span class="sub">4. Title</span> Homework uploaded by 11:59 PM (Cairo) the night before the session. <span class="late">Late</span> uploaded after that. <span class="miss">Missing</span> not uploaded. <span class="ok">Excused</span> agreed with Mr Zein.',
+      '<b>34/40</b> <span class="sub">Level 5 of 7</span> The quiz mark, and where it falls among all the students who took the same quiz (7 is the highest; not an official IB grade). <span class="sub">Level coming soon</span> until everyone has taken it.',
       '🟢 most of the time · 🟡 often · 🔴 needs attention.'],
     v: {}, invalid: 'This link is not valid.', incomplete: 'This link is not complete.', offline: 'Could not load the page. Please check the internet and try again.' },
   ar: { brand: 'مجموعات الأستاذ زين', fin: 'الموقف المالي', perf: 'الأداء', due: 'المبلغ المستحق', by: 'بحد أقصى يوم', how: 'طريقة الدفع', insta: 'الدفع عبر إنستاباي', last: 'آخر دفعة',
@@ -97,12 +100,15 @@ var T = {
     markSoon: 'تظهر الدرجة قريبًا', quizzes: 'الاختبارات', levelOf: function (l) { return 'المستوى ' + l + ' من ٧'; }, soon: 'يظهر المستوى قريبًا', atHome: 'أُدّي في المنزل', level: 'المستوى',
     note: 'ملاحظة من الأستاذ زين', cover: 'حصص فردية', with: 'مع', covered: 'ما تمت تغطيته', labels: 'معنى المصطلحات', updated: 'آخر تحديث',
     foot: 'عند غياب الطالب يُرسل له تسجيل الحصة، وتُحتسب الحصة.',
-    keyFin: ['<b>المبلغ المستحق</b>: ما يُدفع بحد أقصى في الموعد الموضح.', '<b>مستحق</b> (أصفر): حصة تمت ولم تُدفع بعد.', '<b>دفعة مقدمة</b> (أزرق): الحصص القادمة، تُدفع مقدمًا (للأسر التي تدفع على دفعات).',
-      '<b>غائب</b> بجوار حصة مستحقة: لم يحضر الطالب الحصة، وأُرسل له التسجيل وتُحتسب الحصة.', '<b>آخر دفعة</b>: أحدث دفعة تم استلامها.'],
-    key: ['<b>الحضور.</b> <span class="ok">في الموعد</span>: دخل عند بدء الحصة. <span class="late">متأخر</span>: دخل بعد بدء الحصة بأكثر من دقيقتين (مع عدد الدقائق). <span class="miss">غائب</span>: لم يحضر الحصة، ويُرسل له التسجيل وتُحتسب الحصة. حضر: حاضر، من قبل بدء تسجيل وقت الدخول.',
-      '<b>المشاركة</b> (من نص الحصة، مقارنةً ببقية المجموعة): <b>نشِط جدًا</b>: شارك وسأل أكثر بكثير من متوسط المجموعة. <b>نشِط</b>: في حدود متوسط المجموعة. <b>أحيانًا</b>: شارك بضع مرات. <b>هادئ</b>: نادرًا ما شارك. "–" تعني أنها لم تُقَس في تلك الحصة.',
-      '<b>الواجب.</b> <span class="ok">في الموعد</span>: رُفع قبل الساعة ١١:٥٩ مساءً (بتوقيت القاهرة) في الليلة السابقة للحصة. <span class="late">متأخر</span>: رُفع بعد ذلك. <span class="miss">لم يُسلَّم</span>: لم يُرفع. معفى: بالاتفاق مع الأستاذ زين.',
-      '<b>مستوى الاختبار</b> (من ١ إلى ٧): موقع الدرجة بين جميع الطلاب الذين أدّوا الاختبار نفسه (٧ هو الأعلى). وهو ليس درجة IB رسمية، ويظهر بعد أن يؤدي الجميع الاختبار.',
+    keyFin: ['<span class="pill due">مستحق</span> حصة تمت ولم تُدفع بعد.',
+      '<span class="pill ahead">دفعة مقدمة</span> <span class="sub">لم تُعقد بعد</span> إحدى الحصص القادمة، تُدفع مقدمًا (للأسر التي تدفع على دفعات).',
+      '<span class="pill due">مستحق</span> <span class="miss">غائب</span> لم يحضر الطالب تلك الحصة، وأُرسل له التسجيل وتُحتسب الحصة.',
+      '<b>المبلغ المستحق</b> ما يُدفع بحد أقصى في الموعد الموضح. <b>آخر دفعة</b> أحدث دفعة تم استلامها.'],
+    key: ['<span class="ok">في الموعد</span> دخل عند بدء الحصة.', '<span class="late">متأخر ٦ دقائق</span> دخل بعد بدء الحصة بأكثر من دقيقتين.',
+      '<span class="miss">غائب</span> لم يحضر الحصة، ويُرسل له التسجيل وتُحتسب الحصة.', '<span class="ok">حضر</span> حاضر، من قبل بدء تسجيل وقت الدخول.',
+      '<b>المشاركة</b> (من نص الحصة، مقارنةً ببقية المجموعة): نشِط جدًا = أعلى بكثير من متوسط المجموعة · نشِط = في حدود المتوسط · أحيانًا = بضع مرات · هادئ = نادرًا ما شارك · <span class="sub">–</span> = لم تُقَس في تلك الحصة.',
+      '<span class="ok">في الموعد</span> <span class="sub">4. Title</span> رُفع الواجب قبل الساعة ١١:٥٩ مساءً (بتوقيت القاهرة) في الليلة السابقة للحصة. <span class="late">متأخر</span> رُفع بعد ذلك. <span class="miss">لم يُسلَّم</span> لم يُرفع. <span class="ok">معفى</span> بالاتفاق مع الأستاذ زين.',
+      '<b>٣٤/٤٠</b> <span class="sub">المستوى ٥ من ٧</span> درجة الاختبار، وموقعها بين جميع الطلاب الذين أدّوا الاختبار نفسه (٧ هو الأعلى، وليس درجة IB رسمية). <span class="sub">يظهر المستوى قريبًا</span> حتى يؤدي الجميع الاختبار.',
       '🟢 أغلب الوقت · 🟡 كثيرًا · 🔴 يحتاج إلى متابعة.'],
     v: { 'On time': 'في الموعد', 'Late': 'متأخر', 'Missing': 'لم يُسلَّم', 'Excused': 'معفى', 'Very active': 'نشِط جدًا', 'Active': 'نشِط', 'Occasional': 'أحيانًا', 'Quiet': 'هادئ' },
     invalid: 'هذا الرابط غير صالح.', incomplete: 'هذا الرابط غير مكتمل.', offline: 'تعذّر تحميل الصفحة، يرجى التأكد من الاتصال بالإنترنت والمحاولة مرة أخرى.' }
