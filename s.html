@@ -52,7 +52,7 @@
 <script>
 var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev';
 var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^0-9a-f]/g, '');
-var P = null, TAB = 'fin', FROM = '', TO = '', RANGE = 'last8', LANG = 'en';
+var P = null, TAB = 'fin', FROM = '', TO = ymd(new Date()), RANGE = 'last8', LANG = 'en';
 try { LANG = localStorage.getItem('lang') === 'ar' ? 'ar' : 'en'; } catch (e) {}
 
 // ---------- words: English (default) and Arabic ----------
@@ -70,7 +70,7 @@ var T = {
     onTime: 'On time', lateMin: function (m) { return 'Late, ' + m + ' min'; },
     sAtt: 'Sessions attended', sTime: 'Arrived on time', sHw: 'Homework on time', of: 'of',
     timed: function (n) { return 'over the ' + n + ' sessions with recorded join times'; }, early: function (n) { return n + ' of these sessions are from before join times and participation were recorded: attendance only.'; },
-    quizzes: 'Quizzes', levelOf: function (l) { return 'Level ' + l + ' of 7'; }, soon: 'Level coming soon', atHome: 'taken at home', level: 'Level',
+    markSoon: 'Mark coming soon', quizzes: 'Quizzes', levelOf: function (l) { return 'Level ' + l + ' of 7'; }, soon: 'Level coming soon', atHome: 'taken at home', level: 'Level',
     note: 'A note from Mr Zein', cover: '1-on-1 sessions', with: 'with', covered: 'Covered', labels: 'What the labels mean', updated: 'Updated',
     foot: 'If a student is absent, the recording is sent and the session is charged.',
     key: ['<b>Due</b> (yellow): a session already taken and not paid yet. <b>Down payment</b> (blue): the next sessions, paid in advance.',
@@ -93,7 +93,7 @@ var T = {
     onTime: 'في الموعد', lateMin: function (m) { return 'متأخر ' + m + ' دقائق'; },
     sAtt: 'الحصص التي حضرها', sTime: 'الحضور في الموعد', sHw: 'تسليم الواجب في الموعد', of: 'من',
     timed: function (k) { return 'من بين ' + sessAr(k) + ' سُجّل فيها وقت الدخول'; }, early: function (k) { return n(k) + ' من هذه الحصص قبل بدء تسجيل وقت الدخول والمشاركة، فيظهر فيها الحضور فقط.'; },
-    quizzes: 'الاختبارات', levelOf: function (l) { return 'المستوى ' + l + ' من ٧'; }, soon: 'يظهر المستوى قريبًا', atHome: 'أُدّي في المنزل', level: 'المستوى',
+    markSoon: 'تظهر الدرجة قريبًا', quizzes: 'الاختبارات', levelOf: function (l) { return 'المستوى ' + l + ' من ٧'; }, soon: 'يظهر المستوى قريبًا', atHome: 'أُدّي في المنزل', level: 'المستوى',
     note: 'ملاحظة من الأستاذ زين', cover: 'حصص فردية', with: 'مع', covered: 'ما تمت تغطيته', labels: 'معنى المصطلحات', updated: 'آخر تحديث',
     foot: 'عند غياب الطالب يُرسل له تسجيل الحصة، وتُحتسب الحصة.',
     key: ['<b>مستحق</b> (أصفر): حصة تمت ولم تُدفع بعد. <b>دفعة مقدمة</b> (أزرق): الحصص القادمة، تُدفع مقدمًا.',
@@ -149,11 +149,11 @@ function financials(p) {
 // ---------- Performance tab ----------
 function inRange() {
   var all = P.history || [];
-  if (RANGE === 'last8' && !FROM && !TO) return all.slice(0, 8);
+  if (RANGE === 'last8') return all.filter(function (r) { return !TO || r.date <= TO; }).slice(0, 8);
   return all.filter(function (r) { return (!FROM || r.date >= FROM) && (!TO || r.date <= TO); });
 }
 function setRange(k) {
-  RANGE = k; TO = '';
+  RANGE = k; TO = ymd(new Date());
   var x = new Date();
   if (k === 'last8') FROM = '';
   else if (k === 'all') FROM = (P.history || []).length ? P.history[P.history.length - 1].date : '';
@@ -195,9 +195,9 @@ function quizChart(qs) {
 }
 function performance(p) {
   var list = inRange(), h = '';
-  if (p.quizzes && p.quizzes.length) h += '<h2>' + t('quizzes') + '</h2><div class="card">' + (p.quizzes.some(function (q) { return q.max; }) ? quizChart(p.quizzes.filter(function (q) { return q.max; })) : '') +
+  if (p.quizzes && p.quizzes.length) h += '<h2>' + t('quizzes') + '</h2><div class="card">' + (p.quizzes.some(function (q) { return q.max && !q.pending; }) ? quizChart(p.quizzes.filter(function (q) { return q.max && !q.pending; })) : '') +
     p.quizzes.slice().reverse().map(function (q) {
-      return '<div class="row"><span>' + esc(q.topic) + '<div class="sub">' + esc(d(q.date)) + (q.atHome ? ' · ' + t('atHome') : '') + '</div></span><span style="text-align:end"><b>' + n(q.mark) + (q.max ? '/' + n(q.max) : '') + '</b><div class="sub">' + (q.level ? t('levelOf')(n(q.level)) : t('soon')) + '</div></span></div>';
+      return '<div class="row"><span>' + esc(q.topic) + '<div class="sub">' + esc(d(q.date)) + (q.atHome ? ' · ' + t('atHome') : '') + '</div></span><span style="text-align:end">' + (q.pending ? '<span class="sub">' + t('markSoon') + '</span>' : '<b>' + n(q.mark) + (q.max ? '/' + n(q.max) : '') + '</b><div class="sub">' + (q.level ? t('levelOf')(n(q.level)) : t('soon')) + '</div>') + '</span></div>';
     }).join('') + '</div>';
   h += '<h2>' + t('sessions') + '</h2><div class="card"><div class="filter"><label>' + t('from') + '<input type="date" id="f" value="' + FROM + '"></label><label>' + t('to') + '<input type="date" id="t" value="' + TO + '"></label></div>' +
     '<div class="chips">' + [['last8', t('last8')], ['m1', t('lastMonth')], ['m3', t('last3')], ['all', t('all')]].map(function (o) {
