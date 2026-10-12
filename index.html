@@ -1664,7 +1664,7 @@ function sessionForm(i) {
     '<div class="sub" style="margin-top:8px">Date</div><input id="sd" type="date" value="' + (s ? s.day : today()) + '">' +
     '<div class="sub" style="margin-top:8px">What was it</div><input id="st" list="stl" value="Group Session"><datalist id="stl"><option>Group Session</option><option>Recorded Session</option><option>Quiz Session</option><option>1-on-1 Session</option></datalist>' +
     '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="sq" style="width:auto"' + (q ? ' checked' : '') + ' onchange="quizToggle()"> 📝 Quiz this session</label>' +
-    '<div id="sqf" style="display:' + (q ? '' : 'none') + '">' + quizFields('sq', q) + '</div>' +
+    '<div id="sqf" style="display:' + (q ? '' : 'none') + '">' + quizFields('sq', q, s ? s.group : '') + '</div>' +
     '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="snoh" style="width:auto"' + (q ? ' checked' : '') + ' onchange="noHwToggle()"> No homework for next session</label>' +
     '<div id="snhb" style="display:' + (q ? 'none' : '') + '"><div class="sub" style="margin-top:8px">Next homework (optional: its folder is made with this title)</div>' +
     '<div class="filters" style="margin:0;align-items:center"><b id="snhn" style="flex:none;min-width:2em">…</b><input id="snh" placeholder="Title, e.g. Rational Functions"></div><div id="snhx" class="sub"></div></div>' +
@@ -1848,10 +1848,26 @@ function sendRecording(i) {
 // One after each chapter: planned on an upcoming session (or ticked when logging). Absent students take it at home
 // (To do prepares the message to their parent with your instructions); marks are entered later from To do.
 var QUIZ_INSTR = 'One sitting, within the time written on the quiz, with no notes or help (calculator only where allowed). Please photograph every page and send it to me on WhatsApp within 2 days.';
-function quizFields(p, q) {
+// The same quiz given to another group of the batch: its quizzes are compared (levels across groups) only when the
+// topic matches exactly, so "Same quiz as…" copies the topic, total marks, instructions and link from it.
+var SAME_Q = [];
+function sameQuizChips(p, group) {
+  var batch = String(group || '').replace(/\s*G\d+\s*$/i, '').trim(), seen = {};
+  SAME_Q = quizList().filter(function (x) { return x.batch === batch && x.group !== group && !seen[x.topic.toLowerCase()] && (seen[x.topic.toLowerCase()] = true); });
+  if (!SAME_Q.length) return '';
+  return '<div class="sub" style="margin-top:6px">Same quiz as another group?</div><div class="chips" style="margin-top:2px">' + SAME_Q.map(function (x, k) {
+    return '<a class="chip act" href="#" onclick="useSameQuiz(\'' + p + '\',' + k + ');return false">📝 ' + esc(x.topic) + ' (' + esc(x.group.replace(batch, '').trim()) + ', ' + esc(fmtDate(String(x.date).slice(0, 10)).slice(0, 5)) + ')</a>'; }).join('') + '</div>';
+}
+function useSameQuiz(p, k) {
+  var x = SAME_Q[k];
+  document.getElementById(p + 't').value = x.topic; document.getElementById(p + 'm').value = x.max || '';
+  document.getElementById(p + 'i').value = x.instructions || ''; document.getElementById(p + 'l').value = x.link || '';
+  notice('Copied from ' + x.group + ': the levels will be worked out across both groups.');
+}
+function quizFields(p, q, group) {
   q = q || {};
   var instr = q.instructions; if (!instr) { try { instr = localStorage.getItem('quizInstr'); } catch (e) {} }
-  return '<div class="sub" style="margin-top:6px">Topic (the chapter)</div><input id="' + p + 't" value="' + esc(q.topic || '') + '" placeholder="e.g. Functions">' +
+  return (group && !q.topic ? sameQuizChips(p, group) : '') + '<div class="sub" style="margin-top:6px">Topic (the chapter)</div><input id="' + p + 't" value="' + esc(q.topic || '') + '" placeholder="e.g. Functions">' +
     '<div class="sub" style="margin-top:6px">Total marks</div><input id="' + p + 'm" type="number" inputmode="numeric" min="1" value="' + esc(q.max || '') + '" placeholder="e.g. 45">' +
     '<div class="sub" style="margin-top:6px">Instructions for taking it at home (sent to absent students\' parents)</div><textarea id="' + p + 'i" rows="3" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)">' + esc(instr || QUIZ_INSTR) + '</textarea>' +
     '<div class="sub" style="margin-top:6px">Link to the quiz (optional: a Drive file for absent students)</div><input id="' + p + 'l" value="' + esc(q.link || '') + '" placeholder="https://drive.google.com/…">';
@@ -1871,7 +1887,7 @@ function noHwToggle() { document.getElementById('snhb').style.display = document
 // "Plan a quiz" on a session card: shows on the card and in the reminder.
 function planQuizForm(i) {
   var s = WEEK[i];
-  sheet('📝 Quiz · ' + s.group + ' · ' + fmtDate(s.day), quizFields('pq', s.quiz) +
+  sheet('📝 Quiz · ' + s.group + ' · ' + fmtDate(s.day), quizFields('pq', s.quiz, s.group) +
     '<button class="primary" style="width:100%;margin-top:12px" onclick="savePlanQuiz(' + i + ')">Save</button>');
 }
 function savePlanQuiz(i) {
