@@ -1552,7 +1552,7 @@ function saveNotHeld(i) {
       var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove();
       patchLocal(function () {
         var w = cached('week'); if (w) w.forEach(function (x) { if (x.sessionId === s.sessionId) x.status = 'Did not happen'; });
-        var t = cached('todo'); if (t) t.toLog = t.toLog.filter(function (x) { return x.sessionId !== s.sessionId; });
+        var t = cached('todo'); if (t) { t.toLog = t.toLog.filter(function (x) { return x.sessionId !== s.sessionId; }); (t.soon || []).forEach(function (x) { if (x.sessionId === s.sessionId) x.status = 'Did not happen'; }); }
       });
       goBack();
     },
@@ -1808,7 +1808,7 @@ function saveSession() {
       var sid = args.sessionId || args.date + ' ' + args.group;
       patchLocal(function () {
         var w = cached('week'); if (w) w.forEach(function (x) { if (x.sessionId === sid) x.status = 'Logged'; });
-        var t = cached('todo'); if (t) t.toLog = t.toLog.filter(function (x) { return x.sessionId !== sid; });
+        var t = cached('todo'); if (t) { t.toLog = t.toLog.filter(function (x) { return x.sessionId !== sid; }); (t.soon || []).forEach(function (x) { if (x.sessionId === sid) x.status = 'Logged'; }); }
         // The quiz now waits for marks (and absent students get it at home, once the server has prepared the message).
         if (quiz && t && t.quizzes) t.quizzes.marks.unshift({ id: (SESS_QUIZ && SESS_QUIZ.id) || 'Q-' + args.date.replace(/-/g, '') + '-' + args.group.replace(/\s+/g, ''),
           group: args.group, topic: quiz.topic, date: args.date, max: quiz.max, missing: 0, pending: true,
@@ -2193,6 +2193,20 @@ function showTodo() {
   call('todo', {}, function (d) {
     TODO = d;
     var parts = [];
+    // Today's sessions, by the clock: ended ones (not logged) join "Sessions to log" at once.
+    var todays = (d.soon || []).filter(function (s) { return s.day === today() && s.status !== 'Logged' && s.status !== 'Did not happen'; }).map(liveStatus);
+    var live = cached('weekLive') || {};
+    todays.filter(function (s) { return s.status === 'Needs review'; }).forEach(function (s) {
+      if (!d.toLog.some(function (x) { return x.sessionId === s.sessionId; })) d.toLog.unshift({ group: s.group, day: s.day, start: s.start, eventId: s.eventId, sessionId: s.sessionId });
+    });
+    todays = todays.filter(function (s) { return s.status !== 'Needs review'; });
+    if (todays.length) parts.push('<h2>Today</h2>' + todays.map(function (s) {
+      var hw = live[s.sessionId] && live[s.sessionId].homework;
+      return '<div class="card"><div class="item"><span><b>' + esc(s.group) + '</b><div class="sub">' + esc(s.start) + '–' + esc(s.end) + (s.quiz ? ' · 📝 Quiz: ' + esc(s.quiz) : '') + '</div></span>' +
+        '<span class="tag ' + (STATUS_TAG[s.status] || '') + '">' + esc(s.status) + '</span></div><div class="chips">' +
+        (s.folder ? '<a class="chip folder-chip" href="' + esc(s.folder) + '" target="_blank">🗂️ Assignments</a>' : '') +
+        (hw && hw.link ? '<a class="chip folder-chip" href="' + esc(hw.link) + '" target="_blank">📥 ' + esc(hw.title) + '</a>' : '') + '</div></div>';
+    }).join(''));
     if (d.toLog.length) parts.push('<h2>Sessions to log</h2>' + d.toLog.map(function (s) {
       return '<div class="card"><div class="item"><span><b>' + esc(s.group) + '</b><div class="sub">' + esc(fmtDate(s.day)) + ' · ' + esc(s.start) + '</div></span></div>' +
         '<div class="actions"><button class="primary" onclick="logFromTodo(\'' + esc(s.sessionId) + '\')">Log session</button>' +
