@@ -2299,7 +2299,7 @@ function nudge(hi, pi) {
 // Sends an absent student the recording (sharing it so they can open it) and logs it.
 function sendRec(i) {
   var r = TODO.recordings[i];
-  waSend(r.phone, 'Hi ' + r.first + ', here is the recording of the session you missed:\n' + r.links.join('\n') + '\nPlease watch it before the next session.', 'Recording to absent student', { studentId: r.id });
+  waSend(r.phone, 'Hi ' + r.first + ', here is the recording of the ' + r.group + ' session you missed (' + fmtDate(r.date) + '):\n' + r.links.join('\n') + '\nPlease watch it before the next session.', 'Recording to absent student', { studentId: r.id });
   r.links.forEach(function (u) { var m = u.match(/\/d\/([-\w]+)/); if (m) call('shareRecording', { fileId: m[1] }, function () {}, { optimistic: function () {}, quiet: true }); });
   patchLocal(function () { var t = cached('todo'); if (t) t.recordings = t.recordings.filter(function (x) { return !(x.id === r.id && x.sessionId === r.sessionId); }); });
   showTodo();
