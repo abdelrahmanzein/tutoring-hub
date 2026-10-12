@@ -263,7 +263,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['planQuiz', 'saveQuizMarks', 'quizSentHome', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -362,7 +362,7 @@ function cached(action, args) { var c = CACHE[action + '|' + JSON.stringify(args
 // then "Saved ✓". If Google refuses one (e.g. the balance changed meanwhile), you get "Not saved: why".
 var QUEUE_ACTIONS = ['setHomework', 'updateGroup', 'assignUpload', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession',
   'undoSession', 'updateStudent', 'addAccount', 'confirmAccount', 'undoStudentEdit', 'moveStudent', 'joinCancel',
-  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate', 'shareRecording', 'logMessage', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'planQuiz', 'saveQuizMarks', 'quizSentHome'];
+  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate', 'shareRecording', 'logMessage', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels'];
 var QUEUE_LABEL = { recordPayment: 'payment', addAdjustment: 'adjustment', logSession: 'session', undoSession: 'undo', updateStudent: 'student edit', setHomework: 'homework', planQuiz: 'quiz', saveQuizMarks: 'quiz marks' };
 
 function newId() {
@@ -1897,12 +1897,13 @@ function savePlanQuiz(i) {
 }
 
 // Entering marks (from To do): raw marks; levels 1–7 are worked out from everyone who took the same quiz.
-var QM = null;
-function quizMarksForm(k) {
-  QM = TODO.quizzes.marks[k];
+var QM = null, QM_BACK = null;
+function quizMarksForm(k) { openMarks(TODO.quizzes.marks[k], showTodo, 'To do'); }
+function openMarks(q, back, label) {
+  QM = q; QM_BACK = back;
   newView();
-  setBack('To do', 'To do', showTodo);
-  document.getElementById('main').innerHTML = '<button class="back" onclick="showTodo()">‹ To do</button><h2>📝 ' + esc(QM.topic) + ' · ' + esc(QM.group) + '</h2>' +
+  setBack(label, label, back);
+  document.getElementById('main').innerHTML = '<button class="back" onclick="QM_BACK()">‹ ' + esc(label) + '</button><h2>📝 ' + esc(QM.topic) + ' · ' + esc(QM.group) + '</h2>' +
     '<div class="sub" style="margin:-4px 0 8px">' + esc(fmtDate(String(QM.date).slice(0, 10))) + (QM.max ? ' · out of ' + esc(QM.max) : '') + '. Leave a mark empty to fill it in later.</div>' +
     QM.students.map(function (p, j) {
       return '<div class="card"><div class="item" style="align-items:center"><span><b>' + esc(p.name) + '</b>' + (p.absent ? '<div class="sub">Absent · ' + (p.sentHome ? 'sent home ' + esc(fmtDate(String(p.sentHome).slice(0, 10))) : 'not sent home yet') + '</div>' : '') + '</span>' +
@@ -1930,7 +1931,8 @@ function saveQuizMarks() {
       // A student with a mark no longer needs the quiz sent home.
       t.quizzes.home = t.quizzes.home.filter(function (x) { return !(x.quizId === q.id && marks[x.id] !== '' && marks[x.id] !== undefined); });
     });
-    showTodo();
+    patchLocal(function () { (cached('quizzes') || []).forEach(function (x) { if (x.id === q.id) Object.keys(marks).forEach(function (id) { if (x.marks[id]) { x.marks[id].mark = marks[id]; x.marks[id].atHome = !!atHome[id]; } }); }); });
+    QM_BACK();
   } });
 }
 
@@ -1949,7 +1951,7 @@ function quizCard(id) {
   if (!qs.length) return '';
   return '<h2>Quizzes</h2><div class="card">' + qs.map(function (q) {
     var m = q.marks[id];
-    return '<div class="item"><span>' + esc(q.topic) + '<div class="sub">' + esc(fmtDate(String(q.date).slice(0, 10))) + (m.atHome ? ' · at home' : m.absent ? ' · absent' : '') + '</div></span><span style="text-align:right">' +
+    return '<div class="item nav-row" onclick="showQuiz(\'' + esc(q.id) + '\')"><span>' + esc(q.topic) + '<div class="sub">' + esc(fmtDate(String(q.date).slice(0, 10))) + (m.atHome ? ' · at home' : m.absent ? ' · absent' : '') + '</div></span><span style="text-align:right">' +
       (m.mark === '' ? '<span class="sub">no mark yet</span>' : '<b>' + esc(m.mark) + (q.max ? '/' + esc(q.max) : '') + '</b>' + (m.level ? '<div class="sub">Level ' + esc(m.level) + ' of 7</div>' : '')) + '</span></div>';
   }).join('') + '</div>';
 }
@@ -1961,9 +1963,97 @@ function groupQuizzes(group) {
   return '<h2>Quizzes</h2><div class="card">' + qs.map(function (q) {
     var ms = Object.keys(q.marks).map(function (k) { return q.marks[k].mark; }).filter(function (x) { return x !== ''; });
     var avg = ms.length ? Math.round(ms.reduce(function (a, b) { return a + b; }, 0) / ms.length * 10) / 10 : '';
-    return '<div class="item"><span>' + esc(q.topic) + '<div class="sub">' + esc(fmtDate(String(q.date).slice(0, 10))) + ' · ' + esc(q.status) + '</div></span><span style="text-align:right">' +
+    return '<div class="item nav-row" onclick="showQuiz(\'' + esc(q.id) + '\')"><span>' + esc(q.topic) + '<div class="sub">' + esc(fmtDate(String(q.date).slice(0, 10))) + ' · ' + esc(q.status) + '</div></span><span style="text-align:right">' +
       (ms.length ? 'avg <b>' + avg + (q.max ? '/' + esc(q.max) : '') + '</b><div class="sub">' + ms.length + ' of ' + Object.keys(q.marks).length + ' marked</div>' : '<span class="sub">no marks yet</span>') + '</span></div>';
   }).join('') + '</div>';
+}
+
+// ---------- Quizzes screen (from Groups, a group's page, or To do) ----------
+// Every quiz: its details (total marks, instructions, link: editable), marks, and how the whole batch did on it
+// (all groups), with the level boundaries and "publish levels now".
+function quizList() { return cached('quizzes') || []; }
+function showQuizzes() {
+  newView();
+  setBack('Quizzes', 'Groups', showQuizzes);
+  refreshView = showQuizzes;
+  document.getElementById('title').textContent = 'Quizzes';
+  call('quizzes', {}, function (list) {
+    var byTopic = {};
+    list.forEach(function (q) { var k = q.batch + ' · ' + q.topic; (byTopic[k] = byTopic[k] || []).push(q); });
+    document.getElementById('main').innerHTML = '<button class="back" onclick="openTab(\'Groups\')">‹ Groups</button>' + (Object.keys(byTopic).map(function (k) {
+      var qs = byTopic[k];
+      return '<div class="card"><div class="sess-title">📝 ' + esc(qs[0].topic) + '</div><div class="sub">' + esc(qs[0].batch) + ' · ' + (qs[0].levelsFinal ? 'levels final' : 'levels provisional') + '</div><div class="chips">' +
+        qs.map(function (q) { var n = Object.keys(q.marks).length, done = Object.keys(q.marks).filter(function (i) { return q.marks[i].mark !== ''; }).length;
+          return '<a class="chip act" href="#" onclick="showQuiz(\'' + esc(q.id) + '\');return false">' + esc(q.group.replace(q.batch, '').trim() || q.group) + ' · ' + esc(fmtDate(String(q.date).slice(0, 10)).slice(0, 5)) + ' · ' + (q.status === 'Planned' ? 'planned' : done + '/' + n + ' marked') + '</a>'; }).join('') + '</div></div>';
+    }).join('') || '<div class="card sub">No quizzes yet. Plan one from a session card (📝 Plan a quiz).</div>');
+  });
+}
+
+function showQuiz(id) {
+  var q = quizList().filter(function (x) { return x.id === id; })[0];
+  if (!q) return showQuizzes();
+  newView();
+  setBack('Quizzes', 'Groups', showQuizzes);
+  refreshView = function () { showQuiz(id); };
+  var all = quizList().filter(function (x) { return q.cohort.indexOf(x.id) >= 0; });
+  var rows = [];
+  all.forEach(function (x) { Object.keys(x.marks).forEach(function (sid) { var m = x.marks[sid]; rows.push({ name: m.name, group: x.group, mark: m.mark, max: x.max, level: m.level, absent: m.absent, atHome: m.atHome, mine: x.id === q.id }); }); });
+  rows.sort(function (a, b) { return (b.mark === '' ? -1 : b.mark) - (a.mark === '' ? -1 : a.mark); });
+  var missingGroups = q.batchGroups.filter(function (g) { return !all.some(function (x) { return x.group === g && x.status === 'Marked'; }); });
+  var counts = [0, 0, 0, 0, 0, 0, 0]; rows.forEach(function (r) { if (r.level) counts[r.level - 1]++; });
+  var top = Math.max.apply(null, counts.concat([1]));
+  document.getElementById('main').innerHTML = '<button class="back" onclick="showQuizzes()">‹ Quizzes</button>' +
+    '<h2>📝 ' + esc(q.topic) + '</h2><div class="sub" style="margin:-4px 0 8px">' + esc(q.group) + ' · ' + esc(fmtDate(String(q.date).slice(0, 10))) + ' · ' + esc(q.status) + '</div>' +
+    '<div class="card"><div class="item"><b>Details</b><a class="chip act" href="#" onclick="editQuizForm(\'' + esc(q.id) + '\');return false">✏️ Edit</a></div>' +
+      '<div class="sub" style="margin-top:6px">Total marks</div><div>' + (q.max ? '<b>' + esc(q.max) + '</b>' : '<span class="miss">Not set yet</span>') + '</div>' +
+      '<div class="sub" style="margin-top:6px">Instructions for taking it at home</div><div style="white-space:pre-wrap">' + esc(q.instructions || '–') + '</div>' +
+      (q.link ? '<div class="chips"><a class="chip act" href="' + esc(q.link) + '" target="_blank">📄 The quiz</a></div>' : '') + '</div>' +
+    (q.status === 'Planned' ? '' : '<button class="primary" style="width:100%" onclick="quizMarksFromScreen(\'' + esc(q.id) + '\')">Enter or change marks (' + esc(q.group) + ')</button>') +
+    '<h2>Whole batch (' + esc(q.batch) + ')</h2><div class="card">' +
+      (q.stats ? '<div class="row"><span>Marks in</span><span>' + q.stats.n + '</span></div><div class="row"><span>Mean</span><span>' + q.stats.mean + (q.max ? ' / ' + esc(q.max) : '') + '</span></div><div class="row"><span>Standard deviation</span><span>' + q.stats.sd + '</span></div>' : '<div class="sub">Levels appear once 2 or more marks are in.</div>') +
+      '<div class="sub" style="margin-top:8px">' + (q.published ? '✅ Levels published ' + esc(fmtDate(String(q.published).slice(0, 10))) + ': boundaries are fixed, and families see the levels.' :
+        q.levelsFinal ? '✅ All groups marked: levels are final and families see them.' :
+        '⏳ Provisional: families see the mark only, until ' + (missingGroups.length ? esc(missingGroups.join(', ')) + ' ' + (missingGroups.length > 1 ? 'are' : 'is') + ' marked' : 'all marks are in') + ', or you publish now.') + '</div>' +
+      (q.stats ? '<div class="chips">' + (q.published ? '<a class="chip act danger" href="#" onclick="publishLevels(\'' + esc(q.id) + '\', true);return false">↩️ Withdraw early publishing</a>' : q.levelsFinal ? '' :
+        '<a class="chip act" href="#" onclick="publishLevels(\'' + esc(q.id) + '\');return false">📢 Publish levels now (fix boundaries)</a>') + '</div>' : '') + '</div>' +
+    (q.boundaries.length ? '<h2>Level boundaries</h2><div class="card">' + q.boundaries.slice().reverse().map(function (b) {
+        return '<div class="row"><span>Level ' + b.level + '</span><span>' + b.from + (q.max ? ' / ' + esc(q.max) : '') + ' or more</span></div>'; }).join('') +
+      '<div class="row"><span>Level 1</span><span>below ' + q.boundaries[0].from + '</span></div>' +
+      '<div style="margin-top:10px">' + counts.map(function (c, k) { return '<div style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="width:52px">Level ' + (k + 1) + '</span><span style="height:12px;border-radius:0 4px 4px 0;background:var(--accent);width:' + Math.round(c / top * 70) + '%"></span><span class="sub">' + c + '</span></div>'; }).join('') + '</div></div>' : '') +
+    '<h2>Everyone who took it</h2><div class="card">' + (rows.map(function (r) {
+      return '<div class="row"><span>' + (r.mine ? '<b>' + esc(r.name) + '</b>' : esc(r.name)) + '<div class="sub">' + esc(r.group) + (r.atHome ? ' · at home' : r.absent ? ' · absent' : '') + '</div></span><span style="text-align:right">' +
+        (r.mark === '' ? '<span class="sub">no mark</span>' : '<b>' + esc(r.mark) + (r.max ? '/' + esc(r.max) : '') + '</b>' + (r.max ? ' <span class="sub">' + Math.round(r.mark / r.max * 100) + '%</span>' : '') + (r.level ? '<div class="sub">Level ' + r.level + '</div>' : '')) + '</span></div>';
+    }).join('') || '<div class="sub">No marks yet.</div>') + '</div>';
+}
+
+function quizMarksFromScreen(id) {
+  var q = quizList().filter(function (x) { return x.id === id; })[0];
+  openMarks({ id: q.id, topic: q.topic, group: q.group, date: q.date, max: q.max,
+    students: Object.keys(q.marks).map(function (sid) { var m = q.marks[sid]; return { id: sid, name: m.name, mark: m.mark, absent: m.absent, atHome: m.atHome, sentHome: m.sentHome }; })
+      .sort(function (a, b) { return a.name.localeCompare(b.name); }) }, function () { showQuiz(id); }, 'Quiz');
+}
+
+function editQuizForm(id) {
+  var q = quizList().filter(function (x) { return x.id === id; })[0];
+  sheet('📝 ' + q.topic + ' · ' + q.group, quizFields('eq', q) + '<button class="primary" style="width:100%;margin-top:12px" onclick="saveQuizEdit(\'' + esc(id) + '\')">Save</button>');
+}
+function saveQuizEdit(id) {
+  var q = quizList().filter(function (x) { return x.id === id; })[0], v = quizValues('eq');
+  if (!v.topic) return notice('Enter the quiz topic.');
+  if (v.max && Object.keys(q.marks).some(function (k) { return q.marks[k].mark !== '' && q.marks[k].mark > Number(v.max); })) return notice('Some marks are above ' + v.max + '.');
+  call('planQuiz', Object.assign({ group: q.group, day: String(q.date).slice(0, 10), sessionId: q.sessionId }, v), function () {}, { optimistic: function () {
+    closeSheet();
+    patchLocal(function () { (cached('quizzes') || []).forEach(function (x) { if (x.id === id) { x.topic = v.topic; x.max = Number(v.max) || ''; x.instructions = v.instructions; x.link = v.link; } }); });
+    showQuiz(id);
+  } });
+}
+function publishLevels(id, off) {
+  if (!confirm(off ? 'Withdraw early publishing? Levels go back to provisional and families stop seeing them until all groups are marked.' :
+    'Publish the levels now? The boundaries are fixed from the marks in so far (later marks get levels from the same boundaries), and families see the levels.')) return;
+  call('publishQuizLevels', { quizId: id, off: !!off }, function () {}, { optimistic: function () {
+    patchLocal(function () { var q0 = quizList().filter(function (x) { return x.id === id; })[0]; quizList().forEach(function (x) { if (q0 && q0.cohort.indexOf(x.id) >= 0) { x.published = off ? '' : today(); x.levelsFinal = !off; } }); });
+    showQuiz(id);
+  } });
 }
 </script>
 
@@ -1976,7 +2066,7 @@ function showGroups() {
   refreshView = showGroups;
   document.getElementById('title').textContent = 'Groups';
   call('groups', {}, function (list) {
-    document.getElementById('main').innerHTML = '<div class="actions" style="margin-top:0"><button class="primary" onclick="groupForm()">＋ New group</button></div>' + list.map(function (g) {
+    document.getElementById('main').innerHTML = '<div class="actions" style="margin-top:0"><button class="primary" onclick="groupForm()">＋ New group</button><button onclick="showQuizzes()">📝 Quizzes</button></div>' + list.map(function (g) {
       return '<div class="card nav-row" onclick="showGroup(\'' + esc(g.group) + '\')"><div><div class="sess-title">' + esc(g.group) + '</div>' +
         '<div class="sub">' + g.members + ' students' + (g.next ? ' · next ' + esc(fmtDate(g.next.slice(0, 10))) + ' ' + esc(g.next.slice(11)) : '') + '</div></div>' +
         '<div>' + (g.status === 'Paused' ? '<span class="tag">Paused</span> ' : '') + (g.pastPapers ? '<span class="tag warn">Past papers</span> ' : '') + '›</div></div>';
