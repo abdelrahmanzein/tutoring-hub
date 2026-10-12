@@ -266,7 +266,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['quizRemoveStudent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -365,7 +365,7 @@ function cached(action, args) { var c = CACHE[action + '|' + JSON.stringify(args
 // then "Saved ✓". If Google refuses one (e.g. the balance changed meanwhile), you get "Not saved: why".
 var QUEUE_ACTIONS = ['setHomework', 'updateGroup', 'assignUpload', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession',
   'undoSession', 'updateStudent', 'addAccount', 'confirmAccount', 'undoStudentEdit', 'moveStudent', 'joinCancel',
-  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate', 'shareRecording', 'logMessage', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels'];
+  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate', 'shareRecording', 'logMessage', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'quizRemoveStudent'];
 var QUEUE_LABEL = { recordPayment: 'payment', addAdjustment: 'adjustment', logSession: 'session', undoSession: 'undo', updateStudent: 'student edit', setHomework: 'homework', planQuiz: 'quiz', saveQuizMarks: 'quiz marks' };
 
 function newId() {
@@ -1968,7 +1968,8 @@ function openMarks(q, back, label) {
     QM.students.map(function (p, j) {
       return '<div class="card"><div class="item" style="align-items:center"><span><b>' + esc(p.name) + '</b>' + (p.absent ? '<div class="sub">Absent · ' + (p.sentHome ? 'sent home ' + esc(fmtDate(String(p.sentHome).slice(0, 10))) : 'not sent home yet') + '</div>' : '') + '</span>' +
         '<input id="qm' + j + '" type="number" inputmode="decimal" min="0"' + (QM.max ? ' max="' + esc(QM.max) + '"' : '') + ' step="0.5" value="' + esc(p.mark) + '" style="width:5.5em;flex:none" placeholder="' + (QM.max ? '/' + esc(QM.max) : 'Mark') + '"></div>' +
-        (p.absent ? '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="qh' + j + '" style="width:auto"' + (p.atHome || p.sentHome ? ' checked' : '') + '> Taken at home</label>' : '') + '</div>';
+        (p.absent ? '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="qh' + j + '" style="width:auto"' + (p.atHome || p.sentHome ? ' checked' : '') + '> Taken at home</label>' : '') +
+        (p.mark === '' || p.mark === undefined ? '<div class="chips"><a class="chip act danger" href="#" onclick="quizRemove(' + j + ');return false">✕ Not taking it with this group</a></div>' : '') + '</div>';
     }).join('') +
     '<button class="primary" style="width:100%;margin-top:6px" onclick="hold(this);saveQuizMarks()">Save marks</button>';
 }
@@ -2113,6 +2114,20 @@ function publishLevels(id, off) {
   call('publishQuizLevels', { quizId: id, off: !!off }, function () {}, { optimistic: function () {
     patchLocal(function () { var q0 = quizList().filter(function (x) { return x.id === id; })[0]; quizList().forEach(function (x) { if (q0 && q0.cohort.indexOf(x.id) >= 0) { x.published = off ? '' : today(); x.levelsFinal = !off; } }); });
     showQuiz(id);
+  } });
+}
+
+// Takes a student off this quiz (they take the same quiz with another group of the batch).
+function quizRemove(j) {
+  var p = QM.students[j], q = QM;
+  if (!confirm('Take ' + p.name + ' off this quiz (' + q.group + ')? Use this when they take the same quiz with another group.')) return;
+  call('quizRemoveStudent', { quizId: q.id, id: p.id }, function () {}, { optimistic: function () {
+    q.students.splice(j, 1);
+    patchLocal(function () {
+      (cached('quizzes') || []).forEach(function (x) { if (x.id === q.id) delete x.marks[p.id]; });
+      var t = cached('todo'); if (t && t.quizzes) { t.quizzes.marks.forEach(function (x) { if (x.id === q.id) x.students = x.students.filter(function (s) { return s.id !== p.id; }); }); t.quizzes.home = t.quizzes.home.filter(function (x) { return !(x.quizId === q.id && x.id === p.id); }); }
+    });
+    openMarks(q, QM_BACK, document.querySelector('.back') ? document.querySelector('.back').textContent.replace('‹', '').trim() : 'Quiz');
   } });
 }
 </script>
