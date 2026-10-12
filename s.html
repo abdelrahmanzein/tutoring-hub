@@ -73,8 +73,9 @@ var T = {
     markSoon: 'Mark coming soon', quizzes: 'Quizzes', levelOf: function (l) { return 'Level ' + l + ' of 7'; }, soon: 'Level coming soon', atHome: 'taken at home', level: 'Level',
     note: 'A note from Mr Zein', cover: '1-on-1 sessions', with: 'with', covered: 'Covered', labels: 'What the labels mean', updated: 'Updated',
     foot: 'If a student is absent, the recording is sent and the session is charged.',
-    key: ['<b>Due</b> (yellow): a session already taken and not paid yet. <b>Down payment</b> (blue): the next sessions, paid in advance.',
-      '<b>Attendance.</b> <span class="ok">On time</span>: joined when the session started. <span class="late">Late</span>: joined more than 2 minutes after the start (minutes shown). <span class="miss">Absent</span>: missed the session; the recording is sent and the session is charged. Attended: present, from before join times were recorded.',
+    keyFin: ['<b>Amount due</b>: what to pay by the date shown.', '<b>Due</b> (yellow): a session already taken and not paid yet.', '<b>Down payment</b> (blue): the next sessions, paid in advance (for families paying in blocks).',
+      '<b>Absent</b> next to a Due session: the student missed it; the recording was sent and the session is charged.', '<b>Last payment</b>: the most recent payment received.'],
+    key: ['<b>Attendance.</b> <span class="ok">On time</span>: joined when the session started. <span class="late">Late</span>: joined more than 2 minutes after the start (minutes shown). <span class="miss">Absent</span>: missed the session; the recording is sent and the session is charged. Attended: present, from before join times were recorded.',
       '<b>Participation</b> (from the session\'s transcript, compared with the rest of the group): <b>Very active</b>: spoke up and asked questions well above the group\'s average. <b>Active</b>: about the group\'s average. <b>Occasional</b>: spoke up a few times. <b>Quiet</b>: hardly spoke. "–" means it wasn\'t measured that session.',
       '<b>Homework.</b> <span class="ok">On time</span>: uploaded by 11:59 PM (Cairo) the night before the session. <span class="late">Late</span>: uploaded after that. <span class="miss">Missing</span>: not uploaded. Excused: agreed with Mr Zein.',
       '<b>Quiz level</b> (1 to 7): where the mark falls among all the students who took the same quiz (7 is the highest). It is not an official IB grade, and it appears once everyone has taken the quiz.',
@@ -96,8 +97,9 @@ var T = {
     markSoon: 'تظهر الدرجة قريبًا', quizzes: 'الاختبارات', levelOf: function (l) { return 'المستوى ' + l + ' من ٧'; }, soon: 'يظهر المستوى قريبًا', atHome: 'أُدّي في المنزل', level: 'المستوى',
     note: 'ملاحظة من الأستاذ زين', cover: 'حصص فردية', with: 'مع', covered: 'ما تمت تغطيته', labels: 'معنى المصطلحات', updated: 'آخر تحديث',
     foot: 'عند غياب الطالب يُرسل له تسجيل الحصة، وتُحتسب الحصة.',
-    key: ['<b>مستحق</b> (أصفر): حصة تمت ولم تُدفع بعد. <b>دفعة مقدمة</b> (أزرق): الحصص القادمة، تُدفع مقدمًا.',
-      '<b>الحضور.</b> <span class="ok">في الموعد</span>: دخل عند بدء الحصة. <span class="late">متأخر</span>: دخل بعد بدء الحصة بأكثر من دقيقتين (مع عدد الدقائق). <span class="miss">غائب</span>: لم يحضر الحصة، ويُرسل له التسجيل وتُحتسب الحصة. حضر: حاضر، من قبل بدء تسجيل وقت الدخول.',
+    keyFin: ['<b>المبلغ المستحق</b>: ما يُدفع بحد أقصى في الموعد الموضح.', '<b>مستحق</b> (أصفر): حصة تمت ولم تُدفع بعد.', '<b>دفعة مقدمة</b> (أزرق): الحصص القادمة، تُدفع مقدمًا (للأسر التي تدفع على دفعات).',
+      '<b>غائب</b> بجوار حصة مستحقة: لم يحضر الطالب الحصة، وأُرسل له التسجيل وتُحتسب الحصة.', '<b>آخر دفعة</b>: أحدث دفعة تم استلامها.'],
+    key: ['<b>الحضور.</b> <span class="ok">في الموعد</span>: دخل عند بدء الحصة. <span class="late">متأخر</span>: دخل بعد بدء الحصة بأكثر من دقيقتين (مع عدد الدقائق). <span class="miss">غائب</span>: لم يحضر الحصة، ويُرسل له التسجيل وتُحتسب الحصة. حضر: حاضر، من قبل بدء تسجيل وقت الدخول.',
       '<b>المشاركة</b> (من نص الحصة، مقارنةً ببقية المجموعة): <b>نشِط جدًا</b>: شارك وسأل أكثر بكثير من متوسط المجموعة. <b>نشِط</b>: في حدود متوسط المجموعة. <b>أحيانًا</b>: شارك بضع مرات. <b>هادئ</b>: نادرًا ما شارك. "–" تعني أنها لم تُقَس في تلك الحصة.',
       '<b>الواجب.</b> <span class="ok">في الموعد</span>: رُفع قبل الساعة ١١:٥٩ مساءً (بتوقيت القاهرة) في الليلة السابقة للحصة. <span class="late">متأخر</span>: رُفع بعد ذلك. <span class="miss">لم يُسلَّم</span>: لم يُرفع. معفى: بالاتفاق مع الأستاذ زين.',
       '<b>مستوى الاختبار</b> (من ١ إلى ٧): موقع الدرجة بين جميع الطلاب الذين أدّوا الاختبار نفسه (٧ هو الأعلى). وهو ليس درجة IB رسمية، ويظهر بعد أن يؤدي الجميع الاختبار.',
@@ -221,7 +223,7 @@ function draw() {
     '<div class="tabs"><button class="' + (TAB === 'fin' ? 'on' : '') + '" onclick="TAB=\'fin\';draw()">' + t('fin') + '</button><button class="' + (TAB === 'perf' ? 'on' : '') + '" onclick="TAB=\'perf\';draw()">' + t('perf') + '</button></div>';
   if (p.note && p.note.text) html += '<h2>' + t('note') + '</h2><div class="card"><div style="white-space:pre-wrap">' + esc(p.note.text) + '</div>' + (p.note.date ? '<div class="sub">' + esc(d(p.note.date)) + '</div>' : '') + '</div>';
   html += TAB === 'fin' ? financials(p) : performance(p);
-  html += '<details class="card key"><summary><b>' + t('labels') + '</b></summary>' + t('key').map(function (x) { return '<p>' + x + '</p>'; }).join('') + '</details>' +
+  html += '<details class="card key"><summary><b>' + t('labels') + '</b></summary>' + t(TAB === 'fin' ? 'keyFin' : 'key').map(function (x) { return '<p>' + x + '</p>'; }).join('') + '</details>' +
     '<footer>' + t('updated') + ' ' + esc(d(p.updated)) + '. ' + t('foot') + '</footer>';
   document.getElementById('main').innerHTML = html;
   document.title = p.name + ' · ' + t('brand');

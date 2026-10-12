@@ -62,6 +62,8 @@
 
   /* Cards. A card you can tap has a hand cursor, lifts on hover and shows › on the right. */
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  .col-hide { display:none !important; }
+  .col-toggle { display:inline-block; margin-top:6px; font-size:13px; color:var(--accent); cursor:pointer; user-select:none; }
   .card[onclick] { cursor:pointer; transition:border-color .15s, box-shadow .15s, transform .05s; }
   .card[onclick]:hover { border-color:var(--accent); box-shadow:0 2px 10px rgba(36,87,197,.12); }
   .card[onclick]:active { transform:scale(.99); }
@@ -577,6 +579,40 @@ function setRefreshing(on) {
 }
 
 // Fades out the opening logo once the first screen has data (or after 8 seconds at most).
+// ---------- Long screens: cards with more than two things in them start folded ----------
+// When a screen has several cards and scrolls, a card listing more than two things (lines, chips, entries) shows only
+// its first line (and its buttons) with "Show (n)". Cards with tables or with fields to fill in never fold. Opening one
+// is remembered while the app is open.
+var OPEN_CARDS = {};
+function cardKey(c) { return (c.firstElementChild ? c.firstElementChild.textContent : c.textContent).trim().slice(0, 60); }
+function foldCards() {
+  var main = document.getElementById('main'), cards = main.querySelectorAll('.card');
+  if (cards.length < 2 || main.scrollHeight <= window.innerHeight) return;
+  cards.forEach(function (c) {
+    if (c.getAttribute('data-fold') || c.id === 'ledger' || c.tagName === 'DETAILS' || c.querySelector('table, input, select, textarea, iframe, .card')) return;
+    var items = c.querySelectorAll('.row').length + c.querySelectorAll('.chips > *').length + c.querySelectorAll('dl > dt').length + Math.max(0, c.querySelectorAll('.item').length - 1);
+    var kids = [].slice.call(c.children, 1).filter(function (k) { return !k.classList.contains('actions'); });
+    c.setAttribute('data-fold', '1');
+    if (items <= 2 || !kids.length) return;
+    var key = cardKey(c), t = document.createElement('div');
+    t.className = 'col-toggle';
+    var set = function (open) {
+      kids.forEach(function (k) { k.classList.toggle('col-hide', !open); });
+      t.textContent = open ? '▾ Hide' : '▸ Show (' + items + ')';
+      if (open) OPEN_CARDS[key] = true; else delete OPEN_CARDS[key];
+    };
+    t.onclick = function (e) { e.stopPropagation(); set(!!kids[0].classList.contains('col-hide')); };
+    c.firstElementChild.insertAdjacentElement('afterend', t);
+    set(!!OPEN_CARDS[key]);
+  });
+}
+(function () {
+  if (typeof MutationObserver === 'undefined' || !document.getElementById('main')) return;
+  var pending = false;
+  new MutationObserver(function () { if (pending) return; pending = true; setTimeout(function () { pending = false; foldCards(); }, 30); })
+    .observe(document.getElementById('main'), { childList: true, subtree: true });
+})();
+
 function hideSplash() {
   var el = document.getElementById('splash');
   if (!el || el.classList.contains('gone')) return;
@@ -2544,6 +2580,7 @@ function payActions(list, i) {
     '<div class="actions"><button class="primary" onclick="payFromRequest()">Record payment</button>' +
     (r.status === 'Transfer sent' ? '<button onclick="transferFlag(false)">Transfer not sent after all</button>' : '<button onclick="transferFlag(true)">Transfer on its way</button>') + '</div>' +
     '<div class="sub" style="margin-top:8px">"Transfer on its way" pauses reminders (e.g. a USD transfer that takes a few days).</div>' +
+    (r.link ? '<button style="width:100%;margin-top:12px" onclick="openInApp(PAY_SEL.link, \'What the family sees\')">📄 View their report</button>' : '') +
     '<button class="secondary" style="width:100%;margin-top:12px" onclick="withdrawRequest()">Withdraw this request</button>');
 }
 var PAY_SEL = null;
