@@ -1850,7 +1850,6 @@ function drawSessionRows() {
 function saveSession() {
   var quiz = quizValues('sq'), noHw = document.getElementById('snoh').checked;
   if (quiz && !quiz.topic) return notice('Enter the quiz topic (or untick "Quiz this session").');
-  if (quiz) try { localStorage.setItem('quizInstr', quiz.instructions); } catch (e) {}
   var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value,
     noteNext: document.getElementById('sn').value, homeworkNumber: SESS_HW ? SESS_HW.number : '', nextHomework: (document.getElementById('snh') || {}).value || '', rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined,
     noHomework: noHw, quiz: quiz || (SESS_QUIZ ? false : null) };
@@ -1899,7 +1898,9 @@ function sendRecording(i) {
 // ---------- Quizzes ----------
 // One after each chapter: planned on an upcoming session (or ticked when logging). Absent students take it at home
 // (To do prepares the message to their parent with your instructions); marks are entered later from To do.
-var QUIZ_INSTR = 'One sitting, within the time written on the quiz, with no notes or help (calculator only where allowed). Please photograph every page and send it to me on WhatsApp within 2 days.';
+// Default instructions for a new quiz: Settings → quiz_instructions (this text only if that's empty).
+var QUIZ_INSTR = '- Solve in an external paper\n- No calculators allowed\n- Duration is 62 minutes: the first 5 minutes are just for reading and going through the assessment\n- The quiz is out of 40 marks (even though the available marks are more than that, so any extra marks you collect are bonus)\n- Scan your response as a PDF as soon as you finish\n- Send the PDF to abdelrahman.zein@gmail.com\n- Make the subject: First + Last names';
+function quizDefaultInstr() { var a = cached('adminData'), x = a && (a.settings || []).filter(function (r) { return r.key === 'quiz_instructions'; })[0]; return (x && x.value) || QUIZ_INSTR; }
 // The same quiz given to another group of the batch: its quizzes are compared (levels across groups) only when the
 // topic matches exactly, so "Same quiz as…" copies the topic, total marks, instructions and link from it.
 var SAME_Q = [];
@@ -1918,11 +1919,26 @@ function useSameQuiz(p, k) {
 }
 function quizFields(p, q, group) {
   q = q || {};
-  var instr = q.instructions; if (!instr) { try { instr = localStorage.getItem('quizInstr'); } catch (e) {} }
+  var instr = q.instructions || quizDefaultInstr();
   return (group && !q.topic ? sameQuizChips(p, group) : '') + '<div class="sub" style="margin-top:6px">Topic (the chapter)</div><input id="' + p + 't" value="' + esc(q.topic || '') + '" placeholder="e.g. Functions">' +
     '<div class="sub" style="margin-top:6px">Total marks</div><input id="' + p + 'm" type="number" inputmode="numeric" min="1" value="' + esc(q.max || '') + '" placeholder="e.g. 45">' +
-    '<div class="sub" style="margin-top:6px">Instructions for taking it at home (sent to absent students\' parents)</div><textarea id="' + p + 'i" rows="3" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)">' + esc(instr || QUIZ_INSTR) + '</textarea>' +
-    '<div class="sub" style="margin-top:6px">Link to the quiz (optional: a Drive file for absent students)</div><input id="' + p + 'l" value="' + esc(q.link || '') + '" placeholder="https://drive.google.com/…">';
+    '<div class="sub" style="margin-top:6px">Instructions for taking it at home (sent to absent students\' parents)</div><textarea id="' + p + 'i" rows="3" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)">' + esc(instr) + '</textarea>' +
+    '<div class="sub" style="margin-top:6px">The quiz file (for absent students): from Tutoring Quizzes, uploaded in the last month</div>' +
+    '<select id="' + p + 'ls" onchange="if (this.value !== \'*\') document.getElementById(\'' + p + 'l\').value = this.value"><option value="">Loading files…</option></select>' +
+    '<input id="' + p + 'l" value="' + esc(q.link || '') + '" placeholder="or paste a link" style="margin-top:6px">' + quizFilesLoad(p, q.link || '');
+}
+// Fills the quiz-file list (after the form is drawn); the current link is kept even if older than a month.
+function quizFilesLoad(p, current) {
+  setTimeout(function () {
+    call('quizFiles', {}, function (files) {
+      var el = document.getElementById(p + 'ls'); if (!el) return;
+      var has = files.some(function (f) { return f.url === current; });
+      el.innerHTML = '<option value="">' + (files.length ? 'Pick the quiz file…' : 'No files uploaded in the last month') + '</option>' +
+        (current && !has ? '<option value="' + esc(current) + '" selected>(the file linked now)</option>' : '') +
+        files.map(function (f) { return '<option value="' + esc(f.url) + '"' + (f.url === current ? ' selected' : '') + '>' + esc(f.name) + ' · ' + esc(fmtDate(f.created)) + '</option>'; }).join('');
+    }, { part: true });
+  }, 0);
+  return '';
 }
 function quizValues(p) {
   var on = document.getElementById(p); if (on && on.type === 'checkbox' && !on.checked) return null;
@@ -1945,7 +1961,6 @@ function planQuizForm(i) {
 function savePlanQuiz(i) {
   var s = WEEK[i], q = quizValues('pq');
   if (!q.topic) return notice('Enter the quiz topic.');
-  try { localStorage.setItem('quizInstr', q.instructions); } catch (e) {}
   call('planQuiz', Object.assign({ group: s.group, day: s.day, sessionId: s.sessionId }, q), function () {}, { optimistic: function () {
     closeSheet();
     var had = s.quiz;
@@ -2104,7 +2119,7 @@ function quizMarksFromScreen(id) {
 
 function editQuizForm(id) {
   var q = quizList().filter(function (x) { return x.id === id; })[0];
-  sheet('📝 ' + q.topic + ' · ' + q.group, quizFields('eq', q) + '<button class="primary" style="width:100%;margin-top:12px" onclick="saveQuizEdit(\'' + esc(id) + '\')">Save</button>');
+  sheet('📝 ' + q.topic + ' · ' + q.group, '<div class="sub">Total, instructions and file are shared by every group taking this quiz.</div>' + quizFields('eq', q) + '<button class="primary" style="width:100%;margin-top:12px" onclick="saveQuizEdit(\'' + esc(id) + '\')">Save</button>');
 }
 function saveQuizEdit(id) {
   var q = quizList().filter(function (x) { return x.id === id; })[0], v = quizValues('eq');
@@ -2112,7 +2127,7 @@ function saveQuizEdit(id) {
   if (v.max && Object.keys(q.marks).some(function (k) { return q.marks[k].mark !== '' && q.marks[k].mark > Number(v.max); })) return notice('Some marks are above ' + v.max + '.');
   call('planQuiz', Object.assign({ group: q.group, day: String(q.date).slice(0, 10), sessionId: q.sessionId }, v), function () {}, { optimistic: function () {
     closeSheet();
-    patchLocal(function () { (cached('quizzes') || []).forEach(function (x) { if (x.id === id) { x.topic = v.topic; x.max = Number(v.max) || ''; x.instructions = v.instructions; x.link = v.link; } }); });
+    patchLocal(function () { (cached('quizzes') || []).forEach(function (x) { if (x.id === id) x.topic = v.topic; if (x.id === id || q.cohort.indexOf(x.id) >= 0) { x.max = Number(v.max) || ''; x.instructions = v.instructions; x.link = v.link; } }); });
     showQuiz(id);
   } });
 }
