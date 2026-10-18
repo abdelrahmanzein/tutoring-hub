@@ -1999,28 +1999,46 @@ var QM = null, QM_BACK = null;
 function quizMarksForm(k) { openMarks(TODO.quizzes.marks[k], showTodo, 'To do'); }
 function openMarks(q, back, label) {
   QM = q; QM_BACK = back;
+  if (!QM.available) { var full = quizList().filter(function (x) { return x.id === q.id; })[0]; if (full && full.available) QM.available = full.available; }
   newView();
   setBack(label, label, back);
   document.getElementById('main').innerHTML = '<button class="back" onclick="QM_BACK()">‹ ' + esc(label) + '</button><h2>📝 ' + esc(QM.topic) + ' · ' + esc(QM.group) + '</h2>' +
     '<div class="sub" style="margin:-4px 0 8px">' + esc(fmtDate(String(QM.date).slice(0, 10))) + (QM.max ? ' · graded out of ' + esc(QM.max) + (QM.available && QM.available !== QM.max ? ' (' + esc(QM.available) + ' available)' : '') : '') + '. Leave a mark empty to fill it in later.</div>' +
     QM.students.map(function (p, j) {
       return '<div class="card"><div class="item" style="align-items:center"><span><b>' + esc(p.name) + '</b>' + (p.absent ? '<div class="sub">Absent · ' + (p.sentHome ? 'sent home ' + esc(fmtDate(String(p.sentHome).slice(0, 10))) : 'not sent home yet') + '</div>' : '') + '</span>' +
-        '<input id="qm' + j + '" type="number" inputmode="decimal" min="0"' + (QM.available || QM.max ? ' max="' + esc(QM.available || QM.max) + '"' : '') + ' step="0.5" value="' + esc(p.mark) + '" style="width:5.5em;flex:none" placeholder="' + (QM.max ? '/' + esc(QM.max) : 'Mark') + '"></div>' +
+        '<input id="qm' + j + '" type="number" inputmode="decimal" min="0"' + (QM.available ? ' max="' + esc(QM.available) + '"' : '') + ' step="0.5" value="' + esc(p.mark) + '" style="width:5.5em;flex:none" placeholder="' + (QM.max ? '/' + esc(QM.max) : 'Mark') + '"></div>' +
         (p.absent ? '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="qh' + j + '" style="width:auto"' + (p.atHome || p.sentHome ? ' checked' : '') + '> Taken at home</label>' : '') +
         (p.mark === '' || p.mark === undefined ? '<div class="chips"><a class="chip act danger" href="#" onclick="quizRemove(' + j + ');return false">✕ Not taking it with this group</a></div>' : '') + '</div>';
     }).join('') +
+    quizAddBox() +
     '<button class="primary" style="width:100%;margin-top:6px" onclick="hold(this);saveQuizMarks()">Save marks</button>';
+  var qa = document.getElementById('qadd'); if (qa) qa.onchange = quizAddPick;
+}
+// "＋ Add a student": someone who took it with this group but wasn't on its list when the session was logged.
+function quizAddBox() {
+  var people = (cached('todo') || {}).people || [], have = {};
+  QM.students.forEach(function (p) { have[p.id] = true; });
+  var batch = String(QM.group).replace(/\s*G\d+\s*$/i, '').trim();
+  var opts = people.filter(function (p) { return !have[p.id] && p.groups.some(function (g) { return String(g).indexOf(batch) === 0; }); });
+  if (!opts.length) return '';
+  return '<div class="filters" style="margin-top:6px">' + sel('qadd', '', [['', '＋ Add a student who took it with this group']].concat(opts.map(function (p) { return [p.id, p.name]; }))) + '</div>';
+}
+function quizAddPick() {
+  var el = document.getElementById('qadd'); if (!el || !el.value) return;
+  var p = ((cached('todo') || {}).people || []).filter(function (x) { return x.id === el.value; })[0];
+  QM.students.push({ id: p.id, name: p.name, mark: '', absent: false });
+  openMarks(QM, QM_BACK, document.querySelector('.back') ? document.querySelector('.back').textContent.replace('‹', '').trim() : 'Quiz');
 }
 function saveQuizMarks() {
   var marks = {}, atHome = {}, bad = '';
   QM.students.forEach(function (p, j) {
     var v = document.getElementById('qm' + j).value.trim();
-    var lim = Number(QM.available || QM.max) || 0;
+    var lim = Number(QM.available) || 0;                         // marks above the cap are fine (bonus); the server checks the available marks
     if (v !== '' && (isNaN(v) || Number(v) < 0 || (lim && Number(v) > lim))) bad = p.name;
     marks[p.id] = v === '' ? '' : Number(v);
     var h = document.getElementById('qh' + j); if (h && h.checked) atHome[p.id] = true;
   });
-  if (bad) { document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; b.textContent = 'Save marks'; }); return notice('Check ' + bad + '\'s mark' + (QM.available || QM.max ? ' (0 to ' + (QM.available || QM.max) + ')' : '') + '.'); }
+  if (bad) { document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; b.textContent = 'Save marks'; }); return notice('Check ' + bad + '\'s mark' + (QM.available ? ' (0 to ' + QM.available + ')' : '') + '.'); }
   var q = QM;
   call('saveQuizMarks', { quizId: q.id, marks: marks, atHome: atHome }, function () {}, { optimistic: function () {
     patchLocal(function () {
