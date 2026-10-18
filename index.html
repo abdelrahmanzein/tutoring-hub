@@ -1645,6 +1645,7 @@ function chipHomework(i, id, number, status) {
     });
     s.students.forEach(function (p) { if (p.id === id && status) p.hw = show; });
     redrawSessionCards();
+    if (refreshView === showTodo) showTodo();               // set from a To do Today card
     if (!status) notice('Back to automatic: the next homework check decides.');
   } });
 }
@@ -2443,6 +2444,11 @@ function showTodo() {
         '<span class="tag ' + (STATUS_TAG[s.status] || '') + '">' + esc(s.status) + '</span></div><div class="chips">' +
         (s.folder ? '<a class="chip folder-chip" href="' + esc(s.folder) + '" target="_blank">🗂️ Assignments</a>' : '') +
         (hw && hw.link ? '<a class="chip folder-chip" href="' + esc(hw.link) + '" target="_blank">📥 ' + esc(hw.title) + '</a>' : '') + '</div>' +
+        // The students with their homework status, as on the Sessions screen (tap: their page or the homework status).
+        (live[s.sessionId] && live[s.sessionId].students ? '<div class="chips">' + live[s.sessionId].students.map(function (p) {
+          return '<button class="chip hw-' + (HW_CLASS[p.hw] || 'none') + '" title="' + esc(p.detail || p.hw || '') + '" onclick="todoStudentChip(\'' + esc(s.sessionId) + '\',\'' + esc(p.id) + '\')">' +
+            (HW_ICON[p.hw] ? HW_ICON[p.hw] + ' ' : '') + esc(p.name) + (p.detail ? ' <span class="sub">' + esc(p.detail) + '</span>' : '') + '</button>';
+        }).join('') + '</div>' : '') +
         (live[s.sessionId] && live[s.sessionId].reminder ? '<div class="actions"><button onclick="todayReminder(\'' + esc(s.sessionId) + '\')">💬 Send reminder</button></div>' : '') + '</div>';
     }).join(''));
     if (d.toLog.length) parts.push('<h2>Sessions to log</h2>' + d.toLog.map(function (s) {
@@ -2555,6 +2561,17 @@ function sendRec(i) {
   r.links.forEach(function (u) { var m = u.match(/\/d\/([-\w]+)/); if (m) call('shareRecording', { fileId: m[1] }, function () {}, { optimistic: function () {}, quiet: true }); });
   patchLocal(function () { var t = cached('todo'); if (t) t.recordings = t.recordings.filter(function (x) { return !(x.id === r.id && x.sessionId === r.sessionId); }); });
   showTodo();
+}
+
+// A student chip on a Today card: same options as on Sessions (the session is added to the loaded week if needed).
+function todoStudentChip(sessionId, id) {
+  var i = WEEK.map(function (w) { return w.sessionId; }).indexOf(sessionId);
+  if (i < 0) {
+    var s = (TODO.soon || []).filter(function (x) { return x.sessionId === sessionId; })[0], x = (cached('weekLive') || {})[sessionId] || {};
+    WEEK.push(Object.assign({}, s, { homework: x.homework, pastPapers: x.pastPapers, reminder: x.reminder, students: x.students || [] }));
+    i = WEEK.length - 1;
+  }
+  studentChip(i, id);
 }
 
 // The reminder for one of today's sessions (from To do).
