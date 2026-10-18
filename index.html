@@ -1920,15 +1920,17 @@ function sameQuizChips(p, group) {
 }
 function useSameQuiz(p, k) {
   var x = SAME_Q[k];
-  document.getElementById(p + 't').value = x.topic; document.getElementById(p + 'm').value = x.max || '';
+  document.getElementById(p + 't').value = x.topic; document.getElementById(p + 'm').value = x.max || ''; document.getElementById(p + 'a').value = x.available || x.max || '';
   document.getElementById(p + 'i').value = x.instructions || ''; document.getElementById(p + 'l').value = x.link || '';
   notice('Copied from ' + x.group + ': the levels will be worked out across both groups.');
 }
 function quizFields(p, q, group) {
   q = q || {};
-  var instr = q.instructions || quizDefaultInstr();
+  var instr = q.instructions || quizDefaultInstr().replace(/out of \d+ marks/i, 'out of ' + (q.max || quizDefaultCap()) + ' marks');
   return (group && !q.topic ? sameQuizChips(p, group) : '') + '<div class="sub" style="margin-top:6px">Topic (the chapter)</div><input id="' + p + 't" value="' + esc(q.topic || '') + '" placeholder="e.g. Functions">' +
-    '<div class="sub" style="margin-top:6px">Total marks</div><input id="' + p + 'm" type="number" inputmode="numeric" min="1" value="' + esc(q.max || '') + '" placeholder="e.g. 45">' +
+    '<div class="filters" style="margin:6px 0 0"><label class="sub" style="flex:1">Marks available (whole paper)<input id="' + p + 'a" type="number" inputmode="numeric" min="1" value="' + esc(q.available || q.max || '') + '" placeholder="e.g. 61"></label>' +
+    '<label class="sub" style="flex:1">Graded out of (cap)<input id="' + p + 'm" type="number" inputmode="numeric" min="1" value="' + esc(q.max || quizDefaultCap()) + '" oninput="quizCapToInstr(\'' + p + '\')"></label></div>' +
+    '<div class="sub">Marks above the cap are bonus: a student can score e.g. 51/40, which is level 7.</div>' +
     '<div class="sub" style="margin-top:6px">Instructions for taking it at home (sent to absent students\' parents)</div><textarea id="' + p + 'i" rows="3" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)">' + esc(instr) + '</textarea>' +
     '<div class="sub" style="margin-top:6px">The quiz file (for absent students): from Tutoring Quizzes, uploaded in the last month</div>' +
     '<select id="' + p + 'ls" onchange="if (this.value !== \'*\') document.getElementById(\'' + p + 'l\').value = this.value"><option value="">Loading files…</option></select>' +
@@ -1947,9 +1949,15 @@ function quizFilesLoad(p, current) {
   }, 0);
   return '';
 }
+function quizDefaultCap() { var a = cached('adminData'), x = a && (a.settings || []).filter(function (r) { return r.key === 'quiz_default_cap'; })[0]; return Number(x && x.value) || 40; }
+// The instructions follow the cap ("The quiz is out of 40 marks" → the new cap).
+function quizCapToInstr(p) {
+  var v = document.getElementById(p + 'm').value, el = document.getElementById(p + 'i');
+  if (el && v) el.value = el.value.replace(/out of \d+ marks/i, 'out of ' + v + ' marks');
+}
 function quizValues(p) {
   var on = document.getElementById(p); if (on && on.type === 'checkbox' && !on.checked) return null;
-  return { topic: document.getElementById(p + 't').value.trim(), max: document.getElementById(p + 'm').value, instructions: document.getElementById(p + 'i').value.trim(), link: document.getElementById(p + 'l').value.trim() };
+  return { topic: document.getElementById(p + 't').value.trim(), max: document.getElementById(p + 'm').value, available: document.getElementById(p + 'a').value, instructions: document.getElementById(p + 'i').value.trim(), link: document.getElementById(p + 'l').value.trim() };
 }
 function quizToggle() {
   var on = document.getElementById('sq').checked;
@@ -1994,10 +2002,10 @@ function openMarks(q, back, label) {
   newView();
   setBack(label, label, back);
   document.getElementById('main').innerHTML = '<button class="back" onclick="QM_BACK()">‹ ' + esc(label) + '</button><h2>📝 ' + esc(QM.topic) + ' · ' + esc(QM.group) + '</h2>' +
-    '<div class="sub" style="margin:-4px 0 8px">' + esc(fmtDate(String(QM.date).slice(0, 10))) + (QM.max ? ' · out of ' + esc(QM.max) : '') + '. Leave a mark empty to fill it in later.</div>' +
+    '<div class="sub" style="margin:-4px 0 8px">' + esc(fmtDate(String(QM.date).slice(0, 10))) + (QM.max ? ' · graded out of ' + esc(QM.max) + (QM.available && QM.available !== QM.max ? ' (' + esc(QM.available) + ' available)' : '') : '') + '. Leave a mark empty to fill it in later.</div>' +
     QM.students.map(function (p, j) {
       return '<div class="card"><div class="item" style="align-items:center"><span><b>' + esc(p.name) + '</b>' + (p.absent ? '<div class="sub">Absent · ' + (p.sentHome ? 'sent home ' + esc(fmtDate(String(p.sentHome).slice(0, 10))) : 'not sent home yet') + '</div>' : '') + '</span>' +
-        '<input id="qm' + j + '" type="number" inputmode="decimal" min="0"' + (QM.max ? ' max="' + esc(QM.max) + '"' : '') + ' step="0.5" value="' + esc(p.mark) + '" style="width:5.5em;flex:none" placeholder="' + (QM.max ? '/' + esc(QM.max) : 'Mark') + '"></div>' +
+        '<input id="qm' + j + '" type="number" inputmode="decimal" min="0"' + (QM.available || QM.max ? ' max="' + esc(QM.available || QM.max) + '"' : '') + ' step="0.5" value="' + esc(p.mark) + '" style="width:5.5em;flex:none" placeholder="' + (QM.max ? '/' + esc(QM.max) : 'Mark') + '"></div>' +
         (p.absent ? '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="qh' + j + '" style="width:auto"' + (p.atHome || p.sentHome ? ' checked' : '') + '> Taken at home</label>' : '') +
         (p.mark === '' || p.mark === undefined ? '<div class="chips"><a class="chip act danger" href="#" onclick="quizRemove(' + j + ');return false">✕ Not taking it with this group</a></div>' : '') + '</div>';
     }).join('') +
@@ -2007,11 +2015,12 @@ function saveQuizMarks() {
   var marks = {}, atHome = {}, bad = '';
   QM.students.forEach(function (p, j) {
     var v = document.getElementById('qm' + j).value.trim();
-    if (v !== '' && (isNaN(v) || Number(v) < 0 || (QM.max && Number(v) > Number(QM.max)))) bad = p.name;
+    var lim = Number(QM.available || QM.max) || 0;
+    if (v !== '' && (isNaN(v) || Number(v) < 0 || (lim && Number(v) > lim))) bad = p.name;
     marks[p.id] = v === '' ? '' : Number(v);
     var h = document.getElementById('qh' + j); if (h && h.checked) atHome[p.id] = true;
   });
-  if (bad) { document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; b.textContent = 'Save marks'; }); return notice('Check ' + bad + '\'s mark' + (QM.max ? ' (0 to ' + QM.max + ')' : '') + '.'); }
+  if (bad) { document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; b.textContent = 'Save marks'; }); return notice('Check ' + bad + '\'s mark' + (QM.available || QM.max ? ' (0 to ' + (QM.available || QM.max) + ')' : '') + '.'); }
   var q = QM;
   call('saveQuizMarks', { quizId: q.id, marks: marks, atHome: atHome }, function () {}, { optimistic: function () {
     patchLocal(function () {
@@ -2096,45 +2105,50 @@ function showQuiz(id) {
   document.getElementById('main').innerHTML = '<button class="back" onclick="showQuizzes()">‹ Quizzes</button>' +
     '<h2>📝 ' + esc(q.topic) + '</h2><div class="sub" style="margin:-4px 0 8px">' + esc(q.group) + ' · ' + esc(fmtDate(String(q.date).slice(0, 10))) + ' · ' + esc(q.status) + '</div>' +
     '<div class="card"><div class="item"><b>Details</b><a class="chip act" href="#" onclick="editQuizForm(\'' + esc(q.id) + '\');return false">✏️ Edit</a></div>' +
-      '<div class="sub" style="margin-top:6px">Total marks</div><div>' + (q.max ? '<b>' + esc(q.max) + '</b>' : '<span class="miss">Not set yet</span>') + '</div>' +
+      '<div class="sub" style="margin-top:6px">Marks</div><div>' + (q.max ? '<b>Graded out of ' + esc(q.max) + '</b>' + (q.available && q.available !== q.max ? ' · ' + esc(q.available) + ' available (the rest is bonus)' : '') : '<span class="miss">Not set yet</span>') + '</div>' +
       '<div class="sub" style="margin-top:6px">Instructions for taking it at home</div><div style="white-space:pre-wrap">' + esc(q.instructions || '–') + '</div>' +
       (q.link ? '<div class="chips"><a class="chip act" href="' + esc(q.link) + '" target="_blank">📄 The quiz</a></div>' : '') + '</div>' +
     (q.status === 'Planned' ? '' : '<button class="primary" style="width:100%" onclick="quizMarksFromScreen(\'' + esc(q.id) + '\')">Enter or change marks (' + esc(q.group) + ')</button>') +
     '<h2>Whole batch (' + esc(q.batch) + ')</h2><div class="card">' +
-      (q.stats ? '<div class="row"><span>Marks in</span><span>' + q.stats.n + '</span></div><div class="row"><span>Mean</span><span>' + q.stats.mean + (q.max ? ' / ' + esc(q.max) : '') + '</span></div><div class="row"><span>Standard deviation</span><span>' + q.stats.sd + '</span></div>' : '<div class="sub">Levels appear once 2 or more marks are in.</div>') +
+      (q.stats ? '<div class="row"><span>Marks in</span><span>' + q.stats.n + '</span></div><div class="row"><span>Mean (marks capped at ' + esc(q.max) + ')</span><span>' + q.stats.mean + '</span></div>' +
+        '<div class="row"><span>Standard deviation</span><span>' + q.stats.sd + '</span></div><div class="row"><span>Bottom of the range (mean − 3 SD, not below 0)</span><span>' + q.stats.floor + '</span></div>' +
+        '<div class="row"><span>Band width ((' + esc(q.max) + ' − bottom) ÷ 7)</span><span>' + q.stats.band + '</span></div>' : '<div class="sub">Levels appear once 2 or more marks are in.</div>') +
       '<div class="sub" style="margin-top:8px">' + (q.published ? '✅ Levels published ' + esc(fmtDate(String(q.published).slice(0, 10))) + ': boundaries are fixed, and families see the levels.' :
         q.levelsFinal ? '✅ All groups marked: levels are final and families see them.' :
         '⏳ Provisional: families see the mark only, until ' + (missingGroups.length ? esc(missingGroups.join(', ')) + ' ' + (missingGroups.length > 1 ? 'are' : 'is') + ' marked' : 'all marks are in') + ', or you publish now.') + '</div>' +
       (q.stats ? '<div class="chips">' + (q.published ? '<a class="chip act danger" href="#" onclick="publishLevels(\'' + esc(q.id) + '\', true);return false">↩️ Withdraw early publishing</a>' : q.levelsFinal ? '' :
         '<a class="chip act" href="#" onclick="publishLevels(\'' + esc(q.id) + '\');return false">📢 Publish levels now (fix boundaries)</a>') + '</div>' : '') + '</div>' +
     (q.boundaries.length ? '<h2>Level boundaries</h2><div class="card">' + q.boundaries.slice().reverse().map(function (b) {
-        return '<div class="row"><span>Level ' + b.level + '</span><span>' + b.from + (q.max ? ' / ' + esc(q.max) : '') + ' or more</span></div>'; }).join('') +
+        var next = q.boundaries.filter(function (x) { return x.level === b.level + 1; })[0];
+        return '<div class="row"><span>Level ' + b.level + '</span><span>' + (next ? b.from + '–' + (next.from - 1) : b.from + ' or more (no upper limit)') + '</span></div>'; }).join('') +
       '<div class="row"><span>Level 1</span><span>below ' + q.boundaries[0].from + '</span></div>' +
       '<div style="margin-top:10px">' + counts.map(function (c, k) { return '<div style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="width:52px">Level ' + (k + 1) + '</span><span style="height:12px;border-radius:0 4px 4px 0;background:var(--accent);width:' + Math.round(c / top * 70) + '%"></span><span class="sub">' + c + '</span></div>'; }).join('') + '</div></div>' : '') +
     '<h2>Everyone who took it</h2><div class="card">' + (rows.map(function (r) {
       return '<div class="row"><span>' + (r.mine ? '<b>' + esc(r.name) + '</b>' : esc(r.name)) + '<div class="sub">' + esc(r.group) + (r.atHome ? ' · at home' : r.absent ? ' · absent' : '') + '</div></span><span style="text-align:right">' +
-        (r.mark === '' ? '<span class="sub">no mark</span>' : '<b>' + esc(r.mark) + (r.max ? '/' + esc(r.max) : '') + '</b>' + (r.max ? ' <span class="sub">' + Math.round(r.mark / r.max * 100) + '%</span>' : '') + (r.level ? '<div class="sub">Level ' + r.level + '</div>' : '')) + '</span></div>';
+        (r.mark === '' ? '<span class="sub">no mark</span>' : '<b>' + esc(r.mark) + (r.max ? '/' + esc(r.max) : '') + '</b>' + (r.max ? ' <span class="sub">' + Math.round(r.mark / r.max * 1000) / 10 + '%</span>' : '') + (r.level ? '<div class="sub">Level ' + r.level + '</div>' : '')) + '</span></div>';
     }).join('') || '<div class="sub">No marks yet.</div>') + '</div>';
 }
 
 function quizMarksFromScreen(id) {
   var q = quizList().filter(function (x) { return x.id === id; })[0];
-  openMarks({ id: q.id, topic: q.topic, group: q.group, date: q.date, max: q.max,
+  openMarks({ id: q.id, topic: q.topic, group: q.group, date: q.date, max: q.max, available: q.available,
     students: Object.keys(q.marks).map(function (sid) { var m = q.marks[sid]; return { id: sid, name: m.name, mark: m.mark, absent: m.absent, atHome: m.atHome, sentHome: m.sentHome }; })
       .sort(function (a, b) { return a.name.localeCompare(b.name); }) }, function () { showQuiz(id); }, 'Quiz');
 }
 
 function editQuizForm(id) {
   var q = quizList().filter(function (x) { return x.id === id; })[0];
-  sheet('📝 ' + q.topic + ' · ' + q.group, '<div class="sub">Total, instructions and file are shared by every group taking this quiz.</div>' + quizFields('eq', q) + '<button class="primary" style="width:100%;margin-top:12px" onclick="saveQuizEdit(\'' + esc(id) + '\')">Save</button>');
+  sheet('📝 ' + q.topic + ' · ' + q.group, '<div class="sub">Marks, instructions and file are shared by every group taking this quiz.</div>' + quizFields('eq', q) + '<button class="primary" style="width:100%;margin-top:12px" onclick="saveQuizEdit(\'' + esc(id) + '\')">Save</button>');
 }
 function saveQuizEdit(id) {
   var q = quizList().filter(function (x) { return x.id === id; })[0], v = quizValues('eq');
   if (!v.topic) return notice('Enter the quiz topic.');
-  if (v.max && Object.keys(q.marks).some(function (k) { return q.marks[k].mark !== '' && q.marks[k].mark > Number(v.max); })) return notice('Some marks are above ' + v.max + '.');
+  if (Number(v.available) && Number(v.max) > Number(v.available)) return notice('The cap can\'t be above the marks available.');
+  var lim = Number(v.available || v.max);
+  if (lim && Object.keys(q.marks).some(function (k) { return q.marks[k].mark !== '' && q.marks[k].mark > lim; })) return notice('Some marks are above ' + lim + '.');
   call('planQuiz', Object.assign({ group: q.group, day: String(q.date).slice(0, 10), sessionId: q.sessionId }, v), function () {}, { optimistic: function () {
     closeSheet();
-    patchLocal(function () { (cached('quizzes') || []).forEach(function (x) { if (x.id === id) x.topic = v.topic; if (x.id === id || q.cohort.indexOf(x.id) >= 0) { x.max = Number(v.max) || ''; x.instructions = v.instructions; x.link = v.link; } }); });
+    patchLocal(function () { (cached('quizzes') || []).forEach(function (x) { if (x.id === id) x.topic = v.topic; if (x.id === id || q.cohort.indexOf(x.id) >= 0) { x.max = Number(v.max) || ''; x.available = Number(v.available) || x.max; x.instructions = v.instructions; x.link = v.link; } }); });
     showQuiz(id);
   } });
 }

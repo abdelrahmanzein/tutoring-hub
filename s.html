@@ -219,7 +219,7 @@ function performance(p) {
   var list = inRange(), h = '';
   if (p.quizzes && p.quizzes.length) h += '<h2>' + t('quizzes') + '</h2><div class="card">' + (p.quizzes.some(function (q) { return q.max && !q.pending; }) ? quizChart(p.quizzes.filter(function (q) { return q.max && !q.pending; })) : '') +
     p.quizzes.slice().reverse().map(function (q) {
-      return '<div class="row"><span>' + esc(q.topic) + '<div class="sub">' + esc(d(q.date)) + (q.atHome ? ' · ' + t('atHome') : '') + '</div></span><span style="text-align:end">' + (q.pending ? '<span class="sub">' + t('markSoon') + '</span>' : '<b>' + n(q.mark) + (q.max ? '/' + n(q.max) : '') + '</b><div class="sub">' + (q.level ? t('levelOf')(n(q.level)) : t('soon')) + '</div>') + '</span></div>';
+      return '<div class="row"><span>' + esc(q.topic) + '<div class="sub">' + esc(d(q.date)) + (q.atHome ? ' · ' + t('atHome') : '') + '</div></span><span style="text-align:end">' + (q.pending ? '<span class="sub">' + t('markSoon') + '</span>' : '<b>' + n(q.mark) + (q.max ? '/' + n(q.max) : '') + '</b>' + (q.max ? ' <span class="sub">' + n(Math.round(q.mark / q.max * 1000) / 10) + '%</span>' : '') + '<div class="sub">' + (q.level ? t('levelOf')(n(q.level)) : t('soon')) + '</div>') + '</span></div>';
     }).join('') + '</div>';
   h += '<h2>' + t('sessions') + '</h2><div class="card"><div class="filter"><label>' + t('from') + '<input type="date" id="f" value="' + FROM + '"></label><label>' + t('to') + '<input type="date" id="t" value="' + TO + '"></label></div>' +
     '<div class="chips">' + [['last8', t('last8')], ['m1', t('lastMonth')], ['m3', t('last3')], ['all', t('all')]].map(function (o) {
