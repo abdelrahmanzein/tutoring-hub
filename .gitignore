@@ -1,0 +1,25 @@
+# Private student data: never commit (public repo)
+private/
+submissions/
+marked/
+*Marked*.pdf
+*.scan.pdf
+assessment/data/
+assessment/pages/
+assessment/out/
+
+# Fonts not licensed for redistribution
+*.ttf
+*.ttc
+*.otf
+
+# Secrets
+.env
+.dev.vars
+*.key
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store

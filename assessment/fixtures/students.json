@@ -1,0 +1,878 @@
+[
+ {
+  "name": "Student A",
+  "total": 51,
+  "per_question": {
+   "1": 5,
+   "2": 4,
+   "3": 14,
+   "4": 3,
+   "5": 8,
+   "6": 6,
+   "7": 4,
+   "8": 7
+  },
+  "feedback": {
+   "went_well": [
+    "Inverse functions: finding f⁻¹, its domain, and rejecting an invalid solution with a reason (3c, 3d).",
+    "Rational functions: finding A and B, and describing the full transformation sequence from 1/x (5a, 5b).",
+    "Quadratic inequalities: factorising and giving the final interval (8c)."
+   ],
+   "to_fix": [
+    "Sketching y = [f(x)]² + 1: turning points must be smooth curves, not sharp corners (Q2).",
+    "Reflection in the y-axis: f(−x) (Q4).",
+    "The graph of |f(x)|: a minimum below the x-axis becomes a maximum above it (6a(ii)).",
+    "Solving |f(x)| ≤ 1 from a graph: find every interval across the whole domain (6b).",
+    "Completing the square when a ≠ 1 to reach a(x − h)² + k (8a).",
+    "Sketching a parabola symmetric about its axis (8b).",
+    "Accuracy: carrying a correct value through to the final coordinates (7b(ii))."
+   ],
+   "resolve": [
+    "2",
+    "4",
+    "6a(ii)",
+    "6b",
+    "7b(ii)",
+    "8a",
+    "8b"
+   ]
+  }
+ },
+ {
+  "name": "Student B",
+  "total": 50,
+  "per_question": {
+   "1": 5,
+   "2": 5,
+   "3": 12,
+   "4": 4,
+   "5": 6,
+   "6": 3,
+   "7": 3,
+   "8": 12
+  },
+  "feedback": {
+   "went_well": [
+    "Composite and inverse functions, including the domain of f⁻¹ (Q1, 3c).",
+    "Graph transformations: sketching [f(x)]² + 1 and matching transformed graphs (Q2, Q4).",
+    "Quadratics: vertex form, a fully labelled parabola, and solving a quadratic inequality (Q8)."
+   ],
+   "to_fix": [
+    "Intersection of f and f⁻¹: rejecting a solution outside the domain and giving one point (3d).",
+    "Describing the full transformation sequence for a rational function (5b).",
+    "The graph of |f(x)|: the reflected minimum gives a maximum at height 3 (6a(ii)).",
+    "Solving an inequality involving |f(x)| from a graph (6b).",
+    "Using the discriminant to justify the greatest value of k (7a)."
+   ],
+   "resolve": [
+    "3d",
+    "5b",
+    "6a(ii)",
+    "6b",
+    "7a"
+   ]
+  }
+ },
+ {
+  "name": "Student C",
+  "total": 37,
+  "per_question": {
+   "1": 5,
+   "2": 2,
+   "3": 12,
+   "4": 4,
+   "5": 2,
+   "6": 3,
+   "7": 3,
+   "8": 6
+  },
+  "feedback": {
+   "went_well": [
+    "Composite and inverse functions, including the domain of f⁻¹ (Q1, 3c).",
+    "Naming and ordering transformations, and matching transformed graphs (3a, Q4).",
+    "Using the discriminant to justify the greatest value of k (7a)."
+   ],
+   "to_fix": [
+    "Sketching y = [f(x)]² + 1: the new asymptote (y = 2) and tails approaching it (Q2).",
+    "Intersection of f and f⁻¹: rejecting an invalid solution and stating the point (3d).",
+    "Solving simultaneous equations accurately (5a).",
+    "The graph of |f(x)|: position of the maximum and the cusps (6a(ii)).",
+    "Axis of symmetry written as an equation, x = … (7b(i)).",
+    "Substituting into x² correctly when finding the minimum point (7b(ii)).",
+    "Completing the square through to the final form a(x − h)² + k (8a)."
+   ],
+   "resolve": [
+    "2",
+    "3d",
+    "5a",
+    "6a(ii)",
+    "7b(i)",
+    "7b(ii)",
+    "8a"
+   ]
+  }
+ },
+ {
+  "name": "Student D",
+  "total": 37,
+  "per_question": {
+   "1": 5,
+   "2": 5,
+   "3": 11,
+   "4": 1,
+   "5": 4,
+   "6": 0,
+   "7": 3,
+   "8": 8
+  },
+  "feedback": {
+   "went_well": [
+    "Sketching y = [f(x)]² + 1 with its asymptote and turning points (Q2).",
+    "Rational functions: finding A and B by substitution (5a).",
+    "Quadratics: axis of symmetry, minimum point and vertex form (7b, 8a)."
+   ],
+   "to_fix": [
+    "Interval notation: including an endpoint with a square bracket (3b).",
+    "Domain of f⁻¹ equals the range of f (3c).",
+    "Justifying why a solution is rejected (3d).",
+    "Horizontal and vertical translations and reflections from function notation (Q4).",
+    "Describing the transformation sequence for a rational function (5b).",
+    "Sketching a parabola with the correct symmetric shape (8b).",
+    "Solving a quadratic inequality to a final interval (8c).",
+    "Organisation: keeping each question's parts together and in order."
+   ],
+   "resolve": [
+    "3b",
+    "3c",
+    "3d",
+    "4",
+    "5b",
+    "8b",
+    "8c"
+   ]
+  }
+ },
+ {
+  "name": "Student E",
+  "total": 33,
+  "per_question": {
+   "1": 5,
+   "2": 0,
+   "3": 12,
+   "4": 4,
+   "5": 3,
+   "6": 0,
+   "7": 3,
+   "8": 6
+  },
+  "feedback": {
+   "went_well": [
+    "Sketching y = [f(x)]² + 1 with its asymptote and turning points (Q2).",
+    "Rational functions: finding A and B by substitution (5a).",
+    "Quadratics: axis of symmetry, minimum point and vertex form (7b, 8a)."
+   ],
+   "to_fix": [
+    "Interval notation: including an endpoint with a square bracket (3b).",
+    "Domain of f⁻¹ equals the range of f (3c).",
+    "Justifying why a solution is rejected (3d).",
+    "Horizontal and vertical translations and reflections from function notation (Q4).",
+    "Describing the transformation sequence for a rational function (5b).",
+    "Sketching a parabola with the correct symmetric shape (8b).",
+    "Solving a quadratic inequality to a final interval (8c).",
+    "Organisation: keeping each question's parts together and in order."
+   ],
+   "resolve": [
+    "3b",
+    "3c",
+    "3d",
+    "4",
+    "5b",
+    "8b",
+    "8c"
+   ]
+  }
+ },
+ {
+  "name": "Student F",
+  "total": 31,
+  "per_question": {
+   "1": 5,
+   "2": 0,
+   "3": 9,
+   "4": 2,
+   "5": 8,
+   "6": 1,
+   "7": 2,
+   "8": 4
+  },
+  "feedback": {
+   "went_well": [
+    "Rational functions: finding A and B and the full transformation sequence from 1/x (Q5).",
+    "Inverse functions, including the domain of f⁻¹ (3c).",
+    "Completing the square to vertex form (8a)."
+   ],
+   "to_fix": [
+    "Sketching y = [f(x)]² + 1 so the graph matches your own working (Q2).",
+    "Reflection f(−x) and horizontal stretch f(2x) (Q4).",
+    "The graph of f(|x|): keep x ≥ 0 and reflect it in the y-axis (6a(i)).",
+    "The graph of |f(x)|: it can never go below the x-axis (6a(ii))."
+   ],
+   "resolve": [
+    "2",
+    "4",
+    "6a(i)",
+    "6a(ii)"
+   ]
+  }
+ },
+ {
+  "name": "Student G",
+  "total": 23,
+  "per_question": {
+   "1": 2,
+   "2": 2,
+   "3": 3,
+   "4": 3,
+   "5": 0,
+   "6": 4,
+   "7": 0,
+   "8": 9
+  },
+  "feedback": {
+   "went_well": [
+    "The graphs of f(|x|) and |f(x)|, including the reflected maximum (6a).",
+    "Quadratics: vertex form and a fully labelled parabola (8a, 8b).",
+    "Composite functions (1a)."
+   ],
+   "to_fix": [
+    "Inverse functions: f⁻¹ is not 1/f; finding f⁻¹ and its domain (1b, 3c, 3d).",
+    "Sketching y = [f(x)]² + 1: clear minima and tails approaching y = 2 (Q2).",
+    "Describing transformations with their proper names (3a).",
+    "Horizontal stretch f(2x) (Q4).",
+    "Expanding a squared bracket: (a + b)² = a² + 2ab + b² (3d).",
+    "Solving |f(x)| ≥ (f(x))² from a graph (6b).",
+    "Using the discriminant for 'no real roots' (7a).",
+    "Solving a quadratic inequality (8c)."
+   ],
+   "resolve": [
+    "1b",
+    "2",
+    "3a",
+    "3c",
+    "3d",
+    "4",
+    "6b",
+    "7a",
+    "8c"
+   ]
+  }
+ },
+ {
+  "name": "Student H",
+  "total": 23,
+  "per_question": {
+   "1": 5,
+   "2": 0,
+   "3": 0,
+   "4": 4,
+   "5": 0,
+   "6": 0,
+   "7": 4,
+   "8": 10
+  },
+  "feedback": {
+   "went_well": [
+    "Composite and inverse functions (Q1).",
+    "Matching transformed graphs to function notation (Q4).",
+    "Completing the square and using the discriminant (8a, 7a)."
+   ],
+   "to_fix": [
+    "The graphs of f(|x|) and |f(x)|, drawn on correctly oriented axes (6a).",
+    "Axis of symmetry written as an equation, x = … (7b(i)).",
+    "Labelling intercepts on the sketch itself (8b).",
+    "Stating the solution of a quadratic inequality as an interval (8c)."
+   ],
+   "resolve": [
+    "6a",
+    "7b(i)",
+    "8b",
+    "8c"
+   ]
+  }
+ },
+ {
+  "name": "Student I",
+  "total": 18,
+  "per_question": {
+   "1": 5,
+   "2": 0,
+   "3": 4,
+   "4": 3,
+   "5": 5,
+   "6": 0,
+   "7": 0,
+   "8": 1
+  },
+  "feedback": {
+   "went_well": [
+    "The graphs of f(|x|) and |f(x)|, including the reflected maximum (6a).",
+    "Quadratics: vertex form and a fully labelled parabola (8a, 8b).",
+    "Composite functions (1a)."
+   ],
+   "to_fix": [
+    "Inverse functions: f⁻¹ is not 1/f; finding f⁻¹ and its domain (1b, 3c, 3d).",
+    "Sketching y = [f(x)]² + 1: clear minima and tails approaching y = 2 (Q2).",
+    "Describing transformations with their proper names (3a).",
+    "Horizontal stretch f(2x) (Q4).",
+    "Expanding a squared bracket: (a + b)² = a² + 2ab + b² (3d).",
+    "Solving |f(x)| ≥ (f(x))² from a graph (6b).",
+    "Using the discriminant for 'no real roots' (7a).",
+    "Solving a quadratic inequality (8c)."
+   ],
+   "resolve": [
+    "1b",
+    "2",
+    "3a",
+    "3c",
+    "3d",
+    "4",
+    "6b",
+    "7a",
+    "8c"
+   ]
+  }
+ },
+ {
+  "name": "Student J",
+  "total": 13,
+  "per_question": {
+   "1": 4,
+   "2": 0,
+   "3": 0,
+   "4": 3,
+   "5": 1,
+   "6": 1,
+   "7": 1,
+   "8": 3
+  },
+  "feedback": {
+   "went_well": [
+    "Inverse of a linear function and solving with it (1b).",
+    "Matching translations and a reflection to their graphs (Q4).",
+    "Substituting one function into another (1a)."
+   ],
+   "to_fix": [
+    "Simplifying to reach a given answer (1a).",
+    "Sketching y = [f(x)]² + 1 (Q2).",
+    "Horizontal stretch f(2x) (Q4).",
+    "Rational functions: forming and solving simultaneous equations, and the transformation sequence (5a, 5b).",
+    "The graphs of f(|x|) and |f(x)|, and solving |f(x)| ≤ 1 from a graph (6a, 6b).",
+    "Axis of symmetry as an equation and finding the minimum point (7b).",
+    "Roots from factorised form, the vertex and vertex form (8a).",
+    "Sketching a parabola: direction of opening and intercepts (8b).",
+    "Solving a quadratic inequality (8c)."
+   ],
+   "resolve": [
+    "1a",
+    "2",
+    "4",
+    "5a",
+    "5b",
+    "6a(i)",
+    "6a(ii)",
+    "6b",
+    "7b(i)",
+    "7b(ii)",
+    "8a",
+    "8b",
+    "8c"
+   ]
+  },
+  "notes": [
+   "Q3 and Q7(a) were not attempted. That's fine: aim for 40 marks, then attempt more as your pace builds."
+  ],
+  "extra": [
+   [
+    "3",
+    0,
+    14
+   ],
+   [
+    "7(a)",
+    0,
+    2
+   ]
+  ],
+  "pages": [
+   {
+    "image": "student-j-1.png",
+    "items": [
+     [
+      "r",
+      13,
+      "1(a)",
+      1,
+      2
+     ],
+     [
+      "t",
+      38,
+      16
+     ],
+     [
+      "s",
+      45,
+      16,
+      "M1"
+     ],
+     [
+      "s",
+      45,
+      21,
+      "A0"
+     ],
+     [
+      "u",
+      18,
+      37,
+      22
+     ],
+     [
+      "x",
+      41,
+      23
+     ],
+     [
+      "c",
+      37,
+      21,
+      "Good substitution (M1), but you must reach the given answer. Simplify: 8(x+3)/4 + 5 = 2(x+3) + 5 = 2x + 11. Don't set it equal to a number."
+     ],
+     [
+      "x",
+      92,
+      28
+     ],
+     [
+      "c",
+      92,
+      28,
+      "Second attempt ignored."
+     ],
+     [
+      "r",
+      36,
+      "1(b)",
+      3,
+      3
+     ],
+     [
+      "t",
+      26,
+      42
+     ],
+     [
+      "s",
+      33,
+      42,
+      "(M1)"
+     ],
+     [
+      "t",
+      24,
+      52
+     ],
+     [
+      "s",
+      31,
+      52,
+      "(A1)"
+     ],
+     [
+      "t",
+      22,
+      63
+     ],
+     [
+      "s",
+      29,
+      63,
+      "A1"
+     ],
+     [
+      "c",
+      22,
+      63,
+      "Correct value, but call it a: a = 19."
+     ],
+     [
+      "r",
+      67,
+      "2",
+      0,
+      5
+     ],
+     [
+      "x",
+      34,
+      70
+     ],
+     [
+      "u",
+      45,
+      60,
+      80
+     ],
+     [
+      "c",
+      34,
+      70,
+      "This looks like f, not [f(x)]² + 1. Square the y-values and add 1: max (0, 5), minima (±1, 1), asymptote (−1)² + 1 = 2, so y = 2. It never goes below y = 1."
+     ]
+    ]
+   },
+   {
+    "image": "student-j-2.png",
+    "items": [
+     [
+      "r",
+      6,
+      "4",
+      3,
+      4
+     ],
+     [
+      "t",
+      38,
+      9
+     ],
+     [
+      "t",
+      38,
+      12
+     ],
+     [
+      "t",
+      38,
+      14
+     ],
+     [
+      "x",
+      38,
+      17
+     ],
+     [
+      "s",
+      46,
+      12,
+      "A1 A1 A1 A0"
+     ],
+     [
+      "c",
+      38,
+      17,
+      "f(2x) is a horizontal stretch, factor ½: graph D."
+     ],
+     [
+      "r",
+      25,
+      "5(a)",
+      1,
+      3
+     ],
+     [
+      "t",
+      40,
+      27
+     ],
+     [
+      "s",
+      40,
+      31,
+      "(M1)"
+     ],
+     [
+      "u",
+      43,
+      65,
+      33
+     ],
+     [
+      "x",
+      92,
+      38
+     ],
+     [
+      "c",
+      54,
+      33,
+      "You can't split the fraction like this. Multiply up: −14 = −10A + B. Do the same with Q: 12 = 3A + B. Solve together: A = 2, B = 6."
+     ],
+     [
+      "r",
+      48,
+      "5(b)",
+      0,
+      5
+     ],
+     [
+      "x",
+      82,
+      49
+     ],
+     [
+      "c",
+      82,
+      49,
+      "Write y = 2 + 14/(x−4). Then: vertical stretch, factor 14 → translate 4 right → translate 2 up."
+     ],
+     [
+      "r",
+      55,
+      "6(a)(i)",
+      0,
+      2
+     ],
+     [
+      "x",
+      50,
+      65
+     ],
+     [
+      "c",
+      50,
+      65,
+      "f(|x|) is symmetric about the y-axis: keep the x ≥ 0 part and reflect it."
+     ]
+    ]
+   },
+   {
+    "image": "student-j-3.png",
+    "items": [
+     [
+      "r",
+      2,
+      "6(a)(ii)",
+      1,
+      2
+     ],
+     [
+      "s",
+      80,
+      13,
+      "M1"
+     ],
+     [
+      "x",
+      45,
+      16
+     ],
+     [
+      "s",
+      52,
+      19,
+      "A0"
+     ],
+     [
+      "c",
+      45,
+      16,
+      "|f(x)| touches the x-axis at the roots (sharp cusps) and has a maximum at (−2.7, 3)."
+     ],
+     [
+      "r",
+      27,
+      "6(b)",
+      0,
+      4
+     ],
+     [
+      "x",
+      50,
+      33
+     ],
+     [
+      "c",
+      50,
+      33,
+      "|f(x)| ≥ (f(x))² ⇔ |f(x)| ≤ 1. Read from the graph: −4.93 ≤ x ≤ −4.27 or 0.292 ≤ x ≤ 5."
+     ],
+     [
+      "r",
+      53,
+      "8(a)",
+      2,
+      4
+     ],
+     [
+      "s",
+      18,
+      58,
+      "(A1)"
+     ],
+     [
+      "u",
+      50,
+      70,
+      55
+     ],
+     [
+      "x",
+      72,
+      55
+     ],
+     [
+      "s",
+      79,
+      55,
+      "(M1)"
+     ],
+     [
+      "x",
+      62,
+      58
+     ],
+     [
+      "s",
+      66,
+      61,
+      "A0 A0"
+     ],
+     [
+      "c",
+      60,
+      55,
+      "The roots are −1 and −3, so the vertex is at x = (−1 − 3)/2 = −2, not 2. Then k = f(−2) = −5, so f(x) = 5(x+2)² − 5."
+     ],
+     [
+      "r",
+      76,
+      "8(b)",
+      0,
+      4
+     ],
+     [
+      "x",
+      30,
+      85
+     ],
+     [
+      "c",
+      30,
+      85,
+      "a = 5 > 0, so the parabola opens UPWARD. Roots (−3, 0) and (−1, 0); y-intercept (0, 15); vertex (−2, −5)."
+     ],
+     [
+      "t",
+      88,
+      82
+     ],
+     [
+      "x",
+      85,
+      85
+     ],
+     [
+      "c",
+      85,
+      85,
+      "x-intercepts are points like (−1, 0), not (0, 1)."
+     ]
+    ]
+   },
+   {
+    "image": "student-j-4.png",
+    "items": [
+     [
+      "r",
+      8,
+      "8(c)",
+      1,
+      4
+     ],
+     [
+      "t",
+      55,
+      18
+     ],
+     [
+      "s",
+      62,
+      18,
+      "(A1)"
+     ],
+     [
+      "u",
+      12,
+      40,
+      30
+     ],
+     [
+      "x",
+      42,
+      31
+     ],
+     [
+      "c",
+      42,
+      31,
+      "Keep it as an inequality and factorise: x² + 4x − 5 ≤ 0 ⇒ (x+5)(x−1) ≤ 0 ⇒ −5 ≤ x ≤ 1. '5/4 = 2x²' doesn't follow."
+     ],
+     [
+      "r",
+      52,
+      "7(b)(i)",
+      0,
+      1
+     ],
+     [
+      "x",
+      58,
+      56
+     ],
+     [
+      "c",
+      58,
+      56,
+      "Write the equation: x = −5."
+     ],
+     [
+      "r",
+      66,
+      "7(b)(ii)",
+      1,
+      2
+     ],
+     [
+      "t",
+      68,
+      74
+     ],
+     [
+      "s",
+      75,
+      74,
+      "(M1)"
+     ],
+     [
+      "x",
+      45,
+      68
+     ],
+     [
+      "s",
+      52,
+      68,
+      "A0"
+     ],
+     [
+      "c",
+      68,
+      74,
+      "Finish the calculation: 12.5 − 25 + 13 = ½, so the minimum is (−5, ½)."
+     ]
+    ]
+   }
+  ]
+ }
+]

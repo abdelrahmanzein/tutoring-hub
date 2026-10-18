@@ -1,0 +1,20 @@
+{
+ "title": "Functions Quiz (Paper 1) – AA HL",
+ "course": "AA",
+ "level": "HL",
+ "paper": "P1",
+ "minutes": 60,
+ "cap": 40,
+ "available": 61,
+ "questions": {
+  "1": 5,
+  "2": 5,
+  "3": 14,
+  "4": 4,
+  "5": 8,
+  "6": 8,
+  "7": 5,
+  "8": 12
+ },
+ "next_step": "Re-solve these questions by hand: {qs}. You may use any resource (notes, textbook, videos), but write every step yourself and make sure you understand each part of the solution. After each question, check your work against the markscheme before moving on."
+}
