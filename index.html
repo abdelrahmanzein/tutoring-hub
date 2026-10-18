@@ -2126,7 +2126,8 @@ function showQuiz(id) {
     '<div class="card"><div class="item"><b>Details</b><a class="chip act" href="#" onclick="editQuizForm(\'' + esc(q.id) + '\');return false">✏️ Edit</a></div>' +
       '<div class="sub" style="margin-top:6px">Marks</div><div>' + (q.max ? '<b>Graded out of ' + esc(q.max) + '</b>' + (q.available && q.available !== q.max ? ' · ' + esc(q.available) + ' available (the rest is bonus)' : '') : '<span class="miss">Not set yet</span>') + '</div>' +
       '<div class="sub" style="margin-top:6px">Instructions for taking it at home</div><div style="white-space:pre-wrap">' + esc(q.instructions || '–') + '</div>' +
-      (q.link ? '<div class="chips"><a class="chip act" href="' + esc(q.link) + '" target="_blank">📄 The quiz</a></div>' : '') + '</div>' +
+      '<div class="chips">' + (q.link ? '<a class="chip act" href="' + esc(q.link) + '" target="_blank">📄 The quiz</a>' : '') +
+      '<a class="chip act" href="#" onclick="reflectionFolders(\'' + esc(q.id) + '\');return false">📂 Reflection folder</a></div><div id="qrefl"></div></div>' +
     (q.status === 'Planned' ? '' : '<button class="primary" style="width:100%" onclick="quizMarksFromScreen(\'' + esc(q.id) + '\')">Enter or change marks (' + esc(q.group) + ')</button>') +
     '<h2>Whole batch (' + esc(q.batch) + ')</h2><div class="card">' +
       (q.stats ? '<div class="row"><span>Marks in</span><span>' + q.stats.n + '</span></div><div class="row"><span>Mean (marks capped at ' + esc(q.max) + ')</span><span>' + q.stats.mean + '</span></div>' +
@@ -2192,6 +2193,26 @@ function quizRemove(j) {
     });
     openMarks(q, QM_BACK, document.querySelector('.back') ? document.querySelector('.back').textContent.replace('‹', '').trim() : 'Quiz');
   } });
+}
+
+// "📂 Reflection folder": an un-numbered folder in each group's Assignments (the homework check ignores it) where
+// students upload their quiz reflection; each group's link with a ready message for the group chat.
+var REFL = [];
+function reflectionFolders(id) {
+  var box = document.getElementById('qrefl');
+  box.innerHTML = '<div class="sub" style="margin-top:6px">Making the folders…</div>';
+  call('quizReflectionFolders', { quizId: id }, function (list) {
+    REFL = list;
+    if (!document.getElementById('qrefl')) return;
+    document.getElementById('qrefl').innerHTML = list.map(function (f, k) {
+      return '<div class="item" style="margin-top:8px"><span><b>' + esc(f.group) + '</b><div class="sub">' + esc(f.error || f.name) + '</div></span></div>' + (f.url ?
+        '<div class="chips"><a class="chip act" href="' + esc(f.url) + '" target="_blank">🗂️ Open</a><a class="chip act" href="#" onclick="sendReflection(' + k + ');return false">💬 Send to group</a></div>' : '');
+    }).join('');
+  }, { part: true });
+}
+function sendReflection(k) {
+  var f = REFL[k];
+  groupSend(f.group, '📝 Quiz reflection: please re-solve by hand every question where you lost marks, checking your work against the markscheme after each question, then upload it here:\n' + f.url, 'Quiz reflection folder (group)');
 }
 </script>
 
