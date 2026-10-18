@@ -2584,7 +2584,7 @@ function drawPayments() {
     var days = Math.round((new Date(today() + 'T12:00:00') - new Date(String(r.transferOn || r.sent).slice(0, 10) + 'T12:00:00')) / 864e5);
     return '<div class="card"><div class="item"><span>' + cur(r) + ' <b>' + esc(r.name) + '</b><div class="sub">' + amt(r.transferAmount || r.amount, r.currency) + ' on its way' +
       (r.transferOn ? ' since ' + esc(fmtDate(r.transferOn)) + (days > 0 ? ' (' + days + ' day' + (days > 1 ? 's' : '') + ')' : '') : '') +
-      (r.transferAmount && r.transferAmount < r.amount - 0.5 ? ' · request ' + amt(r.amount, r.currency) : '') + '</div></span></div>' +
+      (r.transferAmount && r.transferAmount < r.amount - 0.5 ? ' · request ' + amt(r.amount, r.currency) + (r.transferAmount >= (r.owedNow || 0) - 0.5 ? ' (covers the sessions taken ✓)' : ' (doesn\'t cover the sessions taken)') : '') + '</div></span></div>' +
       '<div class="sub">Has it reached your account?</div><div class="actions"><button class="primary" onclick="transferArrived(' + i + ')">✅ Arrived: record it</button>' +
       '<button class="secondary" onclick="PAY_SEL=TODO.payments.transfers[' + i + '];saveTransfer(true)">It wasn\'t sent after all</button></div></div>';
   }).join('');
