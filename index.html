@@ -454,7 +454,14 @@ function groupSend(group, text, kind) {
 
 // Send reminder: the session time, the homework, or both.
 var REM = null;
-function reminderSheet(group, timeText, hwText) {
+// The reminder's first line, by how far away the session is when you send it (the prepared text can be from yesterday).
+function reminderOpening(day) {
+  var a = new Date(today() + 'T12:00:00'), b = new Date(String(day).slice(0, 10) + 'T12:00:00'), n = Math.round((b - a) / 864e5);
+  var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return n <= 0 ? 'Reminder: our session is today at' : n === 1 ? 'Our session is confirmed for tomorrow at' : 'Our next session is on ' + DAYS[b.getDay()] + ' ' + b.getDate() + ' ' + MON[b.getMonth()] + ' at';
+}
+function reminderSheet(group, timeText, hwText, day) {
+  if (day && timeText) timeText = String(timeText).replace(/^(Our session is confirmed [^\n]*? at|Reminder: our session is today at|Our session is confirmed for tomorrow at|Our next session is on [^\n]*? at)(?=\n)/, reminderOpening(day));
   REM = { group: group, time: timeText || '', hw: hwText || '' };
   sheet('Send reminder · ' + group, '<div class="sub">What to remind them about?</div><div class="actions">' +
     (REM.time ? '<button onclick="sendRem(\'time\')">🕒 Session time</button>' : '') +
@@ -1653,7 +1660,7 @@ function redrawSessionCards() {
 function sendReminder(i) {
   // The reminder is "time" then (after a blank line) the homework / past-papers part.
   var t = String(WEEK[i].reminder || ''), k = t.indexOf('\n\n');
-  reminderSheet(WEEK[i].group, k < 0 ? t : t.slice(0, k), k < 0 ? '' : t.slice(k + 2));
+  reminderSheet(WEEK[i].group, k < 0 ? t : t.slice(0, k), k < 0 ? '' : t.slice(k + 2), WEEK[i].day);
 }
 
 // "2026-10-08 23:59" -> "Thu 8 Oct, 11:59 PM".
@@ -2484,7 +2491,7 @@ function hwReminder(i) {
   var text = '📝 Homework reminder: ' + o.x.homework.title + ' is due ' + dueLabel(o.x.homework.due) + ' (Cairo time).' +
     (done.length ? '\nThank you ' + list(done) + ' for submitting ✅' : '') + (left.length ? '\nStill waiting for ' + list(left) + '.' : '');
   var rt = String(o.x.reminder || ''), k = rt.indexOf('\n\n');
-  reminderSheet(o.s.group, k < 0 ? rt : rt.slice(0, k), text);
+  reminderSheet(o.s.group, k < 0 ? rt : rt.slice(0, k), text, o.s.day);
 }
 
 // A student who hasn't submitted: set the status by hand, or send them a nudge.
