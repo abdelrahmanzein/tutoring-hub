@@ -53,7 +53,7 @@
 <body>
 <main id="main"><p class="sub">Loading…</p></main>
 <script>
-var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 5;
+var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 6;
 var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^0-9a-f]/g, '');
 var P = null, TAB = 'fin', FROM = '', TO = ymd(new Date()), RANGE = 'last8', LANG = 'en';
 try { LANG = localStorage.getItem('lang') === 'ar' ? 'ar' : 'en'; } catch (e) {}
@@ -62,7 +62,7 @@ try { LANG = localStorage.getItem('lang') === 'ar' ? 'ar' : 'en'; } catch (e) {}
 var T = {
   en: { brand: "Mr Zein's Tutoring Groups", fin: 'Financials', perf: 'Performance', due: 'Amount due', by: 'by', how: 'How to pay', insta: 'Pay with InstaPay', last: 'Last payment',
     covers: 'What this amount covers', session: 'Session', status: 'Status', fee: 'Fee', total: 'Total', tagDue: 'Due', tagDown: 'Down payment', notYet: 'not held yet', attended: 'Attended', absent: 'Absent',
-    soonReq: 'The payment request with the date comes shortly.', transfer: 'Noted that the transfer is on its way. Thank you.',
+    soonReq: 'The payment request with the date comes shortly.', transfer: 'Noted that the transfer is on its way. Thank you.', onWay: function (a, d) { return 'Transfer of ' + a + ' on its way' + (d ? ' (noted ' + d + ')' : '') + '. Thank you.'; }, left: 'Left to pay after it arrives', onWayTitle: 'Transfer on its way',
     nothing: 'Nothing to pay now', ahead: function (n) { return n + ' session' + (n > 1 ? 's' : '') + ' already paid in advance.'; },
     since: function (n, e) { return n + ' session' + (n > 1 ? 's' : '') + ' since the last payment; a payment request comes after ' + e + ' sessions.'; },
     egp: function (n, f) { return n + ' session' + (n > 1 ? 's' : '') + ' taken since the last payment, ' + f + ' each. Shown in yellow below.'; },
@@ -89,7 +89,7 @@ var T = {
     v: {}, invalid: 'This link is not valid.', incomplete: 'This link is not complete.', offline: 'Could not load the page. Please check the internet and try again.' },
   ar: { brand: 'مجموعات الأستاذ زين', fin: 'الموقف المالي', perf: 'الأداء', due: 'المبلغ المستحق', by: 'بحد أقصى يوم', how: 'طريقة الدفع', insta: 'الدفع عبر إنستاباي', last: 'آخر دفعة',
     covers: 'ما يشمله هذا المبلغ', session: 'الحصة', status: 'الحالة', fee: 'الرسوم', total: 'الإجمالي', tagDue: 'مستحق', tagDown: 'دفعة مقدمة', notYet: 'لم تُعقد بعد', attended: 'حضر', absent: 'غائب',
-    soonReq: 'يصلكم طلب الدفع وموعده قريبًا.', transfer: 'تم العلم بأن التحويل في الطريق، شكرًا لحضراتكم.',
+    soonReq: 'يصلكم طلب الدفع وموعده قريبًا.', transfer: 'تم العلم بأن التحويل في الطريق، شكرًا لحضراتكم.', onWay: function (a, d) { return 'تحويل بقيمة ' + a + ' في الطريق' + (d ? ' (بتاريخ ' + d + ')' : '') + '، شكرًا لحضراتكم.'; }, left: 'المتبقي بعد وصوله', onWayTitle: 'تحويل في الطريق',
     nothing: 'لا يوجد مبلغ مستحق الآن', ahead: function (k) { return sessAr(k) + ' مدفوعة مقدمًا.'; },
     since: function (k, e) { return sessAr(k) + ' منذ آخر دفعة، ويصل طلب الدفع بعد ' + sessAr(e) + '.'; },
     egp: function (k, f) { return sessAr(k) + ' منذ آخر دفعة، ' + f + ' للحصة، موضحة باللون الأصفر بالأسفل.'; },
@@ -135,11 +135,16 @@ function financials(p) {
   var c = p.currency, h = '', rows = p.money || [];
   if (p.due) {
     var taken = rows.filter(function (r) { return r.kind === 'due'; }).length, ahead = rows.length - taken, fee = rows.length ? money(rows[0].amount, c) : '';
-    h += '<div class="card due"><div class="sub">' + t('due') + '</div><div class="big">' + money(p.due.amount, c) + '</div>' +
+    // A transfer on its way: the card shows what's left once it arrives (or that it covers everything).
+    var onWay = p.due.transferAmount || 0, left = Math.max(0, Math.round((p.due.amount - onWay) * 100) / 100);
+    if (onWay && left < 0.5) h += '<div class="card" style="background:var(--ahead-bg);border-color:var(--ahead)"><div class="sub">' + t('onWayTitle') + '</div><div class="big" style="color:var(--ahead)">' + money(onWay, c) + '</div>' +
+      '<div class="sub">' + t('onWay')(money(onWay, c), p.due.transferOn ? d(p.due.transferOn) : '') + '</div></div>';
+    else h += '<div class="card due"><div class="sub">' + (onWay ? t('left') : t('due')) + '</div><div class="big">' + money(onWay ? left : p.due.amount, c) + '</div>' +
+      (onWay ? '<div class="sub">' + t('onWay')(money(onWay, c), p.due.transferOn ? d(p.due.transferOn) : '') + '</div>' : '') +
       (p.due.by ? '<div>' + t('by') + ' ' + esc(day(p.due.by)) + '</div>' : '<div class="sub">' + t('soonReq') + '</div>') +
       '<div class="sub">' + (p.type === 3 || ahead ? t('usd')(taken, ahead, fee) : t('egp')(taken, fee)) + '</div>' +
       (p.type === 2 ? '<div class="sub">' + t('usdEgp')(p.due.egpToday ? money(p.due.egpToday, 'EGP') : '') + '</div>' : '') +
-      (p.due.transferSent ? '<div class="sub">' + t('transfer') + '</div>' : '') + '</div>';
+      (p.due.transferSent && !onWay ? '<div class="sub">' + t('transfer') + '</div>' : '') + '</div>';
     if (p.pay) h += '<div class="card"><div class="sub">' + t('how') + '</div>' + (p.pay.kind === 'instapay'
       ? '<a href="' + esc(p.pay.link) + '" style="display:block;text-align:center;margin-top:8px;padding:12px;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none">' + t('insta') + '</a>'
       : '<div style="white-space:pre-wrap;margin-top:6px;font-size:15px;direction:ltr;text-align:left">' + esc(p.pay.text) + '</div>') + '</div>';

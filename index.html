@@ -2410,7 +2410,8 @@ function showTodo() {
       return '<div class="card"><div class="item"><span><b>' + esc(s.group) + '</b><div class="sub">' + esc(s.start) + '–' + esc(s.end) + (s.quiz ? ' · 📝 Quiz: ' + esc(s.quiz) : '') + '</div></span>' +
         '<span class="tag ' + (STATUS_TAG[s.status] || '') + '">' + esc(s.status) + '</span></div><div class="chips">' +
         (s.folder ? '<a class="chip folder-chip" href="' + esc(s.folder) + '" target="_blank">🗂️ Assignments</a>' : '') +
-        (hw && hw.link ? '<a class="chip folder-chip" href="' + esc(hw.link) + '" target="_blank">📥 ' + esc(hw.title) + '</a>' : '') + '</div></div>';
+        (hw && hw.link ? '<a class="chip folder-chip" href="' + esc(hw.link) + '" target="_blank">📥 ' + esc(hw.title) + '</a>' : '') + '</div>' +
+        (live[s.sessionId] && live[s.sessionId].reminder ? '<div class="actions"><button onclick="todayReminder(\'' + esc(s.sessionId) + '\')">💬 Send reminder</button></div>' : '') + '</div>';
     }).join(''));
     if (d.toLog.length) parts.push('<h2>Sessions to log</h2>' + d.toLog.map(function (s) {
       return '<div class="card"><div class="item"><span><b>' + esc(s.group) + '</b><div class="sub">' + esc(fmtDate(s.day)) + ' · ' + esc(s.start) + '</div></span></div>' +
@@ -2524,6 +2525,12 @@ function sendRec(i) {
   showTodo();
 }
 
+// The reminder for one of today's sessions (from To do).
+function todayReminder(sessionId) {
+  var s = (TODO.soon || []).filter(function (x) { return x.sessionId === sessionId; })[0], t = String(((cached('weekLive') || {})[sessionId] || {}).reminder || ''), k = t.indexOf('\n\n');
+  reminderSheet(s.group, k < 0 ? t : t.slice(0, k), k < 0 ? '' : t.slice(k + 2), s.day);
+}
+
 // Opens the log form for a session from the list (finds it among the loaded week, else a blank form for it).
 function logFromTodo(sessionId) {
   var s = TODO.toLog.filter(function (x) { return x.sessionId === sessionId; })[0];
@@ -2572,6 +2579,14 @@ function drawPayments() {
   if (p.reminders.length) html += '<h2>Payment reminders due</h2>' + p.reminders.map(function (r, i) {
     return '<div class="card"><div class="item"><span>' + cur(r) + ' <b>' + esc(r.name) + '</b><div class="sub">Sent ' + esc(fmtDate(r.sent)) + (r.sentAmount && r.sentAmount !== r.amount ? ' as ' + amt(r.sentAmount, r.currency) + ', now ' + r.sessions + ' sessions' : '') + (r.reminders ? ' · ' + r.reminders + ' reminder' + (r.reminders > 1 ? 's' : '') + ' so far' : '') + '</div></span><b>' + amt(r.amount, r.currency) + '</b></div>' +
       '<div class="actions"><button onclick="previewPay(\'reminders\',' + i + ')">Preview</button><button class="primary" onclick="sendReminderPay(' + i + ')">💬 Send reminder</button><button class="secondary" onclick="payActions(\'reminders\',' + i + ')">More…</button></div></div>';
+  }).join('');
+  if (p.transfers && p.transfers.length) html += '<h2>Transfers to confirm</h2>' + p.transfers.map(function (r, i) {
+    var days = Math.round((new Date(today() + 'T12:00:00') - new Date(String(r.transferOn || r.sent).slice(0, 10) + 'T12:00:00')) / 864e5);
+    return '<div class="card"><div class="item"><span>' + cur(r) + ' <b>' + esc(r.name) + '</b><div class="sub">' + amt(r.transferAmount || r.amount, r.currency) + ' on its way' +
+      (r.transferOn ? ' since ' + esc(fmtDate(r.transferOn)) + (days > 0 ? ' (' + days + ' day' + (days > 1 ? 's' : '') + ')' : '') : '') +
+      (r.transferAmount && r.transferAmount < r.amount - 0.5 ? ' · request ' + amt(r.amount, r.currency) : '') + '</div></span></div>' +
+      '<div class="sub">Has it reached your account?</div><div class="actions"><button class="primary" onclick="transferArrived(' + i + ')">✅ Arrived: record it</button>' +
+      '<button class="secondary" onclick="PAY_SEL=TODO.payments.transfers[' + i + '];saveTransfer(true)">It wasn\'t sent after all</button></div></div>';
   }).join('');
   if (p.waiting.length) html += '<details class="card"><summary><b>Waiting for payment (' + p.waiting.length + ')</b></summary>' + p.waiting.map(function (r, i) {
     return '<div class="item" style="margin-top:8px;cursor:pointer" onclick="payActions(\'waiting\',' + i + ')"><span>' + cur(r) + ' ' + esc(r.name) +
@@ -2642,12 +2657,32 @@ function payActions(list, i) {
 var PAY_SEL = null;
 function closeSheet() { var bg = document.querySelector('.sheet-bg'); if (bg) bg.remove(); }
 function payFromRequest() { closeSheet(); paymentForm(PAY_SEL.id, { amount: PAY_SEL.amount, currency: PAY_SEL.type === 2 ? 'EGP' : PAY_SEL.currency }); }
+// "Transfer on its way": how much they sent (reminders stop; To do then asks whether it arrived). Off again: back to waiting.
 function transferFlag(on) {
   var r = PAY_SEL; if (!r.statementId) return notice('Still saving the request; try again in a moment.');
-  call('transferSent', { statementId: r.statementId, undo: !on }, function () {}, { optimistic: function () {
-    patchLocal(function () { var t = cached('todo'); if (t) ['waiting', 'reminders'].forEach(function (l) { t.payments[l].forEach(function (x) { if (x.statementId === r.statementId) x.status = on ? 'Transfer sent' : 'Sent'; }); }); });
+  if (on) return sheet('Transfer on its way · ' + r.name, '<div class="sub">How much did they send? (' + esc(r.currency) + ')</div>' +
+    '<input id="tfa" type="number" inputmode="decimal" value="' + esc(r.amount) + '">' +
+    '<div class="sub" style="margin-top:6px">Reminders stop. The family page shows it, with anything left to pay. To do asks you to confirm when it reaches your account.</div>' +
+    '<button class="primary" style="width:100%;margin-top:10px" onclick="saveTransfer()">Save</button>');
+  saveTransfer(true);
+}
+function saveTransfer(off) {
+  var r = PAY_SEL, amount = off ? 0 : Number((document.getElementById('tfa') || {}).value) || 0;
+  if (!off && !(amount > 0)) return notice('Enter the amount on its way.');
+  call('transferSent', { statementId: r.statementId, undo: !!off, amount: amount }, function () {}, { optimistic: function () {
+    patchLocal(function () {
+      var t = cached('todo'); if (!t) return;
+      var all = t.payments.waiting.concat(t.payments.reminders, t.payments.transfers || []), x = all.filter(function (y) { return y.statementId === r.statementId; })[0];
+      ['waiting', 'reminders', 'transfers'].forEach(function (l) { t.payments[l] = (t.payments[l] || []).filter(function (y) { return y.statementId !== r.statementId; }); });
+      if (x) { x.status = off ? 'Sent' : 'Transfer sent'; x.transferAmount = amount; x.transferOn = today(); (off ? t.payments.waiting : (t.payments.transfers = t.payments.transfers || [])).push(x); }
+    });
     closeSheet(); showTodo();
   } });
+}
+// A transfer arrived: record the payment (filled in with the amount on its way).
+function transferArrived(i) {
+  var r = TODO.payments.transfers[i]; PAY_SEL = r;
+  paymentForm(r.id, { amount: r.transferAmount || r.amount, currency: r.type === 2 ? 'EGP' : r.currency });
 }
 var pendingWithdraw = '';
 function withdrawRequest() {
@@ -2666,7 +2701,7 @@ function loadSms() {
     SMS = (j.items || []).map(function (it) { var v = {}; try { v = JSON.parse(it.value); } catch (e) {} return Object.assign(parseSms(v.text || ''), { key: it.key, at: v.at, text: v.text || '' }); });
     var box = document.getElementById('todo-sms');
     if (!box || !SMS.length) return;
-    var open = TODO.payments.ready.concat(TODO.payments.reminders, TODO.payments.waiting);
+    var open = TODO.payments.ready.concat(TODO.payments.reminders, TODO.payments.waiting, (TODO.payments.transfers || []).map(function (r) { return Object.assign({}, r, { amount: r.transferAmount || r.amount }); }));
     box.innerHTML = '<h2>Money received (bank texts)</h2>' + SMS.map(function (m, i) {
       var match = open.filter(function (r) { return m.amount && Math.abs(r.amount - m.amount) < 0.5 && (r.currency === m.currency || r.type === 2); });
       return '<div class="card"><div class="item"><b>' + (m.amount ? amt(m.amount, m.currency) : 'Amount not found') + '</b><span class="sub">' + esc(fmtDate(String(m.at).slice(0, 10))) + '</span></div>' +
