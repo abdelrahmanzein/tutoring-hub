@@ -53,7 +53,7 @@
 <body>
 <main id="main"><p class="sub">Loading…</p></main>
 <script>
-var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 6;
+var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 7;
 var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^0-9a-f]/g, '');
 var P = null, TAB = 'fin', FROM = '', TO = ymd(new Date()), RANGE = 'last8', LANG = 'en';
 try { LANG = localStorage.getItem('lang') === 'ar' ? 'ar' : 'en'; } catch (e) {}
@@ -72,7 +72,7 @@ var T = {
     lastMonth: 'Last month', last3: 'Last 3 months', all: 'Everything', last8: 'Last 8 sessions', none: 'No sessions in these dates.',
     onTime: 'On time', lateMin: function (m) { return 'Late, ' + m + ' min'; },
     sAtt: 'Sessions attended', sTime: 'Arrived on time', sHw: 'Homework on time', of: 'of',
-    timed: function (n) { return 'over the ' + n + ' sessions with recorded join times'; }, early: function (n) { return n + ' of these sessions are from before join times and participation were recorded: attendance only.'; },
+    timed: function (n) { return 'over the ' + n + ' sessions with recorded join times'; }, early: function (n) { return n + (n == 1 ? ' of these sessions is' : ' of these sessions are') + ' from before join times and participation were recorded: attendance only.'; },
     markSoon: 'Mark coming soon', nextN: function (k) { return 'the next ' + k + ' session' + (k > 1 ? 's' : ''); }, quizzes: 'Quizzes', levelOf: function (l) { return 'Level ' + l + ' of 7'; }, soon: 'Level coming soon', atHome: 'taken at home', level: 'Level',
     note: 'A note from Mr Zein', cover: '1-on-1 sessions', with: 'with', covered: 'Covered', labels: 'What the labels mean', updated: 'Updated',
     foot: 'If a student is absent, the recording is sent and the session is charged.',
@@ -80,11 +80,11 @@ var T = {
       '<span class="pill ahead">Down payment</span> the next sessions, paid in advance (for families paying in blocks). They are not dated, since sessions can move.',
       '<span class="pill due">Due</span> <span class="miss">Absent</span> The student missed that session: the recording was sent, and the session is charged.',
       '<b>Amount due</b> What to pay, by the date shown. <b>Last payment</b> The most recent payment received.'],
-    key: ['<span class="ok">On time</span> Joined when the session started.', '<span class="late">Late, 6 min</span> Joined more than 2 minutes after the start.',
+    key: ['<span class="ok">On time</span> Joined when the session started.', '<span class="late">Late, 6 min</span> (example) Joined more than 2 minutes after the start; the minutes are shown.',
       '<span class="miss">Absent</span> Missed the session: the recording is sent and the session is charged.', '<span class="ok">Attended</span> Present, from before join times were recorded.',
       '<b>Participation</b> (from the session\'s transcript, compared with the rest of the group): Very active = well above the group\'s average · Active = about average · Occasional = a few times · Quiet = hardly spoke · <span class="sub">–</span> = not measured that session.',
-      '<span class="ok">On time</span> <span class="sub">4. Title</span> Homework uploaded by 11:59 PM (Cairo) the night before the session. <span class="late">Late</span> uploaded after that, within 7 days. <span class="miss">Missing</span> not uploaded, or uploaded more than 7 days late. <span class="ok">Excused</span> agreed with Mr Zein.',
-      '<b>34/40</b> <span class="sub">Level 5 of 7</span> The quiz mark, and where it falls among all the students who took the same quiz (7 is the highest; not an official IB grade). <span class="sub">Level coming soon</span> until everyone has taken it.',
+      '<b>Homework</b> (shown as e.g. <span class="ok">On time</span> <span class="sub">4. Integration</span>): <span class="ok">On time</span> uploaded by 11:59 PM (Cairo) the night before the session. <span class="late">Late</span> uploaded after that, within 7 days. <span class="miss">Missing</span> not uploaded, or uploaded more than 7 days late. <span class="ok">Excused</span> agreed with Mr Zein.',
+      '<b>Quizzes</b> (shown as e.g. <b>30/40</b> <span class="sub">Level 6 of 7</span>): the quiz mark, and where it falls among all the students who took the same quiz (7 is the highest; not an official IB grade). <span class="sub">Level coming soon</span> until everyone has taken it.',
       '🟢 most of the time · 🟡 often · 🔴 needs attention.'],
     v: {}, invalid: 'This link is not valid.', incomplete: 'This link is not complete.', offline: 'Could not load the page. Please check the internet and try again.' },
   ar: { brand: 'مجموعات الأستاذ زين', fin: 'الموقف المالي', perf: 'الأداء', due: 'المبلغ المستحق', by: 'بحد أقصى يوم', how: 'طريقة الدفع', insta: 'الدفع عبر إنستاباي', last: 'آخر دفعة',
@@ -107,11 +107,11 @@ var T = {
       '<span class="pill ahead">دفعة مقدمة</span> الحصص القادمة، تُدفع مقدمًا (للأسر التي تدفع على دفعات)، دون تواريخ لأن مواعيد الحصص قد تتغير.',
       '<span class="pill due">مستحق</span> <span class="miss">غائب</span> لم يحضر الطالب تلك الحصة، وأُرسل له التسجيل وتُحتسب الحصة.',
       '<b>المبلغ المستحق</b> ما يُدفع بحد أقصى في الموعد الموضح. <b>آخر دفعة</b> أحدث دفعة تم استلامها.'],
-    key: ['<span class="ok">في الموعد</span> دخل عند بدء الحصة.', '<span class="late">متأخر ٦ دقائق</span> دخل بعد بدء الحصة بأكثر من دقيقتين.',
+    key: ['<span class="ok">في الموعد</span> دخل عند بدء الحصة.', '<span class="late">متأخر ٦ دقائق</span> (مثال) دخل بعد بدء الحصة بأكثر من دقيقتين، مع عدد الدقائق.',
       '<span class="miss">غائب</span> لم يحضر الحصة، ويُرسل له التسجيل وتُحتسب الحصة.', '<span class="ok">حضر</span> حاضر، من قبل بدء تسجيل وقت الدخول.',
       '<b>المشاركة</b> (من نص الحصة، مقارنةً ببقية المجموعة): نشِط جدًا = أعلى بكثير من متوسط المجموعة · نشِط = في حدود المتوسط · أحيانًا = بضع مرات · هادئ = نادرًا ما شارك · <span class="sub">–</span> = لم تُقَس في تلك الحصة.',
-      '<span class="ok">في الموعد</span> <span class="sub">4. Title</span> رُفع الواجب قبل الساعة ١١:٥٩ مساءً (بتوقيت القاهرة) في الليلة السابقة للحصة. <span class="late">متأخر</span> رُفع بعد ذلك خلال ٧ أيام. <span class="miss">لم يُسلَّم</span> لم يُرفع، أو رُفع بعد أكثر من ٧ أيام من موعده. <span class="ok">معفى</span> بالاتفاق مع الأستاذ زين.',
-      '<b>٣٤/٤٠</b> <span class="sub">المستوى ٥ من ٧</span> درجة الاختبار، وموقعها بين جميع الطلاب الذين أدّوا الاختبار نفسه (٧ هو الأعلى، وليس درجة IB رسمية). <span class="sub">يظهر المستوى قريبًا</span> حتى يؤدي الجميع الاختبار.',
+      '<b>الواجب</b> (يظهر مثلًا هكذا: <span class="ok">في الموعد</span> <span class="sub">4. Integration</span>): <span class="ok">في الموعد</span> رُفع الواجب قبل الساعة ١١:٥٩ مساءً (بتوقيت القاهرة) في الليلة السابقة للحصة. <span class="late">متأخر</span> رُفع بعد ذلك خلال ٧ أيام. <span class="miss">لم يُسلَّم</span> لم يُرفع، أو رُفع بعد أكثر من ٧ أيام من موعده. <span class="ok">معفى</span> بالاتفاق مع الأستاذ زين.',
+      '<b>الاختبارات</b> (تظهر مثلًا هكذا: <b>٣٠/٤٠</b> <span class="sub">المستوى ٦ من ٧</span>): درجة الاختبار، وموقعها بين جميع الطلاب الذين أدّوا الاختبار نفسه (٧ هو الأعلى، وليس درجة IB رسمية). <span class="sub">يظهر المستوى قريبًا</span> حتى يؤدي الجميع الاختبار.',
       '🟢 أغلب الوقت · 🟡 كثيرًا · 🔴 يحتاج إلى متابعة.'],
     v: { 'On time': 'في الموعد', 'Late': 'متأخر', 'Missing': 'لم يُسلَّم', 'Excused': 'معفى', 'Very active': 'نشِط جدًا', 'Active': 'نشِط', 'Occasional': 'أحيانًا', 'Quiet': 'هادئ' },
     invalid: 'هذا الرابط غير صالح.', incomplete: 'هذا الرابط غير مكتمل.', offline: 'تعذّر تحميل الصفحة، يرجى التأكد من الاتصال بالإنترنت والمحاولة مرة أخرى.' }
