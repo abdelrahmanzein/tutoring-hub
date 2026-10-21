@@ -1067,29 +1067,24 @@ function adjustForm(id, pre) {
     document.getElementById('main').innerHTML = testBar(d.testMode) + '<button class="back" onclick="showMoneyStudent(\'' + esc(id) + '\')">‹ Cancel</button><h2>Waive, correct or refund · ' + esc(d.student.name) + '</h2>' +
       '<div class="card sub" style="font-size:14px">Use this only when the balance must change <b>without</b> a normal payment:<br>' +
       '• <b>Waive</b>: forgive an amount (e.g. a discount, or a session you decide not to charge). Enter it as a <b>plus</b> amount.<br>' +
-      '• <b>Correct</b>: fix a wrong balance (e.g. a mistake carried from the old sheet): choose whether it adds to or lowers what they owe.<br>' +
+      '• <b>Correct</b>: fix a wrong balance (e.g. a mistake carried from the old sheet). Plus lowers what they owe, minus adds to it.<br>' +
       '• <b>Refund</b>: money you paid back to the family (e.g. unused credit when a student leaves).<br>' +
       'To cancel one session completely, it is simpler to delete its charge in the ledger.</div>' +
       '<div class="card"><div class="sub">What is it?</div><select id="at2"><option value="Adjustment">Waive or correct</option><option value="Refund">Refund (money paid back)</option></select>' +
-      '<div id="adirw"><div class="sub" style="margin-top:8px">Effect</div><select id="adir"><option value="1">Lowers what they owe (waive, discount, credit)</option><option value="-1">Adds to what they owe (a charge was too low)</option></select></div>' +
-      '<div class="sub" style="margin-top:8px">Amount</div><input id="aa" type="number" step="any" min="0" inputmode="decimal">' +
+      '<div class="sub" style="margin-top:8px">Amount</div><input id="aa" type="number" step="any" inputmode="decimal">' +
       '<div class="sub" style="margin-top:8px">Currency</div><select id="ac"><option>EGP</option><option>USD</option></select>' +
       '<div class="sub" style="margin-top:8px">Date</div><input id="ad" type="date" value="' + today() + '">' +
       '<div class="sub" style="margin-top:8px">Reason (required, kept in the ledger)</div><input id="ar"></div>' +
       '<button class="primary" style="margin-top:10px" onclick="hold(this);saveAdjust(\'' + esc(id) + '\')">Save</button>';
     document.getElementById('ac').value = d.student.currency;
-    document.getElementById('at2').onchange = function () { document.getElementById('adirw').style.display = this.value === 'Refund' ? 'none' : ''; };
-    if (pre) { if (pre.type) { document.getElementById('at2').value = pre.type; document.getElementById('at2').onchange.call(document.getElementById('at2')); } if (pre.amount) document.getElementById('aa').value = Math.abs(pre.amount);
+    if (pre) { if (pre.type) document.getElementById('at2').value = pre.type; if (pre.amount) document.getElementById('aa').value = pre.amount;
       if (pre.currency) document.getElementById('ac').value = pre.currency; if (pre.reason) document.getElementById('ar').value = pre.reason; }
   }, { form: true });
 }
 
 // Saves the adjustment.
 function saveAdjust(id) {
-  // The amount is typed without a sign (phone keypads have no minus); "Effect" gives the sign.
-  var signed = Math.abs(Number(document.getElementById('aa').value) || 0) * (document.getElementById('at2').value === 'Refund' ? 1 : Number(document.getElementById('adir').value));
-  document.getElementById('aa').value = signed;
-  call('addAdjustment', { id: id, type: document.getElementById('at2').value, amount: signed, currency: document.getElementById('ac').value,
+  call('addAdjustment', { id: id, type: document.getElementById('at2').value, amount: document.getElementById('aa').value, currency: document.getElementById('ac').value,
     date: document.getElementById('ad').value, reason: document.getElementById('ar').value }, function (r) {
     if (r.queued) {
       var t = document.getElementById('at2') ? document.getElementById('at2').value : 'Adjustment', a = Number(document.getElementById('aa') ? document.getElementById('aa').value : 0);
