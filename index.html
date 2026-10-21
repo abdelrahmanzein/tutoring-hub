@@ -2472,6 +2472,13 @@ function showTodo() {
         }).join('') + '</div>' : '') +
         (live[s.sessionId] && live[s.sessionId].reminder ? '<div class="actions"><button onclick="todayReminder(\'' + esc(s.sessionId) + '\')">💬 Send reminder</button></div>' : '') + '</div>';
     }).join(''));
+    // New enquiries (from the enquiry form or added by you): the details message is one tap away.
+    var newPros = (cached('prospects') || []).filter(function (p) { return p['Stage'] === 'New'; });
+    if (newPros.length) parts.push('<h2>New enquiries</h2>' + newPros.map(function (p) {
+      return '<div class="card nav-row" onclick="todoProspect(\'' + esc(p['Prospect ID']) + '\')"><span><b>' + esc(p['Student name']) + '</b><div class="sub">' +
+        esc([p['Course'] && p['Level'] ? p['Course'] + ' ' + p['Level'] : '', p['Batch'] ? 'May ' + p['Batch'] : '', p['Country']].filter(String).join(' · ')) +
+        (/Enquiry form/.test(p['Notes'] || '') ? ' · via the form' : '') + '</div></span><span>Send details ›</span></div>';
+    }).join(''));
     if (d.toLog.length) parts.push('<h2>Sessions to log</h2>' + d.toLog.map(function (s) {
       return '<div class="card"><div class="item"><span><b>' + esc(s.group) + '</b><div class="sub">' + esc(fmtDate(s.day)) + ' · ' + esc(s.start) + '</div></span></div>' +
         '<div class="actions"><button class="primary" onclick="logFromTodo(\'' + esc(s.sessionId) + '\')">Log session</button>' +
@@ -2582,6 +2589,13 @@ function sendRec(i) {
   r.links.forEach(function (u) { var m = u.match(/\/d\/([-\w]+)/); if (m) call('shareRecording', { fileId: m[1] }, function () {}, { optimistic: function () {}, quiet: true }); });
   patchLocal(function () { var t = cached('todo'); if (t) t.recordings = t.recordings.filter(function (x) { return !(x.id === r.id && x.sessionId === r.sessionId); }); });
   showTodo();
+}
+
+// Opens a new enquiry (same sheet as on Students → Prospects).
+function todoProspect(id) {
+  PROS = cached('prospects') || [];
+  var i = PROS.map(function (p) { return p['Prospect ID']; }).indexOf(id);
+  if (i >= 0) showProspect(i);
 }
 
 // A student chip on a Today card: same options as on Sessions (the session is added to the loaded week if needed).
@@ -2964,7 +2978,7 @@ function drawProspects() {
     var box = document.getElementById('pros');
     if (!box) return;
     var open = list.filter(function (p) { return !/^(Joined|Closed)$/.test(p['Stage']); });
-    box.innerHTML = '<div class="card"><div class="item"><b>Prospects' + (open.length ? ' (' + open.length + ')' : '') + '</b><button class="small" onclick="prospectForm()">＋ Prospect</button></div>' +
+    box.innerHTML = '<div class="card"><div class="item"><b>Prospects' + (open.length ? ' (' + open.length + ')' : '') + '</b><span><button class="small" style="width:auto" onclick="enquiryLink()">🔗 Enquiry form</button> <button class="small" style="width:auto" onclick="prospectForm()">＋ Prospect</button></span></div>' +
       open.map(function (p) {
         var i = PROS.indexOf(p);
         return '<div class="item" style="margin-top:8px;cursor:pointer" onclick="showProspect(' + i + ')"><span><b>' + esc(p['Student name']) + '</b><div class="sub">' +
@@ -3006,6 +3020,15 @@ function saveProspect() {
 }
 
 // One prospect: the next step with its ready message, and the other options.
+// The public enquiry form: copy its link to send to anyone who messages you first, or preview it.
+function enquiryLink() {
+  var url = location.href.replace(/[?#].*$/, '').replace(/[^/]*$/, '') + 'enquiry.html';
+  sheet('Enquiry form', '<div class="sub">Send this link to anyone who asks about lessons (or save it as a WhatsApp quick reply). What they fill in arrives in To do → New enquiries, with the details message ready.</div>' +
+    '<div class="card" style="word-break:break-all;font-size:14px;margin-top:8px">' + esc(url) + '</div>' +
+    '<div class="actions"><button class="primary" onclick="copyText(\'' + esc(url) + '\');notice(\'Link copied.\')">Copy the link</button><button onclick="openInApp(\'' + esc(url) + '?preview=1\', \'Enquiry form (preview)\')">Preview</button></div>');
+}
+function copyText(t) { try { navigator.clipboard.writeText(t); } catch (e) { var x = document.createElement('textarea'); x.value = t; document.body.appendChild(x); x.select(); document.execCommand('copy'); x.remove(); } }
+
 function showProspect(i) {
   var p = PROS[i], st = p['Stage'], m = p.messages || {};
   var wa = function (text, label, next) {
@@ -3054,7 +3077,7 @@ function prospectSend(i, kind, next) {
   if (!p.phone) notice('No number saved: pick the chat in WhatsApp.');
   if (next && p['Stage'] !== next) call('updateProspect', { id: p['Prospect ID'], changes: { 'Stage': next } }, function () {}, { optimistic: function () {
     patchLocal(function () { var l = cached('prospects'); if (l) l.forEach(function (x) { if (x['Prospect ID'] === p['Prospect ID']) x['Stage'] = next; }); });
-    closeSheet(); showStudents();
+    closeSheet(); if (refreshView === showTodo) showTodo(); else showStudents();
   } });
 }
 

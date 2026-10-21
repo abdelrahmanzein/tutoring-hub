@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IBDP Maths enquiry · Mr Zein's Tutoring Groups</title>
+  <style>
+    :root { --bg:#f3f5f9; --card:#fff; --text:#18202e; --sub:#5b6577; --line:#d9dee8; --accent:#2457c5; --bad:#c62828; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#10141c; --card:#1a2030; --text:#e8ecf3; --sub:#9aa5b8; --line:#2c3446; --accent:#7aa2ff; --bad:#ff8a80; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    main { max-width:560px; margin:0 auto; padding:20px 16px 40px; }
+    h1 { font-size:22px; margin:6px 0 2px; }
+    .ar { direction:rtl; text-align:right; font-family:"Geeza Pro", "Noto Naskh Arabic", Tahoma, sans-serif; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:14px 0; }
+    .card h2 { font-size:17px; margin:0 0 6px; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    label { display:block; margin-top:12px; font-size:14px; }
+    label .lbl { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; color:var(--sub); }
+    input, select { width:100%; margin-top:4px; padding:11px 12px; font:inherit; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--text); }
+    .hint { font-size:13px; color:var(--sub); margin-top:3px; }
+    button { width:100%; margin-top:6px; padding:14px; font:inherit; font-weight:600; border:0; border-radius:12px; background:var(--accent); color:#fff; }
+    button:disabled { opacity:.6; }
+    .err { color:var(--bad); margin-top:10px; white-space:pre-line; }
+    .brand { color:var(--accent); font-weight:700; letter-spacing:.2px; margin-top:4px; }
+    .row { padding:8px 0; border-bottom:1px solid var(--line); } .row:last-child { border-bottom:0; }
+    .row .lbl { display:flex; justify-content:space-between; gap:10px; color:var(--sub); font-size:13px; }
+    .val { font-weight:600; margin-top:2px; } .val .ar { font-weight:400; color:var(--sub); }
+    .sub { color:var(--sub); }
+  </style>
+</head>
+<body>
+<main id="main"><p class="sub">Loading… <span class="ar">جارٍ التحميل…</span></p></main>
+<script>// Front page on GitHub Pages: talks to the Apps Script web app with fetch, but keeps the same
+// google.script.run calls the screens already use, so the screens are shared with the Apps Script version.
+var EXEC_URL = 'https://script.google.com/macros/s/AKfycbyCLTCfTmk_UHXW6_aSQ28cSyYRWWiUpFdx4Tsa5epjAviwggqbnqIvu89apC2YxQdz/exec';
+var google = { script: { get run() {
+  var ok = function () {}, fail = function () {};
+  var o = {
+    withSuccessHandler: function (f) { ok = f; return o; },
+    withFailureHandler: function (f) { fail = f; return o; },
+    api: function (token, action, args) {
+      // Google sometimes answers with an error page (cold start); one quiet retry fixes almost all of them.
+      // Only reads and self-protecting saves are retried (payments re-check the balance, sessions refuse duplicates,
+      // imports and deletes are safe to repeat). Other saves are never repeated automatically.
+      var retry = ['tutorReport', 'joinSubmit', 'addAdjustment', 'addAccount', 'undoSession', 'undoStudentEdit', 'updateStudent', 'confirmAccount'].indexOf(action) < 0;
+      var attempt = function (n) {
+        fetch(EXEC_URL, { method: 'POST', credentials: 'omit', redirect: 'follow', body: JSON.stringify({ token: token, action: action, args: args }) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            // Hand the answer over outside this promise, so a drawing problem on the page is never reported as "no connection".
+            setTimeout(function () { if (j.ok) ok(j.res); else fail(new Error(j.error)); }, 0);
+          })
+          .catch(function (e) {
+            // Google sometimes answers with an error page instead of data ("The string did not match the expected pattern").
+            if (n < 3 && retry) return setTimeout(function () { attempt(n + 1); }, 1500 * n);
+            fail(new Error(retry ? 'Google didn\'t answer just now. Tap Refresh in a moment.'
+              : 'Not sure this was saved (connection problem). Tap Refresh and check before trying again.'));
+          });
+      };
+      attempt(1);
+    }
+  };
+  return o;
+} } };
+
+// Keeps the last loaded data on this device, so the app opens with it instantly and refreshes in the background.
+function saveCache() {
+  setTimeout(function () {
+    try { localStorage.setItem('th_cache', JSON.stringify(CACHE)); }
+    catch (e) {                                    // too big for the phone's storage: keep everything but the student pages
+      try { var c = {}; Object.keys(CACHE).forEach(function (k) { if (k.indexOf('profile|') !== 0) c[k] = CACHE[k]; }); localStorage.setItem('th_cache', JSON.stringify(c)); } catch (e2) {}
+    }
+  }, 0);
+}
+function loadCache() {
+  try {
+    var c = JSON.parse(localStorage.getItem('th_cache') || 'null');
+    // Saved data shows at once but counts as old: it's replaced as soon as the fresh download arrives.
+    if (c) { Object.keys(c).forEach(function (k) { c[k].snap = false; c[k].at = 0; }); CACHE = c; }
+  } catch (e) { /* ignore */ }
+}
+
+// The secret token comes once in the link (#t=...), is kept on this device, and removed from the address bar.
+function boot() {
+  var m = location.hash.match(/t=([0-9a-f]+)/);
+  // The token stays in the link on purpose: an iPhone Home Screen app keeps its own storage, separate from Safari,
+  // so the icon must be added from the full link to carry the token in.
+  if (m) { try { localStorage.setItem('th_token', m[1]); } catch (e) {} }
+  var token = ''; try { token = localStorage.getItem('th_token') || ''; } catch (e) {}
+  if (!token) {
+    document.getElementById('splash').innerHTML = '<div class="splash-name">Tutoring Hub</div><div class="sub" style="max-width:300px;text-align:center;line-height:1.5">' +
+      'This copy of the app has no sign-in yet.<br>Open your private setup link in Safari, then Share → Add to Home Screen from that page.</div>';
+    return;
+  }
+  loadCache();
+  start(token);
+}
+</script>
+<script>
+var KEY = (new URLSearchParams(location.search).get('k') || '');
+
+// First contact: whoever is asking (student or parent) fills this once; it becomes a prospect in the app, with the
+// details message ready for Mr Zein to send. No sign-in; only the enquiry actions work without one.
+function api(action, args, ok, fail) {
+  google.script.run.withSuccessHandler(function (r) { ok(r.data); }).withFailureHandler(function (e) { fail(e.message || String(e)); }).api('', action, args);
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function field(id, ar, en, input, hint) {
+  return '<label id="f-' + id + '"><span class="lbl"><span>' + en + '</span><span class="ar">' + ar + '</span></span>' + (input || '<input id="' + id + '">') +
+    (hint ? '<div class="hint">' + hint + '</div>' : '') + '</label>';
+}
+function select(id, options) {
+  return '<select id="' + id + '"><option value="">–</option>' + options.map(function (o) { return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>'; }).join('') + '</select>';
+}
+function phone(id) {
+  return '<div style="display:flex;gap:8px"><select id="' + id + 'Code" aria-label="Country code" style="width:auto;flex:none">' + F.countries.map(function (c) {
+    return '<option value="' + c.dial + '">' + c.flag + ' ' + c.dial + '</option>'; }).join('') + '</select>' +
+    '<input id="' + id + '" type="tel" inputmode="tel" placeholder="Number / الرقم"></div>';
+}
+
+var PREVIEW = /[?&]preview=1/.test(location.search) || KEY === 'preview', F = null;
+function draw(f) {
+  F = f;
+  var m = document.getElementById('main');
+  m.innerHTML =
+    (PREVIEW ? '<div class="card" style="border-color:#d97706">Preview: this is exactly what students and parents see. Nothing is sent.</div>' : '') +
+    '<div class="brand">Mr Zein\'s Tutoring Groups</div>' +
+    '<h1 class="ar">الاستفسار عن حصص الرياضيات للبكالوريا الدولية</h1><h1>IBDP Maths enquiry</h1>' +
+    '<p class="sub ar">يرجى تعبئة هذا النموذج القصير، وستصلكم التفاصيل على واتساب.</p><p class="sub">Please fill in this short form, and the details will reach you on WhatsApp.</p>' +
+    '<div class="card"><h2><span>Who is filling in this form?</span><span class="ar">من يملأ هذا النموذج؟</span></h2>' +
+      field('who', 'أنا', 'I am the', select('who', [['Parent', 'Parent / ولي الأمر'], ['Student', 'Student / الطالب']])) +
+    '</div>' +
+    '<div class="card"><h2><span>Student</span><span class="ar">الطالب</span></h2>' +
+      field('name', 'اسم الطالب بالإنجليزية', 'Student\'s full name (English)') +
+      field('school', 'المدرسة', 'School') +
+      field('country', 'بلد الإقامة', 'Country of residence', select('country', f.countries.map(function (c) { return [c.name, c.flag + ' ' + c.name]; }).concat([['Other', '🌍 Other']]))) +
+      field('city', 'المدينة', 'City', null, 'So session times are shown in your local time.') +
+      field('course', 'المادة', 'Course', select('course', [['AA', 'Analysis and Approaches (AA)'], ['AI', 'Applications and Interpretation (AI)'], ['?', 'Not sure yet / لم يُحدَّد بعد']])) +
+      field('level', 'المستوى', 'Level', select('level', [['HL', 'Higher Level (HL)'], ['SL', 'Standard Level (SL)'], ['?', 'Not sure yet / لم يُحدَّد بعد']])) +
+      field('batch', 'سنة الامتحانات النهائية', 'Final exams in', select('batch', f.batches.map(function (b) { return [b, 'May ' + b + ' / مايو ' + b]; }))) +
+      field('studentWhatsApp', 'رقم واتساب الطالب (اختياري)', 'Student\'s WhatsApp (optional)', phone('studentWhatsApp')) +
+    '</div>' +
+    '<div class="card"><h2><span>Parent</span><span class="ar">ولي الأمر</span></h2>' +
+      field('parentName', 'اسم ولي الأمر', 'Parent\'s name') +
+      field('parentRelation', 'صلة القرابة', 'Relation', select('parentRelation', [['Mother', 'Mother / الأم'], ['Father', 'Father / الأب'], ['Other', 'Other / غير ذلك']])) +
+      field('parentWhatsApp', 'رقم واتساب ولي الأمر', 'Parent\'s WhatsApp', phone('parentWhatsApp')) +
+    '</div>' +
+    '<div class="card">' +
+      field('heard', 'كيف عرفتم عنا؟ (اختياري)', 'How did you hear about us? (optional)', select('heard', [['A friend or family', 'A friend or family / صديق أو أحد الأقارب'], ['A current student', 'A current student / طالب حالي'], ['Social media', 'Social media / وسائل التواصل'], ['School', 'School / المدرسة'], ['Other', 'Other / غير ذلك']])) +
+      field('question', 'أي سؤال أو ملاحظة (اختياري)', 'Any question or note (optional)', '<input id="question" maxlength="300">') +
+      '<input id="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-5000px;width:1px;height:1px" aria-hidden="true">' +
+    '</div>' +
+    '<button id="send" onclick="send()">إرسال · Send</button><div id="err" class="err"></div>';
+  var showCity = function () {
+    var c = F.countries.filter(function (x) { return x.name === document.getElementById('country').value; })[0];
+    document.getElementById('f-city').style.display = c && c.multiZone ? '' : 'none';
+    ['studentWhatsApp', 'parentWhatsApp'].forEach(function (id) { var el = document.getElementById(id + 'Code'); if (c && !el.dataset.touched) el.value = c.dial; });
+  };
+  ['studentWhatsApp', 'parentWhatsApp'].forEach(function (id) { document.getElementById(id + 'Code').onchange = function () { this.dataset.touched = '1'; }; });
+  document.getElementById('country').onchange = showCity;
+  showCity();
+}
+
+function send() {
+  var a = {};
+  ['who', 'name', 'school', 'country', 'city', 'course', 'level', 'batch', 'parentName', 'parentRelation', 'heard', 'question', 'website'].forEach(function (id) { a[id] = document.getElementById(id).value.trim(); });
+  if (document.getElementById('f-city').style.display === 'none') a.city = '';
+  ['studentWhatsApp', 'parentWhatsApp'].forEach(function (id) {
+    var n = document.getElementById(id).value.replace(/[^0-9]/g, '').replace(/^0+/, '');
+    a[id] = n ? document.getElementById(id + 'Code').value + ' ' + n : '';
+  });
+  var need = ['who', 'name', 'school', 'country', 'course', 'level', 'batch', 'parentName', 'parentRelation', 'parentWhatsApp'];
+  if (document.getElementById('f-city').style.display !== 'none') need.push('city');
+  var missing = need.filter(function (id) { return !a[id]; }), err = document.getElementById('err');
+  if (missing.length) { err.innerHTML = '<span class="ar">يرجى تعبئة جميع الحقول المطلوبة.</span>\nPlease fill in every required field.'; document.getElementById(missing[0]).focus(); return; }
+  if (/[؀-ۿ]/.test(a.name)) { err.textContent = 'Please write the student\'s name in English letters.'; return; }
+  if (PREVIEW) { err.textContent = 'Preview only: nothing was sent. At this point they see the thank-you message.'; return; }
+  var b = document.getElementById('send'); b.disabled = true; b.textContent = 'Sending…'; err.textContent = '';
+  api('enquirySubmit', { answers: a }, function () {
+    document.getElementById('main').innerHTML = '<div class="card"><p class="ar">تم استلام بياناتكم، شكرًا لكم. ستصلكم التفاصيل على واتساب قريبًا.</p><p>Thank you, we have your details. They will reach you on WhatsApp shortly.</p></div>';
+    window.scrollTo(0, 0);
+  }, function (msg) { b.disabled = false; b.textContent = 'إرسال · Send'; err.textContent = msg; });
+}
+
+api('enquiryForm', {}, draw, function (msg) { document.getElementById('main').innerHTML = '<div class="card err">' + esc(msg) + '</div>'; });
+</script>
+</body>
+</html>
