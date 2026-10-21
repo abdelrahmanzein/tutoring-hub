@@ -3097,15 +3097,18 @@ function localPosition(entries) {
   var covered = {}, pool = 0, last = null;
   live.filter(function (e) { return e['Type'] !== 'Charge'; }).forEach(function (e) {
     var rest = Number(e['Amount']);
-    if (e['Type'] === 'Payment') String(e['Allocated to'] || '').split(/[,;\s]+/).filter(String).forEach(function (cid) {
-      var c = byId[cid]; if (c && !covered[cid]) { covered[cid] = true; rest += Number(c['Amount']); } });
+    if (e['Type'] === 'Payment') String(e['Allocated to'] || '').split(/[,;\s]+/).filter(String).map(function (cid) { return byId[cid]; }).filter(Boolean)
+      .sort(function (a, b) { return String(a['Date']).localeCompare(String(b['Date'])); }).forEach(function (c) {
+        var cid = c['Entry ID'], open = -Number(c['Amount']) - (covered[cid] || 0), take = Math.max(0, Math.min(rest, open));
+        if (take > 0) { covered[cid] = (covered[cid] || 0) + take; rest -= take; } });
     pool += rest;
     if (e['Type'] === 'Payment' && (!last || String(e['Date']) >= String(last['Date']))) last = e;
   });
   var unpaid = [];
   charges.forEach(function (c) {
-    if (covered[c['Entry ID']]) return;
-    var amount = -Number(c['Amount']), paid = Math.max(0, Math.min(pool, amount));
+    var amount = -Number(c['Amount']) - (covered[c['Entry ID']] || 0);
+    if (amount < 0.005) return;
+    var paid = Math.max(0, Math.min(pool, amount));
     pool -= paid;
     if (paid < amount - 0.005) unpaid.push({ entry: c, left: r2(amount - paid) });
   });
