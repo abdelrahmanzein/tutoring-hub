@@ -138,8 +138,8 @@ function draw(f) {
     (PREVIEW ? '<div class="card" style="border-color:#d97706">Preview: this is exactly what students and parents see. Nothing is sent.</div>' : '') +
     '<div class="brand">Mr Zein\'s Tutoring Groups</div>' +
     '<h1 class="ar">الاستفسار عن حصص الرياضيات للبكالوريا الدولية</h1><h1>IBDP Maths enquiry</h1>' +
-    '<div class="card note"><p class="ar" style="margin:0 0 6px">أقدّم حصص مادة <b>التحليل والمقاربات (AA)</b> بمستوييها SL وHL فقط، ولا أقدّم حصصًا في مادة التطبيقات والتفسير (AI).</p>' +
-      '<p style="margin:0">I tutor <b>Analysis and Approaches (AA)</b>, SL and HL, only. I don\'t tutor Applications and Interpretation (AI).</p></div>' +
+    '<div class="card note"><p class="ar" style="margin:0 0 6px">أقدّم حصص مادة <b dir="ltr">Mathematics: Analysis and Approaches (AA)</b> بمستوييها SL وHL فقط، ولا أقدّم حصصًا في مادة <span dir="ltr">Mathematics: Applications and Interpretation (AI)</span>.</p>' +
+      '<p style="margin:0">I tutor <b>Mathematics: Analysis and Approaches (AA)</b>, SL and HL, only. I don\'t tutor Mathematics: Applications and Interpretation (AI).</p></div>' +
     '<div class="card"><h2><span>Who is filling in this form?</span><span class="ar">من يملأ هذا النموذج؟</span></h2>' +
       field('who', 'أنا', 'I am the', select('who', [['Parent', 'Parent / ولي الأمر'], ['Student', 'Student / الطالب']])) +
     '</div>' +
@@ -148,7 +148,7 @@ function draw(f) {
       field('school', 'المدرسة', 'School') +
       field('country', 'بلد الإقامة', 'Country of residence', select('country', f.countries.map(function (c) { return [c.name, c.flag + ' ' + c.name]; }).concat([['Other', '🌍 Other']]))) +
       field('city', 'المدينة', 'City', null, 'So session times are shown in your local time.') +
-      field('level', 'المستوى (التحليل والمقاربات)', 'Level (Analysis and Approaches)', '<div class="seg" id="lvl"><button type="button" data-v="SL">SL</button><button type="button" data-v="HL">HL</button></div>') +
+      field('level', 'المستوى في مادة AA', 'Level in Analysis and Approaches (AA)', '<div class="seg" id="lvl"><button type="button" data-v="SL">SL</button><button type="button" data-v="HL">HL</button></div>') +
       field('batch', 'سنة الامتحانات النهائية', 'Final exams in', select('batch', f.batches.map(function (b) { return [b, 'May ' + b + ' / مايو ' + b]; }))) +
       field('studentWhatsApp', 'رقم واتساب الطالب (اختياري)', 'Student\'s WhatsApp (optional)', phone('studentWhatsApp')) +
     '</div>' +
@@ -198,12 +198,13 @@ function drawChecklist() {
     Object.keys(TOPICS).map(function (t) {
       var rows = rowsFor(t), taken = rows.filter(function (r) { return ST[r[0]] === 'taken'; }).length, hard = rows.filter(function (r) { return ST[r[0]] === 'hard'; }).length;
       return '<details class="topic" data-t="' + t + '"' + (open[t] ? ' open' : '') + '><summary><span>' + TOPICS[t] + '</span><span class="cnt">✅ ' + taken + ' · ⚠️ ' + hard + ' / ' + rows.length + '</span></summary>' +
-        '<button type="button" class="chipb" onclick="markTopic(\'' + t + '\')">Mark the whole topic as taken · تحديد الموضوع كله</button>' +
+        '<div><button type="button" class="chipb" onclick="markTopic(\'' + t + '\', \'taken\')">✅ All taken · تحديد الكل</button> <button type="button" class="chipb" onclick="markTopic(\'' + t + '\', \'\')">⬜ Clear all · إلغاء التحديد</button></div>' +
         rows.map(function (r) { var s = ST[r[0]] || ''; return '<div class="srow ' + s + '" onclick="tapRow(\'' + r[0] + '\')"><span class="st">' + ICON[s] + '</span><span class="code">' + r[0].replace('AHL ', '') + (r[0].indexOf('AHL') === 0 ? '<span class="tag">AHL</span>' : '') + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') + '</details>';
     }).join('');
 }
 function tapRow(c) { ST[c] = NEXT[ST[c] || '']; drawChecklist(); }
-function markTopic(t) { rowsFor(t).forEach(function (r) { if (ST[r[0]] !== 'hard') ST[r[0]] = 'taken'; }); drawChecklist(); document.querySelector('details[data-t="' + t + '"]').open = true; }
+// Whole topic: all taken (rows marked ⚠️ stay ⚠️), or all cleared.
+function markTopic(t, to) { rowsFor(t).forEach(function (r) { if (!to) delete ST[r[0]]; else if (ST[r[0]] !== 'hard') ST[r[0]] = to; }); drawChecklist(); document.querySelector('details[data-t="' + t + '"]').open = true; }
 
 function send() {
   var a = {};
