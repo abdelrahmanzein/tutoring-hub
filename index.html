@@ -2955,7 +2955,7 @@ function tutorForm(i) {
     '<div class="sub" style="margin-top:10px"><b>Student pays</b> per session</div><div class="filters" style="margin:4px 0 0">' + num('tre', t['Student rate Egypt'], 'Egypt (EGP)') + num('tra', t['Student rate abroad'], 'Abroad (USD)') + '</div>' +
     '<div class="sub" style="margin-top:10px"><b>Tutor earns</b> per session, always in EGP</div><div class="filters" style="margin:4px 0 0">' + num('tee', t['Earns Egypt'], 'Egypt student (EGP)') + num('tea', t['Earns abroad'], 'Student abroad (EGP)') + '</div>' +
     '<div class="sub" style="margin-top:6px">The student\'s currency decides which applies (EGP students: Egypt; USD students: abroad). Students abroad are charged in USD; the tutor still earns in EGP.</div>' +
-    '<button class="primary" style="width:100%;margin-top:10px" onclick="saveTutor(\'' + esc(t['Tutor ID'] || '') + '\')">' + (t['Name'] ? 'Save' : 'Add') + '</button>');
+    '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);saveTutor(\'' + esc(t['Tutor ID'] || '') + '\')">' + (t['Name'] ? 'Save' : 'Add') + '</button>');
 }
 function saveTutor(id) {
   var v = function (x) { return document.getElementById(x).value.trim(); };
