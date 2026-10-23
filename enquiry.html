@@ -221,12 +221,53 @@ function send() {
   var missing = need.filter(function (id) { return !a[id]; }), err = document.getElementById('err');
   if (missing.length) { err.innerHTML = '<span class="ar">يرجى تعبئة جميع الحقول المطلوبة.</span>\nPlease fill in every required field.'; var el = document.getElementById(missing[0] === 'level' ? 'lvl' : missing[0]); if (el) { el.scrollIntoView({ block: 'center' }); if (el.focus) el.focus(); } return; }
   if (/[؀-ۿ]/.test(a.name)) { err.textContent = 'Please write the student\'s name in English letters.'; return; }
-  if (PREVIEW) { err.textContent = 'Preview only: nothing was sent. At this point they see the thank-you message.'; return; }
+  SENT = a;
+  if (PREVIEW) { thanks(); return; }
   var b = document.getElementById('send'); b.disabled = true; b.textContent = 'Sending…'; err.textContent = '';
-  api('enquirySubmit', { answers: a }, function () {
-    document.getElementById('main').innerHTML = '<div class="card"><p class="ar">تم استلام بياناتكم، شكرًا لكم. ستصلكم التفاصيل على واتساب قريبًا.</p><p>Thank you, we have your details. They will reach you on WhatsApp shortly.</p></div>';
-    window.scrollTo(0, 0);
-  }, function (msg) { b.disabled = false; b.textContent = 'إرسال · Send'; err.textContent = msg; });
+  api('enquirySubmit', { answers: a }, function () { thanks(); }, function (msg) { b.disabled = false; b.textContent = 'إرسال · Send'; err.textContent = msg; });
+}
+
+// ---------- After sending: thank you, what they sent, and how the sessions work (their fee) ----------
+var SENT = null, TLANG = 'en';
+function feeFor(region, batch) { return (F.fees || []).filter(function (r) { return r.region === region && r.batch === String(batch); })[0]; }
+function arNum(v) { return String(v).replace(/[0-9]/g, function (c) { return '٠١٢٣٤٥٦٧٨٩'[c]; }).replace(/,/g, '٬'); }
+function feeText(r, en) {
+  if (!r) return '';
+  var n = String(r.rate).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return en ? n + ' ' + r.currency : arNum(n) + (r.currency === 'USD' ? ' دولارًا' : ' جنيه');
+}
+function thanks() {
+  var a = SENT, en = TLANG === 'en', eg = a.country === 'Egypt', region = eg ? 'Egypt' : 'Abroad';
+  var g = feeFor(region, a.batch), one = feeFor(region, '1-on-1');
+  var taken = 0, hard = 0; Object.keys(a.syllabus || {}).forEach(function (k) { if (a.syllabus[k] === 'taken') taken++; if (a.syllabus[k] === 'hard') hard++; });
+  var li = function (list) { return '<ul style="margin:6px 0 0;padding-inline-start:20px">' + list.map(function (x) { return '<li style="margin:4px 0">' + x + '</li>'; }).join('') + '</ul>'; };
+  var row = function (k, v) { return '<div class="row" style="display:flex;justify-content:space-between;gap:10px"><span class="sub">' + k + '</span><b style="text-align:end">' + v + '</b></div>'; };
+  var h2 = function (t) { return '<h2 style="font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);margin:22px 0 8px">' + t + '</h2>'; };
+  document.documentElement.dir = en ? 'ltr' : 'rtl';
+  var h = (PREVIEW ? '<div class="card" style="border-color:#d97706;direction:ltr;text-align:left">Preview: this is the page they see after sending. Nothing was sent.</div>' : '') +
+    '<div style="display:flex;justify-content:space-between;align-items:center"><div class="brand">' + (en ? "Mr Zein's Tutoring Groups" : 'مجموعات الأستاذ زين') + '</div>' +
+    '<button type="button" class="chipb" style="color:var(--text)" onclick="TLANG=TLANG===\'en\'?\'ar\':\'en\';thanks()">' + (en ? 'العربية' : 'English') + '</button></div>' +
+    '<div class="card" style="background:#f0fdf4;border-color:#15803d;color:#14532d"><b>' + (en ? '✅ Thank you, we have your details.' : '✅ شكرًا لكم، تم استلام بياناتكم.') + '</b><div style="margin-top:4px;font-size:14px">' +
+      (en ? 'Mr Zein will look at ' + (a.started === 'yes' ? 'the syllabus checklist' : 'your details') + ' and get back to you on WhatsApp with the best way to start: joining a group directly, or with some 1-on-1 support first or alongside.'
+          : 'سيطّلع الأستاذ زين على ' + (a.started === 'yes' ? 'قائمة موضوعات المنهج' : 'البيانات') + '، ويتواصل مع حضراتكم عبر واتساب لاقتراح أنسب طريقة للبدء: الانضمام إلى مجموعة مباشرة، أو مع بعض الحصص الفردية قبل ذلك أو بالتوازي معه.') + '</div></div>' +
+    h2(en ? 'What you sent' : 'البيانات المرسلة') + '<div class="card">' +
+      row(en ? 'Student' : 'الطالب', esc(a.name)) +
+      row(en ? 'Course' : 'المادة', '<span dir="ltr">Mathematics: Analysis and Approaches ' + esc(a.level) + '</span>') +
+      row(en ? 'Final exams' : 'الامتحانات النهائية', (en ? 'May ' : 'مايو ') + (en ? a.batch : arNum(a.batch))) +
+      row(en ? 'Syllabus checklist' : 'قائمة المنهج', a.started === 'yes' ? (en ? '✅ ' + taken + ' taken · ⚠️ ' + hard + ' hard' : '✅ ' + arNum(taken) + ' دُرست · ⚠️ ' + arNum(hard) + ' فيها صعوبة') : (en ? 'Not started yet' : 'لم يبدأ بعد')) + '</div>' +
+    h2(en ? 'Group sessions' : 'الحصص الجماعية') + '<div class="card"><div style="font-size:22px;font-weight:700;color:var(--accent)">' +
+      (g ? feeText(g, en) + ' <span class="sub" style="font-size:14px;font-weight:400">' + (en ? 'per session' : 'للحصة') + '</span>' : (en ? 'Fee to be confirmed' : 'تُحدَّد الرسوم لاحقًا')) + '</div>' +
+      li(en ? ['Small groups, online on Google Meet', 'One session a week, 1 to 1.5 hours', 'Cameras and mics always on', 'Notes shared as a PDF after each session', 'Homework due 11:59 PM Cairo time the night before the next session', 'If a student misses a session, it is recorded for them and the fee still applies', 'DP1 and DP2 groups are taught by Mr Zein']
+            : ['مجموعات صغيرة عبر الإنترنت على Google Meet', 'حصة أسبوعية مدتها من ساعة إلى ساعة ونصف', 'الكاميرا والميكروفون مفتوحان دائمًا', 'تُرسل الملاحظات بصيغة PDF بعد كل حصة', 'يُسلَّم الواجب قبل الساعة ١١:٥٩ مساءً بتوقيت القاهرة في الليلة السابقة للحصة التالية', 'في حالة الغياب تُسجَّل الحصة للطالب، وتبقى رسومها مستحقة', 'يقدّم الأستاذ زين حصص الصفين الأول والثاني من البرنامج']) + '</div>' +
+    h2(en ? '1-on-1 sessions' : 'الحصص الفردية') + '<div class="card">' +
+      li(en ? ['With Mr Zein during the summer break only (May to August)' + (one ? ': ' + feeText(one, true) + ' per session' : ''), 'During the school year: with a qualified assistant teacher, coordinated with and supervised by Mr Zein']
+            : ['مع الأستاذ زين خلال الإجازة الصيفية فقط (من مايو إلى أغسطس)' + (one ? ': ' + feeText(one, false) + ' للحصة' : ''), 'خلال العام الدراسي: مع مدرس مساعد مؤهل، بالتنسيق مع الأستاذ زين وتحت إشرافه']) + '</div>' +
+    h2(en ? 'Payment' : 'الدفع') + '<div class="card">' +
+      li((eg ? (en ? ['A Financials update every 4 sessions, payable within 5 days by InstaPay'] : ['يُرسل الموقف المالي بعد كل أربع حصص، ويُسدَّد خلال خمسة أيام عن طريق InstaPay'])
+             : (en ? ['In blocks of 8 sessions (4 taken and 4 ahead) to keep transfer fees low', 'By transfer to Mr Zein\'s USD account (details sent when needed)'] : ['على دفعات تغطي ثماني حصص (أربع حصص بعد حضورها وأربع مقدمًا) لتقليل رسوم التحويل', 'بالتحويل إلى الحساب الدولاري للأستاذ زين (تُرسل بياناته عند الحاجة)']))
+        .concat(en ? ['The first session is a trial: free if you don\'t continue'] : ['الحصة الأولى تجريبية: مجانية إن لم تستمروا'])) + '</div>';
+  document.getElementById('main').innerHTML = h;
+  window.scrollTo(0, 0);
 }
 
 api('enquiryForm', {}, draw, function (msg) { document.getElementById('main').innerHTML = '<div class="card err">' + esc(msg) + '</div>'; });
