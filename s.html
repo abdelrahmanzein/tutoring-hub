@@ -53,7 +53,7 @@
 <body>
 <main id="main"><p class="sub">Loading…</p></main>
 <script>
-var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 7;
+var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 8;
 var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^0-9a-f]/g, '');
 var P = null, TAB = 'fin', FROM = '', TO = ymd(new Date()), RANGE = 'last8', LANG = 'en';
 try { LANG = localStorage.getItem('lang') === 'ar' ? 'ar' : 'en'; } catch (e) {}
@@ -74,7 +74,7 @@ var T = {
     sAtt: 'Sessions attended', sTime: 'Arrived on time', sHw: 'Homework on time', of: 'of',
     timed: function (n) { return 'over the ' + n + ' sessions with recorded join times'; }, early: function (n) { return n + (n == 1 ? ' of these sessions is' : ' of these sessions are') + ' from before join times and participation were recorded: attendance only.'; },
     markSoon: 'Mark coming soon', nextN: function (k) { return 'the next ' + k + ' session' + (k > 1 ? 's' : ''); }, quizzes: 'Quizzes', levelOf: function (l) { return 'Level ' + l + ' of 7'; }, soon: 'Level coming soon', atHome: 'taken at home', level: 'Level',
-    note: 'A note from Mr Zein', cover: '1-on-1 sessions', with: 'with', covered: 'Covered', labels: 'What the labels mean', updated: 'Updated',
+    note: 'A note from Mr Zein', cover: '1-on-1 sessions', oneOnOne: '1-on-1 session', with: 'with', covered: 'Covered', labels: 'What the labels mean', updated: 'Updated',
     foot: 'If a student is absent, the recording is sent and the session is charged.',
     keyFin: ['<span class="pill due">Due</span> A session already taken and not paid yet.',
       '<span class="pill ahead">Down payment</span> the next sessions, paid in advance (for families paying in blocks). They are not dated, since sessions can move.',
@@ -101,7 +101,7 @@ var T = {
     sAtt: 'الحصص التي حضرها', sTime: 'الحضور في الموعد', sHw: 'تسليم الواجب في الموعد', of: 'من',
     timed: function (k) { return 'من بين ' + sessAr(k) + ' سُجّل فيها وقت الدخول'; }, early: function (k) { return n(k) + ' من هذه الحصص قبل بدء تسجيل وقت الدخول والمشاركة، فيظهر فيها الحضور فقط.'; },
     markSoon: 'تظهر الدرجة قريبًا', nextN: function (k) { return 'الحصص القادمة: ' + sessAr(k); }, quizzes: 'الاختبارات', levelOf: function (l) { return 'المستوى ' + l + ' من ٧'; }, soon: 'يظهر المستوى قريبًا', atHome: 'أُدّي في المنزل', level: 'المستوى',
-    note: 'ملاحظة من الأستاذ زين', cover: 'حصص فردية', with: 'مع', covered: 'ما تمت تغطيته', labels: 'معنى المصطلحات', updated: 'آخر تحديث',
+    note: 'ملاحظة من الأستاذ زين', cover: 'حصص فردية', oneOnOne: 'حصة فردية', with: 'مع', covered: 'ما تمت تغطيته', labels: 'معنى المصطلحات', updated: 'آخر تحديث',
     foot: 'عند غياب الطالب يُرسل له تسجيل الحصة، وتُحتسب الحصة.',
     keyFin: ['<span class="pill due">مستحق</span> حصة تمت ولم تُدفع بعد.',
       '<span class="pill ahead">دفعة مقدمة</span> الحصص القادمة، تُدفع مقدمًا (للأسر التي تدفع على دفعات)، دون تواريخ لأن مواعيد الحصص قد تتغير.',
@@ -154,7 +154,7 @@ function financials(p) {
       rows.filter(function (r) { return r.kind === 'due'; }).map(function (r) {
         var hist = (p.history || []).filter(function (x) { return x.date === r.date; })[0];
         return '<tr class="due"><td>' + (r.date ? esc(day(r.date)) : '–') + '</td><td><span class="pill due">' + t('tagDue') + '</span>' +
-          (hist ? ' <span class="' + (hist.attended ? 'ok' : 'miss') + '">' + (hist.attended ? t('attended') : t('absent')) + '</span>' : '') + '</td><td class="num">' + money(r.amount, c) + '</td></tr>';
+          (r.oneOnOne ? ' <span class="sub">' + t('oneOnOne') + '</span>' : hist ? ' <span class="' + (hist.attended ? 'ok' : 'miss') + '">' + (hist.attended ? t('attended') : t('absent')) + '</span>' : '') + '</td><td class="num">' + money(r.amount, c) + '</td></tr>';
       }).join('') +
       // The down payment is one line: the next sessions, without dates (sessions move; a session held but not yet recorded counts among them).
       (ahead ? '<tr class="ahead"><td><span class="pill ahead">' + t('tagDown') + '</span></td><td>' + t('nextN')(ahead) + '</td><td class="num">' +
