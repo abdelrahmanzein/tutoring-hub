@@ -158,6 +158,8 @@ function draw(f) {
       field('parentWhatsApp', 'رقم واتساب ولي الأمر', 'Parent\'s WhatsApp', phone('parentWhatsApp')) +
     '</div>' +
     '<div class="card"><h2><span>The syllabus</span><span class="ar">المنهج</span></h2>' +
+      '<p class="sub" style="margin:0"><b>To be filled in by the student</b>, who knows best what was covered at school and what feels hard.</p>' +
+      '<p class="sub ar" style="margin:4px 0 0"><b>يملأ الطالب هذا الجزء بنفسه</b>، فهو الأعلم بما دُرس في المدرسة وما يجد فيه صعوبة.</p>' +
       field('started', 'هل بدأ الطالب منهج البكالوريا في المدرسة؟', 'Has the student started the IB course at school?', '<div class="seg" id="started"><button type="button" data-v="yes">Yes / نعم</button><button type="button" data-v="no">Not yet / ليس بعد</button></div>') +
       '<div id="cl"></div></div>' +
     '<div class="card">' +
@@ -257,8 +259,8 @@ function thanks() {
       row(en ? 'Syllabus checklist' : 'قائمة المنهج', a.started === 'yes' ? (en ? '✅ ' + taken + ' taken · ⚠️ ' + hard + ' hard' : '✅ ' + arNum(taken) + ' دُرست · ⚠️ ' + arNum(hard) + ' فيها صعوبة') : (en ? 'Not started yet' : 'لم يبدأ بعد')) + '</div>' +
     h2(en ? 'Group sessions' : 'الحصص الجماعية') + '<div class="card"><div style="font-size:22px;font-weight:700;color:var(--accent)">' +
       (g ? feeText(g, en) + ' <span class="sub" style="font-size:14px;font-weight:400">' + (en ? 'per session' : 'للحصة') + '</span>' : (en ? 'Fee to be confirmed' : 'تُحدَّد الرسوم لاحقًا')) + '</div>' +
-      li(en ? ['Small groups, online on Google Meet', 'One session a week, 1 to 1.5 hours', 'Cameras and mics always on', 'Notes shared as a PDF after each session', 'Homework due 11:59 PM Cairo time the night before the next session', 'If a student misses a session, it is recorded for them and the fee still applies', 'DP1 and DP2 groups are taught by Mr Zein']
-            : ['مجموعات صغيرة عبر الإنترنت على Google Meet', 'حصة أسبوعية مدتها من ساعة إلى ساعة ونصف', 'الكاميرا والميكروفون مفتوحان دائمًا', 'تُرسل الملاحظات بصيغة PDF بعد كل حصة', 'يُسلَّم الواجب قبل الساعة ١١:٥٩ مساءً بتوقيت القاهرة في الليلة السابقة للحصة التالية', 'في حالة الغياب تُسجَّل الحصة للطالب، وتبقى رسومها مستحقة', 'يقدّم الأستاذ زين حصص الصفين الأول والثاني من البرنامج']) + '</div>' +
+      li(en ? ['Small groups, online on Google Meet', 'One session a week, 1 to 1.5 hours', 'Cameras and mics always on', 'Notes shared as a PDF after each session', 'Homework due 11:59 PM Cairo time the night before the next session', 'If a student misses a session, it is recorded for them and the fee still applies']
+            : ['مجموعات صغيرة عبر الإنترنت على Google Meet', 'حصة أسبوعية مدتها من ساعة إلى ساعة ونصف', 'الكاميرا والميكروفون مفتوحان دائمًا', 'تُرسل الملاحظات بصيغة PDF بعد كل حصة', 'يُسلَّم الواجب قبل الساعة ١١:٥٩ مساءً بتوقيت القاهرة في الليلة السابقة للحصة التالية', 'في حالة الغياب تُسجَّل الحصة للطالب، وتبقى رسومها مستحقة']) + '</div>' +
     h2(en ? '1-on-1 sessions' : 'الحصص الفردية') + '<div class="card">' +
       li(en ? ['With Mr Zein during the summer break only (May to August)' + (one ? ': ' + feeText(one, true) + ' per session' : ''), 'During the school year: with a qualified assistant teacher, coordinated with and supervised by Mr Zein']
             : ['مع الأستاذ زين خلال الإجازة الصيفية فقط (من مايو إلى أغسطس)' + (one ? ': ' + feeText(one, false) + ' للحصة' : ''), 'خلال العام الدراسي: مع مدرس مساعد مؤهل، بالتنسيق مع الأستاذ زين وتحت إشرافه']) + '</div>' +

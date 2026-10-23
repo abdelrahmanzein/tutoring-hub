@@ -2472,12 +2472,12 @@ function showTodo() {
         }).join('') + '</div>' : '') +
         (live[s.sessionId] && live[s.sessionId].reminder ? '<div class="actions"><button onclick="todayReminder(\'' + esc(s.sessionId) + '\')">💬 Send reminder</button></div>' : '') + '</div>';
     }).join(''));
-    // New enquiries (from the enquiry form or added by you): the details message is one tap away.
+    // New enquiries from the enquiry form: their checklist, then book the trial (they saw the details on the form).
     var newPros = (cached('prospects') || []).filter(function (p) { return p['Stage'] === 'New'; });
     if (newPros.length) parts.push('<h2>New enquiries</h2>' + newPros.map(function (p) {
       return '<div class="card nav-row" onclick="todoProspect(\'' + esc(p['Prospect ID']) + '\')"><span><b>' + esc(p['Student name']) + '</b><div class="sub">' +
         esc([p['Course'] && p['Level'] ? p['Course'] + ' ' + p['Level'] : '', p['Batch'] ? 'May ' + p['Batch'] : '', p['Country']].filter(String).join(' · ')) +
-        (/Enquiry form/.test(p['Notes'] || '') ? ' · via the form' : '') + '</div></span><span>Send details ›</span></div>';
+        (/Enquiry form/.test(p['Notes'] || '') ? ' · via the form' : '') + '</div></span><span>Review ›</span></div>';
     }).join(''));
     if (d.toLog.length) parts.push('<h2>Sessions to log</h2>' + d.toLog.map(function (s) {
       return '<div class="card"><div class="item"><span><b>' + esc(s.group) + '</b><div class="sub">' + esc(fmtDate(s.day)) + ' · ' + esc(s.start) + '</div></span></div>' +
@@ -2978,7 +2978,7 @@ function drawProspects() {
     var box = document.getElementById('pros');
     if (!box) return;
     var open = list.filter(function (p) { return !/^(Joined|Closed)$/.test(p['Stage']); });
-    box.innerHTML = '<div class="card"><div class="item"><b>Prospects' + (open.length ? ' (' + open.length + ')' : '') + '</b><span><button class="small" style="width:auto" onclick="enquiryLink()">🔗 Enquiry form</button> <button class="small" style="width:auto" onclick="prospectForm()">＋ Prospect</button></span></div>' +
+    box.innerHTML = '<div class="card"><div class="item"><b>Prospects' + (open.length ? ' (' + open.length + ')' : '') + '</b><button class="small" style="width:auto" onclick="enquiryLink()">🔗 Enquiry form</button></div>' +
       open.map(function (p) {
         var i = PROS.indexOf(p);
         return '<div class="item" style="margin-top:8px;cursor:pointer" onclick="showProspect(' + i + ')"><span><b>' + esc(p['Student name']) + '</b><div class="sub">' +
@@ -2993,30 +2993,6 @@ function openProspect(id) {
   PROS = cached('prospects') || PROS;
   var i = PROS.map(function (p) { return p['Prospect ID']; }).indexOf(id);
   if (i >= 0) showProspect(i);
-}
-
-// Quick add: name, who you talk to, their number, course and country (the rest can wait).
-function prospectForm() {
-  call('newStudentForm', {}, function (f) {
-    sheet('New prospect', '<div class="sub">Student name</div><input id="pname">' +
-      '<div class="sub" style="margin-top:8px">You talk to</div>' + sel('pcontact', 'Parent', [['Parent', 'The parent'], ['Student', 'The student']]) +
-      '<div class="sub" style="margin-top:8px">Their WhatsApp</div>' + phoneCells('pphone', f) +
-      '<div class="sub" style="margin-top:8px">Parent name (optional)</div><input id="ppn">' +
-      '<div class="filters" style="margin:8px 0 0">' + sel('pcourse', 'AA', [['AA', 'AA'], ['AI', 'AI']]) + sel('plevel', 'SL', [['SL', 'SL'], ['HL', 'HL']]) +
-      '<input id="pbatch" type="number" placeholder="Batch (e.g. 2028)" style="max-width:140px"></div>' +
-      '<div class="sub" style="margin-top:8px">Country</div><input id="pcountry" list="ncl2" value="Egypt"><datalist id="ncl2">' + f.countries.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</datalist>' +
-      '<div class="sub" style="margin-top:8px">School (optional)</div><input id="pschool">' +
-      '<div class="sub" style="margin-top:8px">Notes (optional)</div><input id="pnotes">' +
-      '<button class="primary" style="width:100%;margin-top:12px" onclick="saveProspect()">Add</button>');
-  }, { form: true });
-}
-function saveProspect() {
-  var v = function (id) { return document.getElementById(id).value.trim(); }, contact = v('pcontact');
-  if (!v('pname')) return notice('Enter the student\'s name.');
-  var phone = phoneValue('pphone');
-  var args = { name: v('pname'), contact: contact, parentName: v('ppn'), course: v('pcourse'), level: v('plevel'), batch: v('pbatch'), country: v('pcountry'),
-    school: v('pschool'), notes: v('pnotes'), parentWhatsApp: contact === 'Parent' ? phone : '', studentWhatsApp: contact === 'Student' ? phone : '' };
-  call('addProspect', args, function () {}, { optimistic: function () { closeSheet(); notice(args.name + ' added. Their messages are ready in about a minute.'); showStudents(); } });
 }
 
 // One prospect: the next step with its ready message, and the other options.
@@ -3048,8 +3024,7 @@ function showProspect(i) {
   var body = '<div class="sub">' + esc([p['Course'] + ' ' + p['Level'], p['Batch'], p['Country'], p['School']].filter(function (x) { return x && x.trim(); }).join(' · ')) +
     (p['Parent name'] ? '<br>Parent: ' + esc(p['Parent name']) : '') + (p['Notes'] ? '<br>' + esc(p['Notes']) : '') + '</div>' + syllabusBox(p);
   if (st === 'New' || st === 'Details sent') {
-    body += m.details ? '<details style="margin-top:10px"><summary class="sub">Details message</summary><div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(m.details) + '</div></details>' +
-      wa('details', st === 'New' ? '💬 Send the details' : '💬 Send the details again', 'Details sent') : '<div class="sub">The details message is being prepared…</div>';
+    // The details (fees, how sessions work, payment) are shown to them on the enquiry form after they send it.
     body += '<div class="sub" style="margin-top:14px">Book the trial</div>' + trialPicker(p) + '<button style="width:100%;margin-top:6px" onclick="bookTrial(' + i + ')">Book trial</button>';
   } else if (st === 'Trial booked') {
     body += '<div style="margin-top:8px">Trial: <b>' + esc(p['Group']) + '</b> · ' + esc(fmtDate(String(p.trialStart || p['Trial date']).slice(0, 16))) + '</div>';
