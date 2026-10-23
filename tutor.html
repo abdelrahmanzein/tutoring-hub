@@ -94,31 +94,51 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function
 var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function d(v) { var m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? +m[3] + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1] : ''; }
 var DATA = null;
+function today() { var x = new Date(); return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); }
 
+// Your page: log each session you held with one of your students, and see (and correct) what you logged.
 function draw(p) {
   DATA = p;
   var m = document.getElementById('main');
   if (!p.valid) { m.innerHTML = '<div class="card">This link is not valid.</div>'; return; }
-  m.innerHTML = '<div class="brand">Mr Zein\'s Tutoring Groups</div><h1>Hello ' + esc(p.name) + '</h1><div class="sub">Your cover sessions. Please report each one after it\'s done.</div>' +
-    (p.sessions.length ? p.sessions.map(function (s, i) {
-      var done = s.status === 'Reported';
-      return '<div class="card"><b>' + esc(s.student) + '</b> <span class="sub">' + esc(s.group) + '</span><div class="sub">' + esc(d(s.date)) + (s.start ? ' · ' + esc(s.start) + ' (Cairo)' : '') + ' · ' + esc(s.minutes) + ' min' +
-        (done ? ' · <span class="ok">reported ✓</span>' : '') + '</div>' +
-        '<label>Did ' + esc(s.student) + ' attend?<select id="a' + i + '"><option value="true"' + (s.attended !== false ? ' selected' : '') + '>Yes</option><option value="false"' + (s.attended === false ? ' selected' : '') + '>No</option></select></label>' +
+  m.innerHTML = '<div class="brand">Mr Zein\'s Tutoring Groups</div><h1>Hello ' + esc(p.name) + '</h1>' +
+    '<div class="sub">Log each 1-on-1 session after you give it. Only sessions that took place: if the student didn\'t come, there\'s nothing to log.</div>' +
+    (p.students.length ? '<div class="card"><b>＋ Log a session</b>' +
+      '<label>Student<select id="ls"><option value="">Pick the student</option>' + p.students.map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>'; }).join('') + '</select></label>' +
+      '<label>Date<input id="ld" type="date" value="' + today() + '" max="' + today() + '"></label>' +
+      '<label>Length (minutes)<input id="lm" type="number" inputmode="numeric" value="60" min="15" step="15"></label>' +
+      '<label>What did the session cover?<textarea id="lc" rows="2"></textarea></label>' +
+      '<label>Homework set (if any)<input id="lh"></label>' +
+      '<label>Comments on the student\'s work (shared with the family after Mr Zein reads them)<textarea id="lk" rows="3"></textarea></label>' +
+      '<button id="lb" onclick="logNew()">Save the session</button><div id="le" class="err"></div></div>'
+      : '<div class="card sub">No students are assigned to you yet. Mr Zein will add them.</div>') +
+    (p.sessions.length ? '<h2 style="font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);margin:22px 0 8px">Your sessions</h2>' + p.sessions.map(function (s, i) {
+      return '<details class="card"><summary><b>' + esc(s.student) + '</b> <span class="sub">' + esc(d(s.date)) + ' · ' + esc(s.minutes) + ' min</span></summary>' +
+        '<label>Length (minutes)<input id="m' + i + '" type="number" value="' + esc(s.minutes) + '"></label>' +
         '<label>What did the session cover?<textarea id="c' + i + '" rows="2">' + esc(s.covered || '') + '</textarea></label>' +
-        '<label>Homework done (if any)<input id="h' + i + '" value="' + esc(s.homework || '') + '"></label>' +
-        '<label>Comments on ' + esc(s.student) + '\'s work (shared with the family after Mr Zein reads them)<textarea id="m' + i + '" rows="3">' + esc(s.comments || '') + '</textarea></label>' +
-        '<button id="b' + i + '" onclick="report(' + i + ')">' + (done ? 'Update report' : 'Send report') + '</button><div id="e' + i + '" class="err"></div></div>';
-    }).join('') : '<div class="card sub">No sessions booked for you yet.</div>');
+        '<label>Homework set (if any)<input id="h' + i + '" value="' + esc(s.homework || '') + '"></label>' +
+        '<label>Comments<textarea id="k' + i + '" rows="3">' + esc(s.comments || '') + '</textarea></label>' +
+        '<button id="b' + i + '" onclick="fix(' + i + ')">Save changes</button><div id="e' + i + '" class="err"></div></details>';
+    }).join('') : '');
 }
 
-function report(i) {
+function logNew() {
+  var b = document.getElementById('lb'), e = document.getElementById('le'), v = function (id) { return document.getElementById(id).value; };
+  if (!v('ls')) { e.textContent = 'Pick the student.'; return; }
+  if (!v('lc').trim()) { e.textContent = 'Please write what the session covered.'; return; }
+  b.disabled = true; b.textContent = 'Saving…'; e.textContent = '';
+  api('tutorLog', { token: KEY, studentId: v('ls'), date: v('ld'), minutes: v('lm'), covered: v('lc'), homework: v('lh'), comments: v('lk') }, function () {
+    api('tutorPage', { token: KEY }, function (p) { draw(p); var x = document.getElementById('le'); if (x) x.innerHTML = '<span class="ok">Saved. Thank you.</span>'; }, function () {});
+  }, function (msg) { b.disabled = false; b.textContent = 'Save the session'; e.textContent = msg; });
+}
+
+function fix(i) {
   var s = DATA.sessions[i], b = document.getElementById('b' + i);
-  b.disabled = true; b.textContent = 'Sending…';
-  api('tutorReport', { token: KEY, coverId: s.id, attended: document.getElementById('a' + i).value === 'true', covered: document.getElementById('c' + i).value,
-    homework: document.getElementById('h' + i).value, comments: document.getElementById('m' + i).value },
-    function () { b.disabled = false; b.textContent = 'Update report'; s.status = 'Reported'; document.getElementById('e' + i).innerHTML = '<span class="ok">Thank you, the report is saved.</span>'; },
-    function (msg) { b.disabled = false; b.textContent = 'Send report'; document.getElementById('e' + i).textContent = msg; });
+  b.disabled = true; b.textContent = 'Saving…';
+  api('tutorLog', { token: KEY, coverId: s.id, minutes: document.getElementById('m' + i).value, covered: document.getElementById('c' + i).value,
+    homework: document.getElementById('h' + i).value, comments: document.getElementById('k' + i).value },
+    function () { b.disabled = false; b.textContent = 'Save changes'; document.getElementById('e' + i).innerHTML = '<span class="ok">Saved.</span>'; },
+    function (msg) { b.disabled = false; b.textContent = 'Save changes'; document.getElementById('e' + i).textContent = msg; });
 }
 
 api('tutorPage', { token: KEY }, draw, function (msg) { document.getElementById('main').innerHTML = '<div class="card err">' + esc(msg) + '</div>'; });

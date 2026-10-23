@@ -266,7 +266,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['removeFromSession', 'undoLastMove', 'leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -1482,7 +1482,7 @@ function showProfile(id) {
         ((p.detail.memberships || []).filter(function (m) { return !m['Until'] && /^Moved from /.test(m['Note'] || ''); }).map(function (m) {
           return '<button class="secondary" onclick="undoMove(\'' + esc(id) + '\', \'' + esc(m['Group']) + '\', \'' + esc(String(m['Note']).replace('Moved from ', '')) + '\')">↩️ Undo last move</button>'; })[0] || '') +
         (p.detail.livePage ? '<button onclick="openInApp(\'' + esc(p.detail.livePage) + '\', \'What the family sees\')">Parent page</button><button class="secondary" onclick="resetLink(\'' + esc(id) + '\')">🔄 Reset page link</button>' : '') +
-        (/^(Active|Trial)$/.test(i['Status']) ? '<button onclick="coverForm(\'' + esc(id) + '\')">1-on-1 with a tutor</button>' : '') +
+        (/^(Active|Trial)$/.test(i['Status']) ? '<button onclick="coverForm(\'' + esc(id) + '\')">Cover tutor</button>' : '') +
         (/^(Active|Trial)$/.test(i['Status']) ? '<button class="secondary" onclick="leaveForm(\'' + esc(id) + '\')">Leaving…</button>' : '') + '</div>' +
       '<h2>Money</h2>' + money +
       '<button class="secondary" style="margin:0 0 10px" onclick="adjustForm(\'' + esc(id) + '\')">✎ Waive, correct or refund</button>' +
@@ -2479,6 +2479,13 @@ function showTodo() {
         esc([p['Course'] && p['Level'] ? p['Course'] + ' ' + p['Level'] : '', p['Batch'] ? 'May ' + p['Batch'] : '', p['Country']].filter(String).join(' · ')) +
         (/Enquiry form/.test(p['Notes'] || '') ? ' · via the form' : '') + '</div></span><span>Review ›</span></div>';
     }).join(''));
+    // 1-on-1 sessions a cover tutor logged: already charged; confirm, or delete if wrong (the charge goes too).
+    if (d.covers && d.covers.length) parts.push('<h2>Cover sessions to confirm</h2>' + d.covers.map(function (c, k) {
+      return '<div class="card"><div class="item"><span><b>' + esc(c.student) + '</b> · ' + esc(c.tutor) + '<div class="sub">' + esc(fmtDate(c.date)) + ' · ' + esc(c.minutes) + ' min · charged ' + amt(c.charge, c.currency) + ' · tutor earns ' + amt(c.earns, c.currency) + '</div></span></div>' +
+        (c.covered ? '<div class="sub">Covered: ' + esc(c.covered) + '</div>' : '') + (c.homework ? '<div class="sub">Homework: ' + esc(c.homework) + '</div>' : '') +
+        (c.comments ? '<div style="white-space:pre-wrap;font-size:14px;margin-top:4px">' + esc(c.comments) + '</div><label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="cvs' + k + '" style="width:auto"' + (c.commentShown ? ' checked' : '') + '> Show the comments on the family page</label>' : '') +
+        '<div class="actions"><button class="primary" onclick="confirmCover(' + k + ')">✓ Confirm</button><button class="secondary" onclick="deleteCover(' + k + ')">Delete (removes the charge)</button></div></div>';
+    }).join(''));
     if (d.toLog.length) parts.push('<h2>Sessions to log</h2>' + d.toLog.map(function (s) {
       return '<div class="card"><div class="item"><span><b>' + esc(s.group) + '</b><div class="sub">' + esc(fmtDate(s.day)) + ' · ' + esc(s.start) + '</div></span></div>' +
         '<div class="actions"><button class="primary" onclick="logFromTodo(\'' + esc(s.sessionId) + '\')">Log session</button>' +
@@ -2588,6 +2595,22 @@ function sendRec(i) {
   waSend(r.phone, 'Hi ' + r.first + ', here is the recording of the ' + r.group + ' session you missed (' + fmtDate(r.date) + '):\n' + r.links.join('\n') + '\nPlease watch it before the next session.', 'Recording to absent student', { studentId: r.id });
   r.links.forEach(function (u) { var m = u.match(/\/d\/([-\w]+)/); if (m) call('shareRecording', { fileId: m[1] }, function () {}, { optimistic: function () {}, quiet: true }); });
   patchLocal(function () { var t = cached('todo'); if (t) t.recordings = t.recordings.filter(function (x) { return !(x.id === r.id && x.sessionId === r.sessionId); }); });
+  showTodo();
+}
+
+// Confirms a logged cover session (and whether its comments show on the family page).
+function confirmCover(k) {
+  var c = TODO.covers[k], box = document.getElementById('cvs' + k), show = !!(box && box.checked);
+  if (c.comments && show !== c.commentShown) call('approveCoverComment', { coverId: c.id, approve: show }, function () {}, { optimistic: function () {}, quiet: true });
+  call('confirmCover', { coverId: c.id }, function () {});
+  patchLocal(function () { var t = cached('todo'); if (t && t.covers) t.covers = t.covers.filter(function (x) { return x.id !== c.id; }); });
+  showTodo();
+}
+function deleteCover(k) {
+  var c = TODO.covers[k];
+  if (!confirm('Delete this session (' + c.student + ', ' + fmtDate(c.date) + ')? Its charge is removed too.')) return;
+  call('confirmCover', { coverId: c.id, remove: true }, function () { notice('Deleted, with its charge.'); });
+  patchLocal(function () { var t = cached('todo'); if (t && t.covers) t.covers = t.covers.filter(function (x) { return x.id !== c.id; }); });
   showTodo();
 }
 
@@ -2908,8 +2931,12 @@ function drawTutors() {
     if (!box) return;
     var reports = d.covers.filter(function (c) { return c['Status'] === 'Reported'; });
     box.innerHTML = '<h2>Cover tutors</h2><div class="card">' + (d.tutors.map(function (t, i) {
-      return '<div class="item"><span><b>' + esc(t['Name']) + '</b><div class="sub">' + (t['Usual fee'] ? 'usual fee ' + amt(t['Usual fee'], t['Currency']) : '') + (t.owed ? ' · <b>you owe ' + amt(t.owed, t['Currency']) + '</b>' : '') + '</div></span>' +
-        '<button class="small" style="width:auto" onclick="tutorLink(' + i + ')">Link</button></div>';
+      var owed = Object.keys(t.owed || {}).filter(function (c) { return t.owed[c]; }).map(function (c) { return amt(t.owed[c], c); }).join(' + ');
+      var n = (d.assigned || []).filter(function (a) { return a['Tutor ID'] === t['Tutor ID']; }).length;
+      return '<div class="item"><span><b>' + esc(t['Name']) + '</b><div class="sub">Student pays ' + (t['Student rate Egypt'] ? amt(t['Student rate Egypt'], 'EGP') : '–') + ' / ' + (t['Student rate abroad'] ? amt(t['Student rate abroad'], 'USD') : '–') +
+        ' · earns ' + (t['Earns Egypt'] ? amt(t['Earns Egypt'], 'EGP') : '–') + ' / ' + (t['Earns abroad'] ? amt(t['Earns abroad'], 'USD') : '–') + ' · ' + n + ' student' + (n === 1 ? '' : 's') +
+        (owed ? ' · <b>you owe ' + owed + '</b>' : '') + '</div></span>' +
+        '<span><button class="small" style="width:auto" onclick="tutorForm(' + i + ')">Edit</button> <button class="small" style="width:auto" onclick="tutorLink(' + i + ')">Link</button></span></div>';
     }).join('') || '<div class="sub">No tutors yet.</div>') + '<div class="actions"><button onclick="tutorForm()">＋ Tutor</button></div></div>' +
       (reports.length ? '<h2>Cover reports</h2>' + reports.slice(0, 15).map(function (c) {
         var i = d.covers.indexOf(c);
@@ -2920,14 +2947,21 @@ function drawTutors() {
       }).join('') : '');
   }, { part: true });
 }
-function tutorForm() {
-  sheet('New cover tutor', '<div class="sub">Name</div><input id="tn"><div class="sub" style="margin-top:8px">WhatsApp</div><input id="tw" type="tel">' +
-    '<div class="filters" style="margin:8px 0 0"><input id="tf" type="number" placeholder="Usual fee per session">' + sel('tc', 'EGP', [['EGP', 'EGP'], ['USD', 'USD']]) + '</div>' +
-    '<button class="primary" style="width:100%;margin-top:10px" onclick="saveTutor()">Add</button>');
+// Add or edit a tutor: per session, what a student pays and what the tutor earns (Egypt in EGP, abroad in USD).
+function tutorForm(i) {
+  var t = typeof i === 'number' ? TUT.tutors[i] : {};
+  var num = function (id, v, ph) { return '<input id="' + id + '" type="number" inputmode="decimal" value="' + esc(v || '') + '" placeholder="' + ph + '">'; };
+  sheet(t['Name'] ? 'Edit ' + t['Name'] : 'New cover tutor', '<div class="sub">Name</div><input id="tn" value="' + esc(t['Name'] || '') + '"><div class="sub" style="margin-top:8px">WhatsApp</div><input id="tw" type="tel" value="' + esc(t['WhatsApp'] || '') + '">' +
+    '<div class="sub" style="margin-top:10px"><b>Student pays</b> per session</div><div class="filters" style="margin:4px 0 0">' + num('tre', t['Student rate Egypt'], 'Egypt (EGP)') + num('tra', t['Student rate abroad'], 'Abroad (USD)') + '</div>' +
+    '<div class="sub" style="margin-top:10px"><b>Tutor earns</b> per session</div><div class="filters" style="margin:4px 0 0">' + num('tee', t['Earns Egypt'], 'Egypt (EGP)') + num('tea', t['Earns abroad'], 'Abroad (USD)') + '</div>' +
+    '<div class="sub" style="margin-top:6px">The student\'s currency decides which pair applies (EGP students: Egypt; USD students: abroad).</div>' +
+    '<button class="primary" style="width:100%;margin-top:10px" onclick="saveTutor(\'' + esc(t['Tutor ID'] || '') + '\')">' + (t['Name'] ? 'Save' : 'Add') + '</button>');
 }
-function saveTutor() {
-  var a = { name: document.getElementById('tn').value.trim(), whatsapp: document.getElementById('tw').value.trim(), fee: document.getElementById('tf').value, currency: document.getElementById('tc').value };
-  call('addTutor', a, function () {}, { optimistic: function () { closeSheet(); notice('Added. Their link is ready in Settings in a moment.'); }, confirmed: function () { drawTutors(); } });
+function saveTutor(id) {
+  var v = function (x) { return document.getElementById(x).value.trim(); };
+  var a = { id: id, name: v('tn'), whatsapp: v('tw'), rateEg: v('tre'), rateAb: v('tra'), earnEg: v('tee'), earnAb: v('tea') };
+  if (!a.name) return notice('Enter the tutor\'s name.');
+  call('saveTutor', a, function () { closeSheet(); notice(id ? 'Saved.' : 'Added. Their link is ready under Link.'); drawTutors(); });
 }
 function tutorLink(i) {
   var t = TUT.tutors[i];
@@ -2947,22 +2981,21 @@ function approveComment(i, on) {
 }
 function drawTutorsFrom() { var d = TUT; CACHE['tutors|{}'] = { data: d, at: Date.now() }; drawTutors(); }
 
-// Booking a 1-on-1 with a cover tutor (from a student's page).
+// A student's cover tutor (from their page): assign them to a tutor, whose link then lists them so the tutor can log sessions.
 function coverForm(id) {
   call('tutors', {}, function (d) {
     if (!d.tutors.length) return notice('Add a cover tutor first (Settings → Cover tutors).');
-    sheet('1-on-1 with a cover tutor', sel('ct', '', [['', 'Pick the tutor']].concat(d.tutors.map(function (t) { return [t['Tutor ID'], t['Name']]; }))) +
-      '<div class="filters" style="margin:8px 0 0"><input id="cd" type="date" value="' + today() + '"><input id="cs" type="time" value="18:00"><input id="cm" type="number" value="60" style="max-width:90px" title="Minutes"></div>' +
-      '<div class="sub" style="margin-top:8px">Tutor\'s fee for this session (blank = their usual fee)</div><input id="cf" type="number">' +
-      '<div class="sub" style="margin-top:8px">When they report it, the student is charged the 1-on-1 rate and the fee is noted as owed to the tutor.</div>' +
-      '<button class="primary" style="width:100%;margin-top:10px" onclick="saveCover(\'' + esc(id) + '\')">Book</button>');
+    var mine = (d.assigned || []).filter(function (a) { return a['Student ID'] === id; }).map(function (a) { return a['Tutor ID']; });
+    sheet('Cover tutor', '<div class="sub">The tutor\'s link lists the students assigned to them; they log each 1-on-1 session there, and you confirm it in To do.</div>' +
+      (mine.length ? mine.map(function (tid) { var t = d.tutors.filter(function (x) { return x['Tutor ID'] === tid; })[0] || { Name: tid };
+        return '<div class="item" style="margin-top:8px"><b>' + esc(t['Name']) + '</b><button class="small secondary" style="width:auto" onclick="assignTutor(\'' + esc(id) + '\',\'' + esc(tid) + '\',true)">Remove</button></div>'; }).join('') : '<div class="sub" style="margin-top:8px">No cover tutor yet.</div>') +
+      '<div class="filters" style="margin:10px 0 0">' + sel('ct', '', [['', 'Assign a tutor']].concat(d.tutors.filter(function (t) { return mine.indexOf(t['Tutor ID']) < 0; }).map(function (t) { return [t['Tutor ID'], t['Name']]; }))) +
+      '<button style="width:auto" onclick="assignTutor(\'' + esc(id) + '\', document.getElementById(\'ct\').value)">Assign</button></div>');
   }, { part: true });
 }
-function saveCover(id) {
-  var a = { studentId: id, tutorId: document.getElementById('ct').value, date: document.getElementById('cd').value, start: document.getElementById('cs').value,
-    minutes: document.getElementById('cm').value, fee: document.getElementById('cf').value };
-  if (!a.tutorId) return notice('Pick the tutor.');
-  call('bookCover', a, function () {}, { optimistic: function () { closeSheet(); notice('Booked. It shows on the tutor\'s page in about a minute.'); } });
+function assignTutor(id, tutorId, off) {
+  if (!tutorId) return notice('Pick the tutor.');
+  call('assignTutor', { studentId: id, tutorId: tutorId, off: !!off }, function () { closeSheet(); notice(off ? 'Removed.' : 'Assigned: they now show on the tutor\'s link.'); });
 }
 </script>
 
