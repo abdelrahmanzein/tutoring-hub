@@ -3029,13 +3029,24 @@ function enquiryLink() {
 }
 function copyText(t) { try { navigator.clipboard.writeText(t); } catch (e) { var x = document.createElement('textarea'); x.value = t; document.body.appendChild(x); x.select(); document.execCommand('copy'); x.remove(); } }
 
+// The enquiry form's syllabus checklist, for deciding where they fit: per topic, taken / total, and the hard ones.
+var TOPIC_NAMES = { '1': 'Number and algebra', '2': 'Functions', '3': 'Geometry and trigonometry', '4': 'Statistics and probability', '5': 'Calculus' };
+function syllabusBox(p) {
+  if (p['Started IB'] === 'No') return '<div class="sub" style="margin-top:8px">📘 Hasn\'t started the IB course yet.</div>';
+  if (!p.syllabus) return '';
+  return '<div class="card" style="margin-top:10px"><b>📘 Syllabus checklist (' + esc(p['Level'] || '') + ')</b>' + p.syllabus.map(function (t) {
+    return '<div class="row"><span>' + t.topic + '. ' + TOPIC_NAMES[t.topic] + (t.hard.length ? '<div class="sub">⚠️ ' + t.hard.map(esc).join('<br>⚠️ ') + '</div>' : '') + '</span>' +
+      '<span class="sub" style="text-align:right;white-space:nowrap">✅ ' + t.taken + (t.hard.length ? ' · ⚠️ ' + t.hard.length : '') + ' / ' + t.total + '</span></div>'; }).join('') +
+    '<div class="sub" style="margin-top:4px">✅ taken at school · ⚠️ taken, but finding it hard · the rest: not taken yet</div></div>';
+}
+
 function showProspect(i) {
   var p = PROS[i], st = p['Stage'], m = p.messages || {};
   var wa = function (text, label, next) {
     return '<button class="primary" style="width:100%;margin-top:8px" onclick="prospectSend(' + i + ',\'' + text + '\',\'' + (next || '') + '\')">' + label + '</button>';
   };
   var body = '<div class="sub">' + esc([p['Course'] + ' ' + p['Level'], p['Batch'], p['Country'], p['School']].filter(function (x) { return x && x.trim(); }).join(' · ')) +
-    (p['Parent name'] ? '<br>Parent: ' + esc(p['Parent name']) : '') + (p['Notes'] ? '<br>' + esc(p['Notes']) : '') + '</div>';
+    (p['Parent name'] ? '<br>Parent: ' + esc(p['Parent name']) : '') + (p['Notes'] ? '<br>' + esc(p['Notes']) : '') + '</div>' + syllabusBox(p);
   if (st === 'New' || st === 'Details sent') {
     body += m.details ? '<details style="margin-top:10px"><summary class="sub">Details message</summary><div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(m.details) + '</div></details>' +
       wa('details', st === 'New' ? '💬 Send the details' : '💬 Send the details again', 'Details sent') : '<div class="sub">The details message is being prepared…</div>';

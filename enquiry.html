@@ -27,6 +27,17 @@
     .row .lbl { display:flex; justify-content:space-between; gap:10px; color:var(--sub); font-size:13px; }
     .val { font-weight:600; margin-top:2px; } .val .ar { font-weight:400; color:var(--sub); }
     .sub { color:var(--sub); }
+    .note { background:#fff7ed; border-color:#f59e0b; } @media (prefers-color-scheme: dark) { .note { background:#2a2112; border-color:#d97706; } }
+    .seg { display:flex; gap:8px; margin-top:6px; } .seg button { flex:1; margin:0; padding:10px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--text); font-weight:600; }
+    .seg button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+    details.topic { border-top:1px solid var(--line); padding:8px 0; } details.topic summary { font-weight:600; cursor:pointer; display:flex; justify-content:space-between; gap:8px; }
+    details.topic summary .cnt { color:var(--sub); font-weight:400; font-size:13px; }
+    .srow { display:flex; gap:10px; align-items:flex-start; padding:8px 6px; border-radius:8px; cursor:pointer; user-select:none; font-size:14px; }
+    .srow .st { flex:none; width:24px; text-align:center; } .srow .code { flex:none; width:58px; color:var(--sub); font-size:12px; padding-top:1px; }
+    .srow.taken { background:#dcfce7; } .srow.hard { background:#fef3c7; }
+    @media (prefers-color-scheme: dark) { .srow.taken { background:#12261a; } .srow.hard { background:#2b2610; } }
+    .tag { font-size:11px; border:1px solid var(--line); border-radius:6px; padding:0 4px; margin-left:4px; color:var(--sub); }
+    .chipb { width:auto; margin:4px 0; padding:4px 10px; font-size:13px; font-weight:400; border:1px solid var(--line); background:var(--card); color:var(--accent); border-radius:999px; }
   </style>
 </head>
 <body>
@@ -127,7 +138,8 @@ function draw(f) {
     (PREVIEW ? '<div class="card" style="border-color:#d97706">Preview: this is exactly what students and parents see. Nothing is sent.</div>' : '') +
     '<div class="brand">Mr Zein\'s Tutoring Groups</div>' +
     '<h1 class="ar">الاستفسار عن حصص الرياضيات للبكالوريا الدولية</h1><h1>IBDP Maths enquiry</h1>' +
-    '<p class="sub ar">يرجى تعبئة هذا النموذج القصير، وستصلكم التفاصيل على واتساب.</p><p class="sub">Please fill in this short form, and the details will reach you on WhatsApp.</p>' +
+    '<div class="card note"><p class="ar" style="margin:0 0 6px">أقدّم حصص مادة <b>التحليل والمقاربات (AA)</b> بمستوييها SL وHL فقط، ولا أقدّم حصصًا في مادة التطبيقات والتفسير (AI).</p>' +
+      '<p style="margin:0">I tutor <b>Analysis and Approaches (AA)</b>, SL and HL, only. I don\'t tutor Applications and Interpretation (AI).</p></div>' +
     '<div class="card"><h2><span>Who is filling in this form?</span><span class="ar">من يملأ هذا النموذج؟</span></h2>' +
       field('who', 'أنا', 'I am the', select('who', [['Parent', 'Parent / ولي الأمر'], ['Student', 'Student / الطالب']])) +
     '</div>' +
@@ -136,8 +148,7 @@ function draw(f) {
       field('school', 'المدرسة', 'School') +
       field('country', 'بلد الإقامة', 'Country of residence', select('country', f.countries.map(function (c) { return [c.name, c.flag + ' ' + c.name]; }).concat([['Other', '🌍 Other']]))) +
       field('city', 'المدينة', 'City', null, 'So session times are shown in your local time.') +
-      field('course', 'المادة', 'Course', select('course', [['AA', 'Analysis and Approaches (AA)'], ['AI', 'Applications and Interpretation (AI)'], ['?', 'Not sure yet / لم يُحدَّد بعد']])) +
-      field('level', 'المستوى', 'Level', select('level', [['HL', 'Higher Level (HL)'], ['SL', 'Standard Level (SL)'], ['?', 'Not sure yet / لم يُحدَّد بعد']])) +
+      field('level', 'المستوى (التحليل والمقاربات)', 'Level (Analysis and Approaches)', '<div class="seg" id="lvl"><button type="button" data-v="SL">SL</button><button type="button" data-v="HL">HL</button></div>') +
       field('batch', 'سنة الامتحانات النهائية', 'Final exams in', select('batch', f.batches.map(function (b) { return [b, 'May ' + b + ' / مايو ' + b]; }))) +
       field('studentWhatsApp', 'رقم واتساب الطالب (اختياري)', 'Student\'s WhatsApp (optional)', phone('studentWhatsApp')) +
     '</div>' +
@@ -146,6 +157,9 @@ function draw(f) {
       field('parentRelation', 'صلة القرابة', 'Relation', select('parentRelation', [['Mother', 'Mother / الأم'], ['Father', 'Father / الأب'], ['Other', 'Other / غير ذلك']])) +
       field('parentWhatsApp', 'رقم واتساب ولي الأمر', 'Parent\'s WhatsApp', phone('parentWhatsApp')) +
     '</div>' +
+    '<div class="card"><h2><span>The syllabus</span><span class="ar">المنهج</span></h2>' +
+      field('started', 'هل بدأ الطالب منهج البكالوريا في المدرسة؟', 'Has the student started the IB course at school?', '<div class="seg" id="started"><button type="button" data-v="yes">Yes / نعم</button><button type="button" data-v="no">Not yet / ليس بعد</button></div>') +
+      '<div id="cl"></div></div>' +
     '<div class="card">' +
       field('heard', 'كيف عرفتم عنا؟ (اختياري)', 'How did you hear about us? (optional)', select('heard', [['A friend or family', 'A friend or family / صديق أو أحد الأقارب'], ['A current student', 'A current student / طالب حالي'], ['Social media', 'Social media / وسائل التواصل'], ['School', 'School / المدرسة'], ['Other', 'Other / غير ذلك']])) +
       field('question', 'أي سؤال أو ملاحظة (اختياري)', 'Any question or note (optional)', '<input id="question" maxlength="300">') +
@@ -160,20 +174,51 @@ function draw(f) {
   ['studentWhatsApp', 'parentWhatsApp'].forEach(function (id) { document.getElementById(id + 'Code').onchange = function () { this.dataset.touched = '1'; }; });
   document.getElementById('country').onchange = showCity;
   showCity();
+  ['lvl', 'started'].forEach(function (id) {
+    document.getElementById(id).onclick = function (e) {
+      if (e.target.tagName !== 'BUTTON') return;
+      [].forEach.call(this.children, function (b) { b.classList.toggle('on', b === e.target); });
+      if (id === 'lvl') LVL = e.target.dataset.v; else STARTED = e.target.dataset.v;
+      drawChecklist();
+    };
+  });
 }
+
+// The syllabus checklist: tap a subtopic to cycle ⬜ not taken yet → ✅ taken at school → ⚠️ taken, but finding it hard.
+var LVL = '', STARTED = '', ST = {};
+var TOPICS = { '1': 'Topic 1 — Number and algebra', '2': 'Topic 2 — Functions', '3': 'Topic 3 — Geometry and trigonometry', '4': 'Topic 4 — Statistics and probability', '5': 'Topic 5 — Calculus' };
+var ICON = { '': '⬜', taken: '✅', hard: '⚠️' }, NEXT = { '': 'taken', taken: 'hard', hard: '' };
+function rowsFor(t) { return F.syllabus.filter(function (r) { return r[0].split(' ')[1].split('.')[0] === t && (LVL === 'HL' || r[0].indexOf('AHL') !== 0); }); }
+function drawChecklist() {
+  var box = document.getElementById('cl');
+  if (STARTED !== 'yes') { box.innerHTML = STARTED === 'no' ? '<p class="sub">No problem: the checklist is only for students who have started. <span class="ar">لا بأس، القائمة للطلاب الذين بدأوا المنهج فقط.</span></p>' : ''; return; }
+  if (!LVL) { box.innerHTML = '<p class="sub">Choose the level (SL or HL) above to see the checklist. <span class="ar">اختر المستوى أعلاه لعرض القائمة.</span></p>'; return; }
+  var open = {}; box.querySelectorAll('details').forEach(function (d) { open[d.dataset.t] = d.open; });
+  box.innerHTML = '<p class="sub ar">اضغط على كل موضوع لتحديده: ✅ دُرس في المدرسة · ⚠️ دُرس لكن فيه صعوبة · ⬜ لم يُدرس بعد.</p><p class="sub">Tap each subtopic: ✅ taken at school · ⚠️ taken, but finding it hard · ⬜ not taken yet.</p>' +
+    Object.keys(TOPICS).map(function (t) {
+      var rows = rowsFor(t), taken = rows.filter(function (r) { return ST[r[0]] === 'taken'; }).length, hard = rows.filter(function (r) { return ST[r[0]] === 'hard'; }).length;
+      return '<details class="topic" data-t="' + t + '"' + (open[t] ? ' open' : '') + '><summary><span>' + TOPICS[t] + '</span><span class="cnt">✅ ' + taken + ' · ⚠️ ' + hard + ' / ' + rows.length + '</span></summary>' +
+        '<button type="button" class="chipb" onclick="markTopic(\'' + t + '\')">Mark the whole topic as taken · تحديد الموضوع كله</button>' +
+        rows.map(function (r) { var s = ST[r[0]] || ''; return '<div class="srow ' + s + '" onclick="tapRow(\'' + r[0] + '\')"><span class="st">' + ICON[s] + '</span><span class="code">' + r[0].replace('AHL ', '') + (r[0].indexOf('AHL') === 0 ? '<span class="tag">AHL</span>' : '') + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') + '</details>';
+    }).join('');
+}
+function tapRow(c) { ST[c] = NEXT[ST[c] || '']; drawChecklist(); }
+function markTopic(t) { rowsFor(t).forEach(function (r) { if (ST[r[0]] !== 'hard') ST[r[0]] = 'taken'; }); drawChecklist(); document.querySelector('details[data-t="' + t + '"]').open = true; }
 
 function send() {
   var a = {};
-  ['who', 'name', 'school', 'country', 'city', 'course', 'level', 'batch', 'parentName', 'parentRelation', 'heard', 'question', 'website'].forEach(function (id) { a[id] = document.getElementById(id).value.trim(); });
+  ['who', 'name', 'school', 'country', 'city', 'batch', 'parentName', 'parentRelation', 'heard', 'question', 'website'].forEach(function (id) { a[id] = document.getElementById(id).value.trim(); });
+  a.level = LVL; a.started = STARTED;
+  a.syllabus = {}; if (STARTED === 'yes') Object.keys(ST).forEach(function (k) { if (ST[k] && (LVL === 'HL' || k.indexOf('AHL') !== 0)) a.syllabus[k] = ST[k]; });
   if (document.getElementById('f-city').style.display === 'none') a.city = '';
   ['studentWhatsApp', 'parentWhatsApp'].forEach(function (id) {
     var n = document.getElementById(id).value.replace(/[^0-9]/g, '').replace(/^0+/, '');
     a[id] = n ? document.getElementById(id + 'Code').value + ' ' + n : '';
   });
-  var need = ['who', 'name', 'school', 'country', 'course', 'level', 'batch', 'parentName', 'parentRelation', 'parentWhatsApp'];
+  var need = ['who', 'name', 'school', 'country', 'level', 'batch', 'started', 'parentName', 'parentRelation', 'parentWhatsApp'];
   if (document.getElementById('f-city').style.display !== 'none') need.push('city');
   var missing = need.filter(function (id) { return !a[id]; }), err = document.getElementById('err');
-  if (missing.length) { err.innerHTML = '<span class="ar">يرجى تعبئة جميع الحقول المطلوبة.</span>\nPlease fill in every required field.'; document.getElementById(missing[0]).focus(); return; }
+  if (missing.length) { err.innerHTML = '<span class="ar">يرجى تعبئة جميع الحقول المطلوبة.</span>\nPlease fill in every required field.'; var el = document.getElementById(missing[0] === 'level' ? 'lvl' : missing[0]); if (el) { el.scrollIntoView({ block: 'center' }); if (el.focus) el.focus(); } return; }
   if (/[؀-ۿ]/.test(a.name)) { err.textContent = 'Please write the student\'s name in English letters.'; return; }
   if (PREVIEW) { err.textContent = 'Preview only: nothing was sent. At this point they see the thank-you message.'; return; }
   var b = document.getElementById('send'); b.disabled = true; b.textContent = 'Sending…'; err.textContent = '';
