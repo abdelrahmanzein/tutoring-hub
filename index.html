@@ -266,7 +266,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['removeFromSession', 'undoLastMove', 'leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -2479,6 +2479,11 @@ function showTodo() {
         esc([p['Course'] && p['Level'] ? p['Course'] + ' ' + p['Level'] : '', p['Batch'] ? 'May ' + p['Batch'] : '', p['Country']].filter(String).join(' · ')) +
         (/Enquiry form/.test(p['Notes'] || '') ? ' · via the form' : '') + '</div></span><span>Review ›</span></div>';
     }).join(''));
+    // Homework folders that couldn't be made when a session was logged: make them now (the title can be corrected).
+    if (d.foldersFailed && d.foldersFailed.length) parts.push('<h2>Homework folders not created</h2>' + d.foldersFailed.map(function (f, k) {
+      return '<div class="card"><b>' + esc(f.group) + '</b> <span class="sub">' + esc(fmtDate(f.date)) + '</span><div class="sub">Google couldn\'t make the folder when you logged it' + (f.why ? ' (' + esc(f.why) + ')' : '') + '.</div>' +
+        '<input id="hff' + k + '" value="' + esc(f.title) + '" style="margin-top:6px"><div class="actions"><button class="primary" onclick="hold(this);retryFolder(' + k + ')">Create the folder</button><button class="secondary" onclick="retryFolder(' + k + ', true)">Dismiss</button></div></div>';
+    }).join(''));
     // 1-on-1 sessions a cover tutor logged: already charged; confirm, or delete if wrong (the charge goes too).
     if (d.covers && d.covers.length) parts.push('<h2>Cover sessions to confirm</h2>' + d.covers.map(function (c, k) {
       return '<div class="card"><div class="item"><span><b>' + esc(c.student) + '</b> · ' + esc(c.tutor) + '<div class="sub">' + esc(fmtDate(c.date)) + ' · ' + esc(c.minutes) + ' min · charged ' + amt(c.charge, c.currency) + ' · tutor earns ' + amt(c.earns, c.earnsCurrency || 'EGP') + '</div></span></div>' +
@@ -2596,6 +2601,15 @@ function sendRec(i) {
   r.links.forEach(function (u) { var m = u.match(/\/d\/([-\w]+)/); if (m) call('shareRecording', { fileId: m[1] }, function () {}, { optimistic: function () {}, quiet: true }); });
   patchLocal(function () { var t = cached('todo'); if (t) t.recordings = t.recordings.filter(function (x) { return !(x.id === r.id && x.sessionId === r.sessionId); }); });
   showTodo();
+}
+
+// Makes a homework folder that failed when the session was logged (or dismisses the note).
+function retryFolder(k, dismiss) {
+  var f = TODO.foldersFailed[k], title = (document.getElementById('hff' + k) || {}).value || f.title;
+  call('retryHomeworkFolder', { group: f.group, date: f.date, title: title, dismiss: !!dismiss }, function (r) {
+    patchLocal(function () { var t = cached('todo'); if (t && t.foldersFailed) t.foldersFailed = t.foldersFailed.filter(function (x) { return !(x.group === f.group && x.date === f.date); }); });
+    notice(dismiss ? 'Dismissed.' : 'Created: ' + (r.folder ? r.folder.name : 'the folder') + '.'); showTodo();
+  });
 }
 
 // Confirms a logged cover session (and whether its comments show on the family page).
