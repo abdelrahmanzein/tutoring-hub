@@ -170,6 +170,17 @@
   .tbl-wrap .tbl td.wrap { white-space:normal; min-width:110px; }
   .tbl td.num, .tbl th.num { text-align:right; }
   .tbl tr.tap { cursor:pointer; } .tbl tr.tap:active td { background:var(--accent-soft); }
+  /* Sessions lists: a colour bar on each row, and the key above */
+  .tbl tr.s-log td:first-child { box-shadow:inset 4px 0 0 var(--warn); } .tbl tr.s-log td { background:color-mix(in srgb, var(--warn) 7%, transparent); }
+  .tbl tr.s-today td:first-child { box-shadow:inset 4px 0 0 var(--accent); } .tbl tr.s-today td { background:var(--accent-soft); }
+  .tbl tr.s-up td:first-child { box-shadow:inset 4px 0 0 var(--accent); }
+  .tbl tr.s-done td:first-child { box-shadow:inset 4px 0 0 var(--good); }
+  .tbl tr.s-off td:first-child { box-shadow:inset 4px 0 0 var(--muted); } .tbl tr.s-off td { color:var(--muted); }
+  .tbl tr td:first-child { padding-left:10px; }
+  .sess-key { display:flex; flex-wrap:wrap; gap:10px; font-size:12px; color:var(--muted); margin:0 0 4px; }
+  .sess-key .k::before { content:''; display:inline-block; width:4px; height:12px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+  .sess-key .s-log::before { background:var(--warn); } .sess-key .s-today::before { background:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+  .sess-key .s-up::before { background:var(--accent); } .sess-key .s-done::before { background:var(--good); } .sess-key .s-off::before { background:var(--muted); }
   .tbl tr.gone td { opacity:.5; text-decoration:line-through; }
 
   /* Roster chips, recent students, profile header, collapsible sections */
@@ -320,7 +331,7 @@ function persist() {
 // fraction of a second instead of asking Google for each screen. Right after a save, screens ask Google directly
 // (as before) until the new data has been uploaded (usually within a minute).
 var READ_URL = 'https://tutoring-hub.abdelrahmanzein.workers.dev';
-var SNAP_ACTIONS = ['quizzes', 'adminData', 'tutors', 'joinList', 'rate', 'nextHomework', 'meetDraft', 'prospects', 'money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive'];
+var SNAP_ACTIONS = ['quizzes', 'adminData', 'tutors', 'joinList', 'rate', 'nextHomework', 'meetDraft', 'prospects', 'money', 'sessionForm', 'week', 'newStudentForm', 'income', 'groups', 'todo', 'group', 'profile', 'weekLive', 'sessionLog'];
 var SNAP_AT = {}, STALE_SINCE = 0, SNAP_LOADING = null, POLL_T = null;
 
 // Downloads the three blobs; redraws the screen you're on if anything changed.
@@ -1604,38 +1615,93 @@ function ledgerRows(list, id) {
 // ---------- Today: log a session by hand (until the calendar/Meet stage) ----------
 var sessData = null, sessRows = [];
 
-// Today screen: today's sessions and the next 6 days' from the Tutoring calendar, with their status.
+// Sessions screen, in two parts: My sessions (group sessions) and Cover tutors (their 1-on-1 sessions, the tutors and
+// what you owe them). My sessions is one list, colour-coded: to log (amber), coming up (blue; today in bold), held
+// (green), didn't happen (grey). Tapping a row opens the session's card.
+var SESS_MODE = 'mine', SESS_PAST = 25;
 function showToday() {
   newView();
   setBack('Sessions', 'Sessions', showToday);
   refreshView = showToday;
   document.getElementById('title').textContent = 'Sessions';
-  FOLD_ON = true;
+  FOLD_ON = false;
+  var seg = '<div class="seg"><button class="' + (SESS_MODE === 'mine' ? 'on' : '') + '" onclick="SESS_MODE=\'mine\';showToday()">My sessions</button>' +
+    '<button class="' + (SESS_MODE === 'cover' ? 'on' : '') + '" onclick="SESS_MODE=\'cover\';showToday()">Cover tutors</button></div>';
+  if (SESS_MODE === 'cover') return showCovers(seg);
   call('week', {}, function (week) {
     week = week.map(liveStatus);
-    call('sessionForm', {}, function (d) {
-      sessData = d;
-      var byDay = {};
-      week.forEach(function (s) { (byDay[s.day] = byDay[s.day] || []).push(s); });
-      var days = Object.keys(byDay).sort();
-      // Keep anything already merged from the live part, then show the cards.
-      var prev = {};
-      WEEK.forEach(function (s) { prev[s.sessionId] = s; });
-      WEEK = week.map(function (s) { var p = prev[s.sessionId]; return p && p.homework !== undefined && !s.reminder ? Object.assign({}, s, { homework: p.homework, pastPapers: p.pastPapers, reminder: p.reminder, students: p.students }) : s; });
-      week = WEEK;
-      var legend = '<div class="sub" style="margin:2px 0 6px">Homework: ✅ on time · ⏰ late · ❌ missing · ⏳ not yet. Past papers: ❓ number of questions not answered yet. Tap a name to open the student.</div>';
-      document.getElementById('main').innerHTML = legend +
-        (days.length ? days.map(function (day) {
-          return '<h2>' + dayLabel(day) + '</h2><div class="day-cards" data-day="' + day + '">' + byDay[day].map(function (s) { return sessionCard(s); }).join('') + '</div>';
-        }).join('') : '<div class="card sub">No sessions in the Tutoring calendar for the next 7 days.</div>') +
-        '<div class="actions"><button class="primary" onclick="sessionForm()">＋ Log a session</button></div>';
-      // Homework, past papers and reminders (read from Drive, so they may come a moment later) are merged into the cards.
-      call('weekLive', {}, function (live) {
-        WEEK.forEach(function (s) { var x = live[s.sessionId]; if (x) { s.homework = x.homework; s.pastPapers = x.pastPapers; s.reminder = x.reminder; s.students = x.students; } });
-        redrawSessionCards();
-      }, { part: true });
+    // Keep anything already merged from the live part (homework, students, reminder).
+    var prev = {};
+    WEEK.forEach(function (s) { prev[s.sessionId] = s; });
+    WEEK = week.map(function (s) { var p = prev[s.sessionId]; return p && p.homework !== undefined && !s.reminder ? Object.assign({}, s, { homework: p.homework, pastPapers: p.pastPapers, reminder: p.reminder, students: p.students }) : s; });
+    var log = cached('sessionLog') || [], todo = cached('todo') || { toLog: [] }, inWeek = {};
+    WEEK.forEach(function (s) { inWeek[s.sessionId] = true; });
+    var toLog = (todo.toLog || []).filter(function (s) { return !inWeek[s.sessionId]; }).map(function (s) { return { kind: 'todo', s: s, day: s.day, start: s.start, group: s.group, cls: 's-log', label: 'To log' }; })
+      .concat(WEEK.filter(function (s) { return s.status === 'Needs review'; }).map(function (s) { return { kind: 'week', s: s, day: s.day, start: s.start, group: s.group, cls: 's-log', label: 'To log' }; }));
+    var coming = WEEK.filter(function (s) { return s.status === 'Upcoming' || s.status === 'In progress'; }).map(function (s) {
+      return { kind: 'week', s: s, day: s.day, start: s.start, group: s.group, cls: s.day === today() ? 's-today' : 's-up', label: s.status === 'In progress' ? 'Now' : s.quiz ? '📝 Quiz' : '' }; });
+    var past = WEEK.filter(function (s) { return s.status === 'Logged' || s.status === 'Did not happen'; }).map(function (s) {
+      var l = log.filter(function (x) { return x.sessionId === s.sessionId; })[0];
+      return l ? { kind: 'past', s: l, day: l.day, start: s.start, group: l.group, cls: l.status === 'Logged' ? 's-done' : 's-off', label: l.title || (l.status === 'Logged' ? 'Held' : 'Didn\'t happen') }
+        : { kind: 'week', s: s, day: s.day, start: s.start, group: s.group, cls: s.status === 'Logged' ? 's-done' : 's-off', label: s.status === 'Logged' ? 'Held' : 'Didn\'t happen' };
+    }).concat(log.filter(function (l) { return !inWeek[l.sessionId]; }).map(function (l) {
+      return { kind: 'past', s: l, day: l.day, start: l.start, group: l.group, cls: l.status === 'Logged' ? 's-done' : 's-off', label: l.title || (l.status === 'Logged' ? 'Held' : 'Didn\'t happen') }; }));
+    toLog.sort(function (a, b) { return a.day < b.day ? -1 : 1; });
+    coming.sort(function (a, b) { return (a.day + a.start) < (b.day + b.start) ? -1 : 1; });
+    past.sort(function (a, b) { return (a.day + a.start) < (b.day + b.start) ? 1 : -1; });
+    SESS_ROWS = toLog.concat(coming, past);
+    var rows = function (list, offset) {
+      return table(['When', 'Group', ''], list.map(function (r) {
+        var d = new Date(r.day + 'T12:00:00'), wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+        return ['<b>' + (r.day === today() ? 'Today' : wd + ' ' + esc(fmtDate(r.day).slice(0, 5))) + '</b>' + (r.start ? '<div class="sub">' + esc(r.start) + '</div>' : ''),
+          esc(String(r.group).replace(/^B(\d+) /, 'B$1 ')), '<span class="sub">' + esc(r.label) + '</span>'];
+      }), { wrap: [2], tap: function (i) { return 'openSessRow(' + (offset + i) + ')'; }, rowClass: function (i) { return list[i].cls; } });
+    };
+    var shownPast = past.slice(0, SESS_PAST);
+    document.getElementById('main').innerHTML = seg +
+      '<div class="sess-key"><span class="k s-log">To log</span><span class="k s-today">Today</span><span class="k s-up">Coming up</span><span class="k s-done">Held</span><span class="k s-off">Didn\'t happen</span></div>' +
+      (toLog.length ? '<h2>To log</h2>' + rows(toLog, 0) : '') +
+      '<h2>Coming up</h2>' + (coming.length ? rows(coming, toLog.length) : '<div class="card sub">Nothing in the Tutoring calendar for the next 7 days.</div>') +
+      '<h2>Past (last 90 days)</h2>' + (past.length ? rows(shownPast, toLog.length + coming.length) +
+        (past.length > shownPast.length ? '<button class="secondary" style="margin:-4px 0 10px" onclick="SESS_PAST+=50;showToday()">Show more</button>' : '') : '<div class="card sub">None yet.</div>') +
+      '<div class="actions"><button class="primary" onclick="sessionForm()">＋ Log a session</button></div>';
+    // Homework, past papers and reminders (read from Drive, so they may come a moment later) are merged into the cards.
+    call('weekLive', {}, function (live) {
+      WEEK.forEach(function (s) { var x = live[s.sessionId]; if (x) { s.homework = x.homework; s.pastPapers = x.pastPapers; s.reminder = x.reminder; s.students = x.students; } });
+      redrawSessionCards();
     }, { part: true });
+    if (!sessData) call('sessionForm', {}, function (d) { sessData = d; }, { part: true });
   });
+}
+
+// A tapped row: the session's card (upcoming or to log), or what happened (past).
+var SESS_ROWS = [];
+function openSessRow(k) {
+  var r = SESS_ROWS[k];
+  if (!r) return;
+  if (r.kind === 'week') {
+    var i = WEEK.indexOf(r.s);
+    cardSheet(r.s.group + ' · ' + fmtDate(r.s.day), '<div class="day-cards" data-day="' + esc(r.s.day) + '" data-id="' + esc(r.s.sessionId) + '">' + sessionCard(WEEK[i]) + '</div>');
+  } else if (r.kind === 'todo') {
+    TODO = cached('todo') || TODO;
+    cardSheet(r.s.group + ' · ' + fmtDate(r.s.day), '<div class="sub">' + esc(r.s.start || '') + ' · not logged yet</div>' +
+      '<div class="actions"><button class="primary" onclick="logFromTodo(\'' + esc(r.s.sessionId) + '\')">Log session</button><button class="secondary" onclick="todoNotHeld(\'' + esc(r.s.sessionId) + '\')">Didn\'t happen</button></div>');
+  } else {
+    var l = r.s, list = function (a) { return a.length ? a.map(esc).join(', ') : '–'; };
+    cardSheet(l.group + ' · ' + fmtDate(l.day), (l.title ? '<div><b>' + esc(l.title) + '</b></div>' : '') +
+      (l.status === 'Logged' ? '<dl style="margin-top:6px"><dt>Came (' + l.came.length + ')</dt><dd>' + list(l.came) + '</dd><dt>Absent (' + l.absent.length + ')</dt><dd>' + list(l.absent) + '</dd></dl>' +
+        '<div class="chips">' + (l.recording.length ? l.recording.map(function (u, n) { return '<a class="chip act" href="' + esc(u) + '" target="_blank">🎥 Recording' + (l.recording.length > 1 ? ' ' + (n + 1) : '') + '</a>'; }).join('') : '<span class="sub">No recording found yet.</span>') + '</div>'
+        : '<div class="sub">Didn\'t happen' + (l.note ? ': ' + esc(l.note) : '') + '</div>') +
+      '<div class="actions">' + (l.status === 'Logged' ? '<button onclick="editSession(\'' + esc(l.sessionId) + '\')">✏️ Correct attendance</button>' : '<button class="secondary" onclick="undoSess(\'' + esc(l.sessionId) + '\')">Undo "didn\'t happen"</button>') +
+      '<button class="secondary" onclick="showGroup(\'' + esc(l.group) + '\')">Open the group</button></div>');
+  }
+}
+
+// A sheet that closes itself when one of its buttons is used (the button opens the next step).
+function cardSheet(title, html) {
+  sheet(title, html);
+  var bg = document.querySelectorAll('.sheet-bg'), me = bg[bg.length - 1];
+  me.addEventListener('click', function (e) { var b = e.target.closest('button, a.chip.act[href="#"]'); if (b && b.id !== 'sheet-close') me.remove(); });
 }
 
 var WEEK = [];
@@ -1736,7 +1802,8 @@ function chipHomework(i, id, number, status) {
 // Redraws just the session cards (after the live homework/past-papers part arrives).
 function redrawSessionCards() {
   document.querySelectorAll('.day-cards').forEach(function (box) {
-    box.innerHTML = WEEK.filter(function (s) { return s.day === box.getAttribute('data-day'); }).map(sessionCard).join('');
+    var id = box.getAttribute('data-id');
+    box.innerHTML = WEEK.filter(function (s) { return id ? s.sessionId === id : s.day === box.getAttribute('data-day'); }).map(sessionCard).join('');
   });
 }
 
@@ -2335,9 +2402,8 @@ function showGroup(name) {
     var g = d.group, paused = g['Status'] === 'Paused';
     document.getElementById('main').innerHTML = '<button class="back" onclick="showGroups()">‹ Groups</button>' +
       '<h2>' + esc(g['Group']) + (paused ? ' <span class="tag">Paused</span>' : '') + '</h2>' +
-      '<div class="card"><b>Next sessions</b>' + (d.times.length ? d.times.map(function (t) {
-        return '<div class="sub">' + esc(fmtDate(t.slice(0, 10))) + ' · ' + esc(t.slice(11)) + ' (Cairo)</div>'; }).join('') : '<div class="sub">None in the calendar for 3 weeks.</div>') +
-        '<div class="actions">' +
+      // The group's WhatsApp and its folders in Drive.
+      '<div class="card"><div class="actions" style="margin-top:0">' +
         (g['WhatsApp link'] ? '<button onclick="window.open(\'' + esc(g['WhatsApp link']) + '\',\'_blank\')">💬 WhatsApp group</button>' : '') +
         '</div>' +
         // The group's folders in Drive.
@@ -3048,30 +3114,83 @@ function saveTemplate(i) {
 }
 </script>
 <script>
-// ---------- Cover tutors (in Settings) ----------
+// ---------- Cover tutors (Sessions → Cover tutors) ----------
+// Their 1-on-1 sessions (colour-coded: to confirm amber, confirmed green, deleted grey), this month per tutor, and the
+// tutors themselves (rates, students, their link). Tap a row for its details and actions.
 var TUT = null;
-function drawTutors() {
+function showCovers(seg) {
   call('tutors', {}, function (d) {
     TUT = d;
-    var box = document.getElementById('tutors');
-    if (!box) return;
-    var reports = d.covers.filter(function (c) { return c['Status'] === 'Reported'; });
-    box.innerHTML = '<h2>Cover tutors</h2><div class="card">' + (d.tutors.map(function (t, i) {
-      var owed = Object.keys(t.owed || {}).filter(function (c) { return t.owed[c]; }).map(function (c) { return amt(t.owed[c], c); }).join(' + ');
-      var n = (d.assigned || []).filter(function (a) { return a['Tutor ID'] === t['Tutor ID']; }).length;
-      return '<div class="item"><span><b>' + esc(t['Name']) + '</b><div class="sub">Student pays ' + (t['Student rate Egypt'] ? amt(t['Student rate Egypt'], 'EGP') : '–') + ' / ' + (t['Student rate abroad'] ? amt(t['Student rate abroad'], 'USD') : '–') +
-        ' · earns ' + (t['Earns Egypt'] ? amt(t['Earns Egypt'], 'EGP') : '–') + ' / ' + (t['Earns abroad'] ? amt(t['Earns abroad'], 'EGP') : '–') + ' · ' + n + ' student' + (n === 1 ? '' : 's') +
-        (owed ? ' · <b>you owe ' + owed + '</b>' : '') + '</div></span>' +
-        '<span><button class="small" style="width:auto" onclick="tutorForm(' + i + ')">Edit</button> <button class="small" style="width:auto" onclick="tutorLink(' + i + ')">Link</button></span></div>';
-    }).join('') || '<div class="sub">No tutors yet.</div>') + '<div class="actions"><button onclick="tutorForm()">＋ Tutor</button></div></div>' +
-      (reports.length ? '<h2>Cover reports</h2>' + reports.slice(0, 15).map(function (c) {
-        var i = d.covers.indexOf(c);
-        return '<div class="card"><div class="item"><span><b>' + esc(c.studentName) + '</b><div class="sub">' + esc(fmtDate(c['Date'])) + ' · ' + esc(c['Tutor ID']) + ' · ' + (c['Attended'] ? 'attended' : 'absent') + '</div></span>' +
-          (c['Fee paid on'] ? '<span class="tag good">fee paid</span>' : '<button class="small" style="width:auto" onclick="payFee(' + i + ')">Fee paid</button>') + '</div>' +
-          (c['Covered'] ? '<div class="sub">Covered: ' + esc(c['Covered']) + '</div>' : '') + (c['Comments'] ? '<div style="white-space:pre-wrap;font-size:14px">' + esc(c['Comments']) + '</div>' +
-          '<div class="actions"><button class="small" onclick="approveComment(' + i + ',' + !c['Comment approved'] + ')">' + (c['Comment approved'] ? 'Hide from the parent page' : 'Show on the parent page') + '</button></div>' : '') + '</div>';
-      }).join('') : '');
-  }, { part: true });
+    var month = today().slice(0, 7), covers = d.covers.filter(function (c) { return c['Status'] !== 'Booked'; });
+    var tname = function (id) { var t = d.tutors.filter(function (x) { return x['Tutor ID'] === id; })[0]; return t ? t['Name'] : id; };
+    var state = function (c) { return c['Status'] === 'Cancelled' ? ['s-off', 'Deleted'] : c['Confirmed on'] ? ['s-done', 'Confirmed'] : ['s-log', 'To confirm']; };
+    // This month, per tutor: sessions, what the students were charged, what the tutor earned, and what's still unpaid.
+    var byTutor = {};
+    d.covers.forEach(function (c) {
+      if (c['Status'] !== 'Reported') return;
+      var t = byTutor[c['Tutor ID']] = byTutor[c['Tutor ID']] || { n: 0, charged: {}, earned: 0, owed: 0 };
+      if (String(c['Date']).slice(0, 7) === month) { t.n++; if (c.chargeCurrency) t.charged[c.chargeCurrency] = (t.charged[c.chargeCurrency] || 0) + c.charge; t.earned += Number(c['Tutor fee']) || 0; }
+      if (!c['Fee paid on']) t.owed += Number(c['Tutor fee']) || 0;
+    });
+    var ids = Object.keys(byTutor);
+    document.getElementById('main').innerHTML = seg +
+      '<div class="sess-key"><span class="k s-log">To confirm</span><span class="k s-done">Confirmed</span><span class="k s-off">Deleted</span></div>' +
+      '<h2>Cover sessions</h2>' + (covers.length ? table(['Date', 'Student', 'Tutor', ''], covers.map(function (c) {
+        return ['<b>' + esc(fmtDate(c['Date']).slice(0, 5)) + '</b>', esc(c.studentName), esc((c.tutorName || tname(c['Tutor ID'])).split(' ')[0]),
+          '<span class="sub">' + state(c)[1] + (c['Fee paid on'] ? ' · paid' : '') + '</span>'];
+      }), { wrap: [1], tap: function (i) { return 'coverRow(' + d.covers.indexOf(covers[i]) + ')'; }, rowClass: function (i) { return state(covers[i])[0]; } })
+        : '<div class="card sub">None yet. Tutors log their sessions through their link; you confirm them here or in To do.</div>') +
+      (ids.length ? '<h2>' + esc(monthName(month, true)) + '</h2>' + table(['Tutor', 'Sessions', 'Students paid', 'Tutor earned'], ids.map(function (id) {
+        var t = byTutor[id];
+        return [esc(tname(id).split(' ')[0]), t.n, Object.keys(t.charged).map(function (c) { return amt(t.charged[c], c); }).join('<br>') || '–', amt(t.earned, 'EGP')];
+      }), { num: [1, 2, 3] }) : '') +
+      '<h2>Tutors</h2>' + (d.tutors.length ? table(['Tutor', 'Students', 'You owe'], d.tutors.map(function (t) {
+        var n = (d.assigned || []).filter(function (a) { return a['Tutor ID'] === t['Tutor ID']; }).length, o = (byTutor[t['Tutor ID']] || {}).owed;
+        return ['<b>' + esc(t['Name']) + '</b>', n, o ? '<b>' + amt(o, 'EGP') + '</b>' : '–'];
+      }), { num: [1, 2], tap: function (i) { return 'tutorRow(' + i + ')'; } }) + '<div class="sub" style="margin:-4px 0 8px">You owe = their sessions not marked paid yet. Tap a tutor for their rates, students and link.</div>' : '<div class="card sub">No tutors yet.</div>') +
+      '<div class="actions"><button onclick="tutorForm()">＋ Tutor</button></div>';
+  });
+}
+
+// One cover session: the tutor's report, and confirm / delete, fee paid, comments on the family page.
+function coverRow(i) {
+  var c = TUT.covers[i];
+  cardSheet(c.studentName + ' · ' + fmtDate(c['Date']), '<dl><dt>Tutor</dt><dd>' + esc(c.tutorName || c['Tutor ID']) + '</dd><dt>Length</dt><dd>' + esc(c['Minutes'] || '–') + ' min</dd>' +
+      '<dt>Charged</dt><dd>' + (c.chargeCurrency ? amt(c.charge, c.chargeCurrency) : '–') + '</dd><dt>Tutor earns</dt><dd>' + amt(c['Tutor fee'] || 0, c['Fee currency'] || 'EGP') + (c['Fee paid on'] ? ' · paid ' + esc(fmtDate(c['Fee paid on'])) : ' · not paid yet') + '</dd>' +
+      (c['Covered'] ? '<dt>Covered</dt><dd>' + esc(c['Covered']) + '</dd>' : '') + (c['Homework done'] ? '<dt>Homework</dt><dd>' + esc(c['Homework done']) + '</dd>' : '') + '</dl>' +
+      (c['Comments'] ? '<div class="sub" style="margin-top:6px">Comments</div><div style="white-space:pre-wrap;font-size:14px">' + esc(c['Comments']) + '</div>' : '') +
+      (c['Status'] === 'Cancelled' ? '<div class="sub" style="margin-top:8px">Deleted, with its charge.</div>' :
+      '<div class="actions">' + (c['Confirmed on'] ? '' : '<button class="primary" onclick="coverConfirm(' + i + ')">✓ Confirm</button><button class="secondary" onclick="coverDelete(' + i + ')">Delete (removes the charge)</button>') +
+        (c['Fee paid on'] ? '' : '<button onclick="payFee(' + i + ')">💵 Fee paid</button>') +
+        (c['Comments'] ? '<button class="secondary" onclick="approveComment(' + i + ',' + !c['Comment approved'] + ')">' + (c['Comment approved'] ? 'Hide comments from the family page' : 'Show comments on the family page') + '</button>' : '') + '</div>'));
+}
+function coverConfirm(i) {
+  var c = TUT.covers[i];
+  call('confirmCover', { coverId: c['Cover ID'] }, function () {});
+  c['Confirmed on'] = today(); drawTutorsFrom();
+  patchLocal(function () { var t = cached('todo'); if (t && t.covers) t.covers = t.covers.filter(function (x) { return x.id !== c['Cover ID']; }); });
+}
+function coverDelete(i) {
+  var c = TUT.covers[i];
+  if (!confirm('Delete this session (' + c.studentName + ', ' + fmtDate(c['Date']) + ')? Its charge is removed too.')) return;
+  call('confirmCover', { coverId: c['Cover ID'], remove: true }, function () { notice('Deleted, with its charge.'); });
+  c['Status'] = 'Cancelled'; drawTutorsFrom();
+  patchLocal(function () { var t = cached('todo'); if (t && t.covers) t.covers = t.covers.filter(function (x) { return x.id !== c['Cover ID']; }); });
+}
+// A tutor: their rates and students, Edit and Link.
+function tutorRow(i) {
+  var t = TUT.tutors[i], st = (TUT.assigned || []).filter(function (a) { return a['Tutor ID'] === t['Tutor ID']; });
+  var names = st.map(function (a) { var p = cached('profile', { id: a['Student ID'] }); return p && p.money ? p.money.student.name : a['Student ID']; });
+  cardSheet(t['Name'], '<dl><dt>WhatsApp</dt><dd>' + esc(t['WhatsApp'] || '–') + '</dd>' +
+    '<dt>Student pays</dt><dd>' + (t['Student rate Egypt'] ? amt(t['Student rate Egypt'], 'EGP') : '–') + ' (Egypt) · ' + (t['Student rate abroad'] ? amt(t['Student rate abroad'], 'USD') : '–') + ' (abroad)</dd>' +
+    '<dt>Tutor earns</dt><dd>' + (t['Earns Egypt'] ? amt(t['Earns Egypt'], 'EGP') : '–') + ' (Egypt student) · ' + (t['Earns abroad'] ? amt(t['Earns abroad'], 'EGP') : '–') + ' (student abroad)</dd><dt>Students (' + names.length + ')</dt><dd>' + (names.map(esc).join('<br>') || '– (assign them from a student\'s page → Cover tutor)') + '</dd></dl>' +
+    '<div class="actions"><button onclick="tutorForm(' + i + ')">Edit rates</button><button onclick="tutorLink(' + i + ')">Their link</button></div>');
+}
+// Old entry point (Settings): draws nothing now; the tutors live under Sessions → Cover tutors.
+function drawTutors() {
+  if (SESS_MODE === 'cover' && document.querySelector('.seg')) return showToday();
+  var box = document.getElementById('tutors');
+  if (box) box.innerHTML = '<h2>Cover tutors</h2><div class="card"><a href="#" onclick="SESS_MODE=\'cover\';openTab(\'Sessions\');return false">Now under Sessions → Cover tutors ›</a></div>';
 }
 // Add or edit a tutor: per session, what a student pays and what the tutor earns (Egypt in EGP, abroad in USD).
 function tutorForm(i) {
@@ -3105,7 +3224,7 @@ function approveComment(i, on) {
   var c = TUT.covers[i];
   call('approveCoverComment', { coverId: c['Cover ID'], approve: on }, function () {}, { optimistic: function () { c['Comment approved'] = on; drawTutorsFrom(); } });
 }
-function drawTutorsFrom() { var d = TUT; CACHE['tutors|{}'] = { data: d, at: Date.now() }; drawTutors(); }
+function drawTutorsFrom() { var d = TUT; CACHE['tutors|{}'] = { data: d, at: Date.now(), snap: true }; drawTutors(); }
 
 // A student's cover tutor (from their page): assign them to a tutor, whose link then lists them so the tutor can log sessions.
 function coverForm(id) {
