@@ -329,7 +329,11 @@ function loadSnapshots() {
     if (STALE_SINCE && SNAP_AT.core > STALE_SINCE) STALE_SINCE = 0;
     if (SAVED_AT && SNAP_AT.core > SAVED_AT) { SAVED_AT = 0; clearInterval(POLL_T); }
     // Changes made on this phone that the downloaded data doesn't include yet are put back on top of it.
-    PATCHES = PATCHES.filter(function (p) { return !(SNAP_AT.core > p.at + 5000); });
+    // Each is kept until a download built after its save was written (server time); unconfirmed ones for 10 minutes.
+    PATCHES = PATCHES.filter(function (p) {
+      if (p.save && !p.doneAt) return Date.now() - p.at < 600000;
+      return !(SNAP_AT.core > (p.doneAt || p.at + 5000));
+    });
     PATCHES.forEach(function (p) { try { p.fn(); } catch (e) {} });
     persist();
     if (JSON.stringify(SNAP_AT) !== before && refreshView) { var y = window.scrollY; refreshView(); window.scrollTo(0, y); }
@@ -340,22 +344,45 @@ function loadSnapshots() {
 // After a save: the new data is uploaded within about a minute; it's checked every 15 s (for 3 minutes).
 // Saves that change money or sessions also make screens ask Google directly until then (stale = true).
 var SAVED_AT = 0;
-function afterSave(stale) {
-  SAVED_AT = Date.now();
+function afterSave(stale, serverAt) {
+  SAVED_AT = Date.parse(serverAt) || Date.now();
   if (stale) STALE_SINCE = Date.now();
   if (!READ_URL) return;
   clearInterval(POLL_T);
   var tries = 0;
-  POLL_T = setInterval(function () { if (++tries > 12 || !SAVED_AT) { clearInterval(POLL_T); SAVED_AT = 0; STALE_SINCE = 0; return; } loadSnapshots(); }, 15000);
+  POLL_T = setInterval(function () { if (++tries > 30 || !SAVED_AT) { clearInterval(POLL_T); SAVED_AT = 0; STALE_SINCE = 0; return; } loadSnapshots(); }, 6000);
+}
+
+// Saves that go to Google directly: it's asked to upload the new screens straight away (in the background), instead
+// of at its next 5-minute check. One upload at a time; a save during one asks for one more after it.
+var PUBLISHING = false, PUBLISH_AGAIN = false;
+function publishSoon() {
+  if (!READ_URL) return;
+  if (PUBLISHING) { PUBLISH_AGAIN = true; return; }
+  PUBLISHING = true;
+  var next = function () { PUBLISHING = false; loadSnapshots(); if (PUBLISH_AGAIN) { PUBLISH_AGAIN = false; publishSoon(); } };
+  google.script.run.withSuccessHandler(next).withFailureHandler(next).api(TOKEN, 'publishNow', {});
 }
 
 // Local changes shown straight away (before the server's new data arrives). fn edits CACHE; it's applied now and
 // again after each download until the download includes it.
-var PATCHES = [];
+var PATCHES = [], CUR_SAVE = null, SAVE_DONE = {};
 function patchLocal(fn) {
-  PATCHES.push({ at: Date.now(), fn: fn });
+  PATCHES.push({ at: Date.now(), fn: fn, save: CUR_SAVE, doneAt: CUR_SAVE ? SAVE_DONE[CUR_SAVE] || 0 : 0 });
   try { fn(); } catch (e) {}
   persist();
+}
+// Runs fn as part of save id (patches it makes wait for that save); saveDone notes when the server wrote it.
+function withSave(id, fn) { var prev = CUR_SAVE; CUR_SAVE = id; try { return fn(); } finally { CUR_SAVE = prev; } }
+function saveDone(id, serverAt) {
+  var at = Date.parse(serverAt) || Date.now();
+  SAVE_DONE[id] = at;
+  PATCHES.forEach(function (p) { if (p.save === id && !p.doneAt) p.doneAt = at; });
+}
+// A refused save: its on-screen changes are taken back.
+function saveFailed(id) {
+  PATCHES = PATCHES.filter(function (p) { return p.save !== id; });
+  SNAP_AT = {}; loadSnapshots();                       // downloaded again (unpatched) and redrawn
 }
 function cached(action, args) { var c = CACHE[action + '|' + JSON.stringify(args || {})]; return c && c.data; }
 
@@ -381,7 +408,7 @@ function queueSave(action, args, done, opts) {
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function () {
       document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
-      if (opts.optimistic) opts.optimistic(); else done({ queued: true });
+      withSave(id, function () { if (opts.optimistic) opts.optimistic(); else done({ queued: true }); });
       if (!opts.quiet) waitForSave(id, action, opts);           // quiet ones (e.g. the message log) aren't followed up
     })
     .catch(function () {                                     // the read service is unreachable: save through Google directly
@@ -407,18 +434,17 @@ function waitForSave(id, action, opts) {
         // elsewhere (conflict). (Other saves report how many fields changed as a number, which is fine.)
         if (!r.ok || d.conflict === true || d.changed === true || d.similar) {
           savingMark(-1);
-          PATCHES = [];
+          saveFailed(id);
           notice('Not saved: ' + (r.error || (d.changed ? 'the balance changed in the meantime. Check it and record the payment again.' :
             d.conflict ? 'it was changed elsewhere since you opened it. Open it again to see the latest values.' : 'please check and try again.')));
         } else {
           savingMark(-1, true);
-          if (opts.confirmed) opts.confirmed(d);
+          saveDone(id, r.at);
+          if (opts.confirmed) withSave(id, function () { opts.confirmed(d); });
         }
-        if (r.ok && STALE_WRITES.indexOf(action) >= 0) {
-          // Money or sessions changed: screens read fresh from the server until the new upload arrives (~30 s).
-          staleAll(); afterSave(true);
-          if (refreshView) { var y = window.scrollY; refreshView(); window.scrollTo(0, y); }
-        } else afterSave(false);
+        // The script uploads new screens right after the save (~20-40 s): they're downloaded as soon as they're there.
+        // Until then the changes made on this phone stay on screen.
+        afterSave(false, r.at);
       }).catch(function () {});
   }, 4000);
 }
@@ -534,6 +560,7 @@ function call(action, args, done, opts) {
   if (fresh && cacheable) args = Object.assign({}, args, { fresh: true });
   var waiting = !shown && !isWrite;           // you're looking at a skeleton or a form waiting
   if (isWrite && READ_URL && QUEUE_ACTIONS.indexOf(action) >= 0) return queueSave(action, args, done, opts);
+  var saveId = isWrite ? newId() : null;
   if (isWrite) savingMark(1);
   send(function (finish) {
     if (waiting) busy(1);
@@ -543,13 +570,15 @@ function call(action, args, done, opts) {
       fetchedAt = new Date(res.fetchedAt); showAge(false);
       if (isWrite) {
         savingMark(-1, true);
+        saveDone(saveId, res.fetchedAt);
         var stale = STALE_WRITES.indexOf(action) >= 0;
         if (stale) staleAll();
-        afterSave(stale);
+        afterSave(stale, res.fetchedAt);
+        publishSoon();
         // Optimistic saves already updated the screen; others continue where you are (or just confirm if you moved on).
-        if (opts.optimistic) { if (opts.confirmed) opts.confirmed(res.data); return; }
+        if (opts.optimistic) { if (opts.confirmed) withSave(saveId, function () { opts.confirmed(res.data); }); return; }
         if (myView !== VIEW) { notice('Saved ✓'); if (stale && refreshView) refreshView(); return; }
-        return done(res.data);
+        return withSave(saveId, function () { return done(res.data); });
       }
       hideSplash();
       if (!cacheable) return done(res.data);
@@ -562,7 +591,7 @@ function call(action, args, done, opts) {
       document.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
       if (isWrite) {
         savingMark(-1);
-        if (opts.optimistic) { PATCHES = []; loadSnapshots(); }       // undo the on-screen change
+        if (opts.optimistic) saveFailed(saveId);                       // undo the on-screen change
         return notice('Not saved: ' + err.message);
       }
       if (shown) return showAge(true);                                  // keep what's on screen; the header says it couldn't refresh
@@ -571,7 +600,7 @@ function call(action, args, done, opts) {
       else if (myView === VIEW) document.getElementById('main').innerHTML = '<div class="error">' + esc(err.message) + '</div>';
     }).api(TOKEN, action, args);
   }, waiting || isWrite);
-  if (isWrite && opts.optimistic) opts.optimistic();
+  if (isWrite && opts.optimistic) withSave(saveId, opts.optimistic);
 }
 
 // After a save, every screen's data is marked old (shown at once, refreshed in the background when opened).
@@ -1869,7 +1898,8 @@ function saveSession() {
         var w = cached('week'); if (w) w.forEach(function (x) { if (x.sessionId === sid) x.status = 'Logged'; });
         var t = cached('todo'); if (t) { t.toLog = t.toLog.filter(function (x) { return x.sessionId !== sid; }); (t.soon || []).forEach(function (x) { if (x.sessionId === sid) x.status = 'Logged'; }); }
         // The quiz now waits for marks (and absent students get it at home, once the server has prepared the message).
-        if (quiz && t && t.quizzes) t.quizzes.marks.unshift({ id: (SESS_QUIZ && SESS_QUIZ.id) || 'Q-' + args.date.replace(/-/g, '') + '-' + args.group.replace(/\s+/g, ''),
+        var qid = (SESS_QUIZ && SESS_QUIZ.id) || 'Q-' + args.date.replace(/-/g, '') + '-' + args.group.replace(/\s+/g, '');
+        if (quiz && t && t.quizzes && !t.quizzes.marks.some(function (q) { return q.id === qid; })) t.quizzes.marks.unshift({ id: qid,
           group: args.group, topic: quiz.topic, date: args.date, max: quiz.max, missing: 0, pending: true,
           students: args.rows.filter(function (r) { return r.status !== 'Not charged'; }).map(function (r) { return { id: r.id, name: r.name, mark: '', absent: r.status !== 'Attended' }; }) });
       });
@@ -2755,7 +2785,8 @@ function confirmRequest(i) {
     patchLocal(function () {
       var t = cached('todo'); if (!t) return;
       t.payments.ready = t.payments.ready.filter(function (x) { return x.id !== r.id; });
-      t.payments.waiting.push(Object.assign({}, r, { sent: today(), reminders: 0, status: 'Sent', statementId: '' }));
+      if (!t.payments.waiting.some(function (x) { return x.id === r.id && x.sent === today(); }))
+        t.payments.waiting.push(Object.assign({}, r, { sent: today(), reminders: 0, status: 'Sent', statementId: '' }));
     });
     showTodo();
   } });
@@ -2773,6 +2804,7 @@ function confirmReminder(i) {
     patchLocal(function () {
       var t = cached('todo'); if (!t) return;
       t.payments.reminders = t.payments.reminders.filter(function (x) { return x.statementId !== r.statementId; });
+      t.payments.waiting = t.payments.waiting.filter(function (x) { return x.statementId !== r.statementId; });
       t.payments.waiting.push(Object.assign({}, r, { reminders: r.reminders + 1 }));
     });
     showTodo();
