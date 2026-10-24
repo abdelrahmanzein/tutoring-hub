@@ -236,7 +236,16 @@ function start(token) {
   };
   setInterval(showAge, 30000);
   setTimeout(hideSplash, 8000);
-  if (READ_URL) loadSnapshots();
+  if (READ_URL) {
+    loadSnapshots();
+    resumeSaves();
+    // The Home Screen app comes back from WhatsApp or the background without reloading: download the latest then,
+    // and every 2 minutes while it's on screen.
+    var lastLoad = Date.now(), freshen = function (min) { if (document.visibilityState === 'visible' && Date.now() - lastLoad > min) { lastLoad = Date.now(); loadSnapshots(); } };
+    document.addEventListener('visibilitychange', function () { freshen(10000); });
+    window.addEventListener('pageshow', function () { freshen(10000); });
+    setInterval(function () { freshen(110000); }, 120000);
+  }
   openTab('To do');
   if (!READ_URL) prefetch();
 }
@@ -419,9 +428,29 @@ function queueSave(action, args, done, opts) {
     });
 }
 
+// Saves waiting for Google, kept on the phone (iPhone may reload the app while you're in WhatsApp).
+function pendingSaves(fn) {
+  var p = {};
+  try { p = JSON.parse(localStorage.getItem('pendingSaves') || '{}'); } catch (e) {}
+  if (fn) { fn(p); try { localStorage.setItem('pendingSaves', JSON.stringify(p)); } catch (e) {} }
+  return p;
+}
+// After a reload: the outcome of each save still waiting is checked again (a logged session then shows its
+// follow-up: the homework folder and the recording for absent students).
+var RESUME_CONFIRM = { logSession: function (d) { if (typeof afterLogged === 'function') afterLogged(d); } };
+function resumeSaves() {
+  var p = pendingSaves();
+  Object.keys(p).forEach(function (id) {
+    if (Date.now() - p[id].at > 3600000) return pendingSaves(function (q) { delete q[id]; });
+    savingMark(1);
+    waitForSave(id, p[id].action, { confirmed: RESUME_CONFIRM[p[id].action] });
+  });
+}
+
 // Checks for the outcome every 4 seconds (for up to 4 minutes).
 function waitForSave(id, action, opts) {
   var tries = 0;
+  pendingSaves(function (p) { p[id] = { action: action, at: (p[id] && p[id].at) || Date.now() }; });
   var t = setInterval(function () {
     if (++tries > 60) { clearInterval(t); savingMark(-1); return notice('Still waiting for Google to save the ' + (QUEUE_LABEL[action] || 'change') + '. It will go through; check again in a few minutes.'); }
     fetch(READ_URL + '/r/' + id, { headers: { Authorization: 'Bearer ' + TOKEN }, credentials: 'omit', cache: 'no-store' })
@@ -429,12 +458,15 @@ function waitForSave(id, action, opts) {
       .then(function (r) {
         if (r.pending) return;
         clearInterval(t);
+        pendingSaves(function (p) { delete p[id]; });
         var d = r.data || {};
         // Refusals: the server said no; a payment whose balance changed meanwhile (changed === true); an edit made
         // elsewhere (conflict). (Other saves report how many fields changed as a number, which is fine.)
         if (!r.ok || d.conflict === true || d.changed === true || d.similar) {
           savingMark(-1);
           saveFailed(id);
+          // Done already by an earlier tap that went through: nothing lost, the latest is downloaded.
+          if (/already logged|already an open request/.test(r.error || '')) return notice((/logged/.test(r.error) ? 'This session was already logged' : 'This request was already sent') + ' (your earlier save went through). Showing the latest now.');
           notice('Not saved: ' + (r.error || (d.changed ? 'the balance changed in the meantime. Check it and record the payment again.' :
             d.conflict ? 'it was changed elsewhere since you opened it. Open it again to see the latest values.' : 'please check and try again.')));
         } else {
@@ -2343,7 +2375,7 @@ function newHwFolder() {
 function saveHwFolder(g) {
   var t = document.getElementById('nhf').value.trim();
   if (!t) return notice('Enter the title.');
-  call('createHomeworkFolder', { group: g, title: t }, function (r) { closeSheet(); notice('Created: ' + r.name + '.'); });
+  call('createHomeworkFolder', { group: g, title: t }, function (r) { closeSheet(); notice((r.existing ? 'Already there: ' : 'Created: ') + r.name + '.'); });
 }
 
 // A student's homework in the list: open their page, their upload, or set the status.
