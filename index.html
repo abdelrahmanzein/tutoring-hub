@@ -266,7 +266,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['removeFromSession', 'undoLastMove', 'leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -2288,6 +2288,7 @@ var HW_COUNT_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Excuse
 function assignmentsBox(d) {
   var list = d.assignments || [];
   return '<details class="card"><summary><b>Assignments (' + list.length + ')</b>' + (d.folder ? ' <a class="chip act" style="margin-left:6px" href="' + esc(d.folder) + '" target="_blank" onclick="event.stopPropagation()">🗂️ Folder</a>' : '') + '</summary>' +
+    '<div class="chips" style="margin-top:8px"><a class="chip act" href="#" onclick="newHwFolder();return false">＋ New homework folder</a></div>' +
     (list.length ? list.map(function (a, i) {
       var c = {};
       a.students.forEach(function (s) { if (s.status) c[s.status] = (c[s.status] || 0) + 1; });
@@ -2299,6 +2300,20 @@ function assignmentsBox(d) {
         }).join('') + '</div>' +
         (a.url ? '<div class="chips"><a class="chip act" href="' + esc(a.url) + '" target="_blank">🗂️ Open this homework\'s folder</a></div>' : '') + '</details>';
     }).join('') : '<div class="sub" style="margin-top:6px">No homework recorded yet.</div>') + '</details>';
+}
+
+// A homework folder made by hand (e.g. it failed when the session was logged): the next number in this group.
+function newHwFolder() {
+  var g = GROUP.group['Group'];
+  var nums = (GROUP && GROUP.assignments || []).map(function (a) { return Number(a.number) || 0; });
+  var next = (nums.length ? Math.max.apply(null, nums) : 0) + 1;
+  sheet('New homework folder', '<div class="sub">Made in ' + esc(g) + ' → Assignments as the next number (about ' + next + ', checked against the folder itself). Students can upload to it at once.</div>' +
+    '<input id="nhf" placeholder="Title, e.g. Optimization" style="margin-top:8px"><button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);saveHwFolder(\'' + esc(g) + '\')">Create</button>');
+}
+function saveHwFolder(g) {
+  var t = document.getElementById('nhf').value.trim();
+  if (!t) return notice('Enter the title.');
+  call('createHomeworkFolder', { group: g, title: t }, function (r) { closeSheet(); notice('Created: ' + r.name + '.'); });
 }
 
 // A student's homework in the list: open their page, their upload, or set the status.
