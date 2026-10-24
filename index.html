@@ -181,6 +181,7 @@
   .sess-key .k::before { content:''; display:inline-block; width:4px; height:12px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
   .sess-key .s-log::before { background:var(--warn); } .sess-key .s-today::before { background:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
   .sess-key .s-up::before { background:var(--accent); } .sess-key .s-done::before { background:var(--good); } .sess-key .s-off::before { background:var(--muted); }
+  .miss { color:var(--warn); }
   .tbl tr.gone td { opacity:.5; text-decoration:line-through; }
 
   /* Roster chips, recent students, profile header, collapsible sections */
@@ -290,7 +291,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['removeFromSession', 'undoLastMove', 'leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -416,7 +417,7 @@ function cached(action, args) { var c = CACHE[action + '|' + JSON.stringify(args
 // then "Saved ✓". If Google refuses one (e.g. the balance changed meanwhile), you get "Not saved: why".
 var QUEUE_ACTIONS = ['setHomework', 'updateGroup', 'assignUpload', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession',
   'undoSession', 'updateStudent', 'addAccount', 'confirmAccount', 'undoStudentEdit', 'moveStudent', 'joinCancel',
-  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate', 'shareRecording', 'logMessage', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'quizRemoveStudent'];
+  'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'addProspect', 'updateProspect', 'leaveStudent', 'updateAttendance', 'updateSetting', 'updateTemplate', 'addRate', 'shareRecording', 'logMessage', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'quizRemoveStudent', 'notesSent'];
 var QUEUE_LABEL = { recordPayment: 'payment', addAdjustment: 'adjustment', logSession: 'session', undoSession: 'undo', updateStudent: 'student edit', setHomework: 'homework', planQuiz: 'quiz', saveQuizMarks: 'quiz marks' };
 
 function newId() {
@@ -1654,7 +1655,7 @@ function showToday() {
       return table(['When', 'Group', ''], list.map(function (r) {
         var d = new Date(r.day + 'T12:00:00'), wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
         return ['<b>' + (r.day === today() ? 'Today' : wd + ' ' + esc(fmtDate(r.day).slice(0, 5))) + '</b>' + (r.start ? '<div class="sub">' + esc(r.start) + '</div>' : ''),
-          esc(String(r.group).replace(/^B(\d+) /, 'B$1 ')), '<span class="sub">' + esc(r.label) + '</span>'];
+          esc(String(r.group).replace(/^B(\d+) /, 'B$1 ')), '<span class="sub">' + esc(r.label) + '</span>' + (r.kind === 'past' && r.s.notes === 'not sent' ? '<div class="miss" style="font-size:12px">📝 notes not sent</div>' : '')];
       }), { wrap: [2], tap: function (i) { return 'openSessRow(' + (offset + i) + ')'; }, rowClass: function (i) { return list[i].cls; } });
     };
     var shownPast = past.slice(0, SESS_PAST);
@@ -1690,9 +1691,11 @@ function openSessRow(k) {
     var l = r.s, list = function (a) { return a.length ? a.map(esc).join(', ') : '–'; };
     cardSheet(l.group + ' · ' + fmtDate(l.day), (l.title ? '<div><b>' + esc(l.title) + '</b></div>' : '') +
       (l.status === 'Logged' ? '<dl style="margin-top:6px"><dt>Came (' + l.came.length + ')</dt><dd>' + list(l.came) + '</dd><dt>Absent (' + l.absent.length + ')</dt><dd>' + list(l.absent) + '</dd></dl>' +
+        (l.notes ? '<div style="margin-top:6px">📝 Notes: ' + (l.notes === 'not sent' ? '<span class="miss">not sent yet</span>' : 'sent ' + esc(fmtDate(l.notes))) + '</div>' : '') +
         '<div class="chips">' + (l.recording.length ? l.recording.map(function (u, n) { return '<a class="chip act" href="' + esc(u) + '" target="_blank">🎥 Recording' + (l.recording.length > 1 ? ' ' + (n + 1) : '') + '</a>'; }).join('') : '<span class="sub">No recording found yet.</span>') + '</div>'
         : '<div class="sub">Didn\'t happen' + (l.note ? ': ' + esc(l.note) : '') + '</div>') +
-      '<div class="actions">' + (l.status === 'Logged' ? '<button onclick="editSession(\'' + esc(l.sessionId) + '\')">✏️ Correct attendance</button>' : '<button class="secondary" onclick="undoSess(\'' + esc(l.sessionId) + '\')">Undo "didn\'t happen"</button>') +
+      '<div class="actions">' + (l.notes === 'not sent' ? '<button class="primary" onclick="notesDone(\'' + esc(l.sessionId) + '\')">✓ Notes sent</button>' : l.notes ? '<button class="secondary" onclick="notesDone(\'' + esc(l.sessionId) + '\', true)">Notes not sent after all</button>' : '') +
+        (l.status === 'Logged' ? '<button onclick="editSession(\'' + esc(l.sessionId) + '\')">✏️ Correct attendance</button>' : '<button class="secondary" onclick="undoSess(\'' + esc(l.sessionId) + '\')">Undo "didn\'t happen"</button>') +
       '<button class="secondary" onclick="showGroup(\'' + esc(l.group) + '\')">Open the group</button></div>');
   }
 }
@@ -2046,6 +2049,11 @@ function afterLogged(r) {
       r.absent.map(function (a, i) { return '<button style="width:100%;margin-top:6px" onclick="sendRecording(' + i + ')">💬 Send the recording to ' + esc(a.first) + (a.phone ? '' : ' (pick the chat)') + '</button>'; }).join('')
       : '<div class="sub" style="margin-top:10px">No recording found yet (Meet takes a while to save it). Absent: ' + r.absent.map(function (a) { return esc(a.first); }).join(', ') + '.</div>';
   }
+  // The notes PDF for the group's WhatsApp (also stays in To do until ticked).
+  var grp = r.sessionId.replace(/^\d{4}-\d{2}-\d{2} /, '').replace(/ \d{2}:\d{2}$/, ''), g = cached('group', { group: grp }), wa = g && g.group && g.group['WhatsApp link'];
+  html += '<div class="note" style="margin-top:10px">📝 Send the session notes (PDF) to the group.</div><div class="actions">' +
+    (wa ? '<button onclick="window.open(\'' + esc(wa) + '\',\'_blank\')">💬 Open the group</button>' : '') +
+    '<button class="primary" onclick="this.disabled=true;notesDone(\'' + esc(r.sessionId) + '\')">✓ Notes sent</button></div><div class="sub">Not now? It stays in To do until you tick it.</div>';
   sheet('Logged ' + r.sessionId, html);
 }
 function sendRecording(i) {
@@ -2672,6 +2680,12 @@ function showTodo() {
         '<div class="actions"><button class="primary" onclick="logFromTodo(\'' + esc(s.sessionId) + '\')">Log session</button>' +
         '<button class="secondary" onclick="todoNotHeld(\'' + esc(s.sessionId) + '\')">Didn\'t happen</button></div></div>';
     }).join(''));
+    // Session notes (PDF from the tablet) for the group's WhatsApp: stays here until ticked as sent.
+    if (d.notes && d.notes.length) parts.push('<h2>Session notes to send</h2>' + d.notes.map(function (n, k) {
+      return '<div class="card"><div class="item"><span><b>' + esc(n.group) + '</b><div class="sub">' + esc(fmtDate(n.day)) + (n.title ? ' · ' + esc(n.title) : '') + '</div></span></div>' +
+        '<div class="actions">' + (n.link ? '<button onclick="window.open(\'' + esc(n.link) + '\',\'_blank\')">💬 Open the group</button>' : '') +
+        '<button class="primary" onclick="notesDone(\'' + esc(n.sessionId) + '\')">✓ Sent</button></div></div>';
+    }).join(''));
     if (d.joins.length) parts.push('<h2>Joining forms to review</h2>' + d.joins.map(function (j, i) {
       return '<div class="card nav-row" onclick="newStudentForm(TODO.joins[' + i + '])"><span><b>' + esc(j.name) + '</b><div class="sub">' + esc(j.group) + ' · filled ' + esc(fmtDate(j.filledAt)) + '</div></span><span>Review ›</span></div>';
     }).join(''));
@@ -2802,6 +2816,18 @@ function deleteCover(k) {
   call('confirmCover', { coverId: c.id, remove: true }, function () { notice('Deleted, with its charge.'); });
   patchLocal(function () { var t = cached('todo'); if (t && t.covers) t.covers = t.covers.filter(function (x) { return x.id !== c.id; }); });
   showTodo();
+}
+
+// Notes ticked as sent (from To do or a past session's card); undo puts them back on the list.
+function notesDone(sessionId, undo) {
+  call('notesSent', { sessionId: sessionId, undo: !!undo }, function () {}, { optimistic: function () {
+    patchLocal(function () {
+      var t = cached('todo'); if (t && t.notes && !undo) t.notes = t.notes.filter(function (x) { return x.sessionId !== sessionId; });
+      (cached('sessionLog') || []).forEach(function (l) { if (l.sessionId === sessionId) l.notes = undo ? 'not sent' : today(); });
+    });
+    if (!undo) notice('Notes marked as sent.');
+    if (refreshView) refreshView();
+  } });
 }
 
 // Opens a new enquiry (same sheet as on Students → Prospects).
