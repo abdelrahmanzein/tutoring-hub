@@ -167,6 +167,10 @@
   .tbl th { text-align:left; color:var(--muted); font-weight:600; font-size:12px; padding:4px 6px; border-bottom:1px solid var(--line); }
   .tbl td { padding:6px; border-bottom:1px solid var(--line); white-space:nowrap; }
   .tbl tr:last-child td { border-bottom:0; }
+  .tbl-wrap .tbl td.wrap { white-space:normal; min-width:110px; }
+  .tbl td.num, .tbl th.num { text-align:right; }
+  .tbl tr.tap { cursor:pointer; } .tbl tr.tap:active td { background:var(--accent-soft); }
+  .tbl tr.gone td { opacity:.5; text-decoration:line-through; }
 
   /* Roster chips, recent students, profile header, collapsible sections */
   .chips, .recent { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; align-items:center; }
@@ -888,9 +892,9 @@ var moneyCache = null, lastMoneyStudent = null;
 // Sheet listing a student's unpaid sessions (oldest first) with what is left on each.
 function showUnpaid(cur) {
   var p = lastMoneyStudent.positions[cur];
-  sheet(lastMoneyStudent.student.name + ' · unpaid sessions', p.unpaid.map(function (u) {
-    return '<div class="row"><span>' + fmtDate(u.date) + ' · ' + esc(u.description) + '</span><b class="neg">' + amt(u.left, cur) + '</b></div>';
-  }).join('') + '<div class="row"><b>Total owed</b><b class="neg">' + amt(p.owed, cur) + '</b></div>');
+  sheet(lastMoneyStudent.student.name + ' · unpaid sessions', table(['Date', 'Session', 'Left to pay'], p.unpaid.map(function (u) {
+    return [esc(fmtDate(u.date)), esc(u.description), '<span class="neg">' + amt(u.left, cur) + '</span>'];
+  }).concat([['<b>Total</b>', '', '<b class="neg">' + amt(p.owed, cur) + '</b>']]), { wrap: [1], num: [2] }));
 }
 
 // Today as yyyy-mm-dd for date inputs.
@@ -943,9 +947,16 @@ function showIncome() {
 }
 
 // A table inside a card that scrolls sideways on narrow screens instead of spilling out.
-function table(head, rows) {
-  return '<div class="card tbl-wrap"><table class="tbl"><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>' +
-    rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>'; }).join('') + '</table></div>';
+// opts (optional): wrap = columns of longer text that wrap, num = columns aligned right, tap(i) = what tapping row i
+// runs (code), rowClass(i) = a class for row i.
+function table(head, rows, opts) {
+  opts = opts || {};
+  var cls = function (k) { return (opts.wrap || []).indexOf(k) >= 0 ? ' class="wrap"' : (opts.num || []).indexOf(k) >= 0 ? ' class="num"' : ''; };
+  return '<div class="card tbl-wrap"><table class="tbl"><tr>' + head.map(function (h, k) { return '<th' + ((opts.num || []).indexOf(k) >= 0 ? ' class="num"' : '') + '>' + h + '</th>'; }).join('') + '</tr>' +
+    rows.map(function (r, i) {
+      var c = [opts.tap ? 'tap' : '', opts.rowClass ? opts.rowClass(i) : ''].filter(String).join(' ');
+      return '<tr' + (c ? ' class="' + c + '"' : '') + (opts.tap ? ' onclick="' + opts.tap(i) + '"' : '') + '>' + r.map(function (x, k) { return '<td' + cls(k) + '>' + x + '</td>'; }).join('') + '</tr>';
+    }).join('') + '</table></div>';
 }
 
 // "2,700 EGP + 30 USD = 4,270 EGP" (skipping zeros; the total only when both currencies are there).
@@ -1094,14 +1105,23 @@ function checkPayment(id, studentCur) {
         : '<div><b>' + amt(amount, studentCur) + '</b></div>') +
       (fee ? '<div class="sub">Arrived ' + amt(arrived, cur) + ': bank fee ' + amt(fee, cur) + ' (you absorb it; the family is credited in full)</div>' : '') +
       '<div class="sub">Balance ' + amt(p.before, studentCur) + ' → ' + amt(p.after, studentCur) + '</div>' +
-      '<div>Covers: ' + (p.covers.length ? p.covers.map(function (c) { return esc(c); }).join(', ') : 'no whole session') + '</div>' +
       (p.creditAfter ? '<div>Credit left after: ' + amt(p.creditAfter, studentCur) + '</div>' : '') +
       (p.owedAfter ? '<div>Still owed: ' + amt(p.owedAfter, studentCur) + ' (' + p.sessionsStillUnpaid + ' sessions)</div>' : '') +
-      '</div><button class="primary" onclick=\'hold(this);savePayment(' + JSON.stringify(Object.assign({}, args, {
+      '</div>' + payCoverTable(p, studentCur) + '<button class="primary" onclick=\'hold(this);savePayment(' + JSON.stringify(Object.assign({}, args, {
         note: document.getElementById('pn').value, receivedCurrency: cur, sentAmount: received, arrivedAmount: arrived, bankFee: fee,
         reference: PAY_PRE && PAY_PRE.reference || '', smsKey: PAY_PRE && PAY_PRE.smsKey || '',
         expectedBalance: p.before, credited: p.credited })) + ')\'>Confirm and save</button>';
   });
+}
+
+// The unpaid sessions and what this payment does to each: paid, partly paid (what's left), or still unpaid.
+function payCoverTable(p, cur) {
+  if (!p.rows) return '<div class="card">Covers: ' + (p.covers.length ? p.covers.map(esc).join('<br>') : 'no whole session') + '</div>';
+  if (!p.rows.length) return '<div class="card sub">No unpaid sessions: all of it is credit.</div>';
+  return '<div class="sub" style="margin:4px 0">What this payment covers (' + esc(cur) + ')</div>' + table(['Date', 'Session', 'Owed', 'After'], p.rows.map(function (r) {
+    var after = r.left < 0.005 ? '✅ Paid' : r.left < r.owed - 0.005 ? '◐ ' + amt(r.left, '').trim() + ' left' : '<span class="sub">Unpaid</span>';
+    return [esc(fmtDate(String(r.date).slice(0, 10)).slice(0, 5)), esc(r.description || ''), amt(r.owed, '').trim(), after];
+  }), { wrap: [1], num: [2] });
 }
 
 // "+0.1%" style difference between two rates.
@@ -1428,11 +1448,11 @@ function saveNewStudent(confirmSimilar) {
 var HW_LIST = [];
 function homeworkCard(list, id) {
   HW_LIST = list;
-  return '<h2>Homework</h2><div class="card">' + (list.map(function (h, i) {
-    return '<div class="item" style="cursor:pointer" onclick="hwEdit(' + i + ',\'' + esc(id) + '\')"><span>' + esc(h.number) + '. ' + esc(h.title) +
-      '<div class="sub">due ' + esc(fmtDate(String(h.due).slice(0, 10))) + (h.manual ? ' · ✎ set by hand' : '') + '</div></span>' +
-      '<span class="chip hw-' + (HW_CLASS[hwKey(h.status)] || 'none') + '">' + (HW_ICON[hwKey(h.status)] || '') + ' ' + esc(h.status) + (h.status === 'Late' && h.daysLate ? ' ' + h.daysLate + 'd' : '') + '</span></div>';
-  }).join('') || '<div class="sub">No homework recorded yet.</div>') + '</div>';
+  if (!list.length) return '<h2>Homework</h2><div class="card sub">No homework recorded yet.</div>';
+  return '<h2>Homework</h2>' + table(['#', 'Homework', 'Due', 'Status'], list.map(function (h) {
+    return [esc(h.number), esc(h.title), esc(fmtDate(String(h.due).slice(0, 10)).slice(0, 5)),
+      (HW_ICON[hwKey(h.status)] || '') + ' ' + esc(hwKey(h.status)) + (h.status === 'Late' && h.daysLate ? ' ' + h.daysLate + 'd' : '') + (h.manual ? ' ✎' : '')];
+  }), { wrap: [1], tap: function (i) { return 'hwEdit(' + i + ',\'' + esc(id) + '\')'; } }) + '<div class="sub" style="margin:-4px 0 8px">Tap one to set it by hand (✎ = set by hand).</div>';
 }
 function hwKey(s) { return s === 'Not due yet' ? 'Not yet' : s; }
 
@@ -1565,16 +1585,18 @@ function showProfile(id) {
 }
 
 // Ledger lines (newest first) with Delete / Restore.
+// A table: date, what it was (with the rate or bank fee when there is one), amount, Delete / Restore.
 function ledgerRows(list, id) {
-  return list.map(function (e) {
+  if (!list.length) return '<div class="sub">No entries yet.</div>';
+  return table(['Date', 'Entry', 'Amount', ''], list.map(function (e) {
     var gone = !!e['Deleted'];
-    return '<div class="item" style="' + (gone ? 'opacity:.5;text-decoration:line-through' : '') + '"><div>' + esc(fmtDate(e['Date'])) + ' · ' + esc(e['Type']) +
-      '<div class="sub">' + esc(e['Description']) + (e['Rate used'] ? ' · ' + esc(e['EGP equivalent']) + ' EGP at ' + esc(e['Rate used']) : '') +
-      (Number(e['Bank fee']) ? ' · arrived ' + esc(e['Amount received']) + ', fee ' + esc(e['Bank fee']) : '') + '</div></div>' +
-      '<div style="text-align:right"><div class="' + (e['Amount'] < 0 ? 'neg' : 'pos') + '">' + amt(e['Amount'], e['Currency']) + '</div>' +
-      '<button class="small" onclick="toggleEntry(\'' + esc(e['Entry ID']) + '\',' + (gone ? 'false' : 'true') + ',\'' + esc(id) + '\')">' + (gone ? 'Restore' : 'Delete') + '</button></div></div>' +
-      '<hr style="border:0;border-top:1px solid var(--line)">';
-  }).join('');
+    var d = fmtDate(String(e['Date']).slice(0, 10));
+    return [esc(d.slice(0, 6) + d.slice(8)),
+      '<b>' + esc(e['Type']) + '</b><div class="sub">' + esc(e['Description']) + (e['Rate used'] ? ' · ' + esc(e['EGP equivalent']) + ' EGP at ' + esc(e['Rate used']) : '') +
+        (Number(e['Bank fee']) ? ' · arrived ' + esc(e['Amount received']) + ', fee ' + esc(e['Bank fee']) : '') + '</div>',
+      '<span class="' + (e['Amount'] < 0 ? 'neg' : 'pos') + '">' + amt(e['Amount'], e['Currency']) + '</span>',
+      '<button class="small" onclick="toggleEntry(\'' + esc(e['Entry ID']) + '\',' + (gone ? 'false' : 'true') + ',\'' + esc(id) + '\')" title="' + (gone ? 'Restore' : 'Delete') + '" style="width:auto;padding:2px 5px">' + (gone ? '↩️' : '🗑') + '</button>'];
+  }), { wrap: [1], num: [2], rowClass: function (i) { return list[i]['Deleted'] ? 'gone' : ''; } }).replace(/^<div class="card tbl-wrap">/, '<div class="tbl-wrap" style="padding:0">');
 }
 </script>
 
@@ -2130,23 +2152,23 @@ function quizSendHome(k) {
 function quizCard(id) {
   var qs = (cached('quizzes') || []).filter(function (q) { return q.marks[id]; });
   if (!qs.length) return '';
-  return '<h2>Quizzes</h2><div class="card">' + qs.map(function (q) {
+  return '<h2>Quizzes</h2>' + table(['Quiz', 'Date', 'Mark', 'Level'], qs.map(function (q) {
     var m = q.marks[id];
-    return '<div class="item nav-row" onclick="showQuiz(\'' + esc(q.id) + '\')"><span>' + esc(q.topic) + '<div class="sub">' + esc(fmtDate(String(q.date).slice(0, 10))) + (m.atHome ? ' · at home' : m.absent ? ' · absent' : '') + '</div></span><span style="text-align:right">' +
-      (m.mark === '' ? '<span class="sub">no mark yet</span>' : '<b>' + esc(m.mark) + (q.max ? '/' + esc(q.max) : '') + '</b>' + (m.level ? '<div class="sub">Level ' + esc(m.level) + ' of 7</div>' : '')) + '</span></div>';
-  }).join('') + '</div>';
+    return [esc(q.topic) + (m.atHome ? '<div class="sub">at home</div>' : m.absent ? '<div class="sub">absent</div>' : ''), esc(fmtDate(String(q.date).slice(0, 10)).slice(0, 5)),
+      m.mark === '' ? '<span class="sub">–</span>' : '<b>' + esc(m.mark) + '</b>' + (q.max ? '<span class="sub">/' + esc(q.max) + '</span>' : ''), m.level ? '<b>' + esc(m.level) + '</b>' : ''];
+  }), { wrap: [0], num: [2, 3], tap: function (i) { return 'showQuiz(\'' + esc(qs[i].id) + '\')'; } });
 }
 
 // A group's quizzes (group page): average and how many marks are in.
 function groupQuizzes(group) {
   var qs = (cached('quizzes') || []).filter(function (q) { return q.group === group; });
   if (!qs.length) return '';
-  return '<h2>Quizzes</h2><div class="card">' + qs.map(function (q) {
+  return '<h2>Quizzes</h2>' + table(['Quiz', 'Date', 'Average', 'Marked'], qs.map(function (q) {
     var ms = Object.keys(q.marks).map(function (k) { return q.marks[k].mark; }).filter(function (x) { return x !== ''; });
     var avg = ms.length ? Math.round(ms.reduce(function (a, b) { return a + b; }, 0) / ms.length * 10) / 10 : '';
-    return '<div class="item nav-row" onclick="showQuiz(\'' + esc(q.id) + '\')"><span>' + esc(q.topic) + '<div class="sub">' + esc(fmtDate(String(q.date).slice(0, 10))) + ' · ' + esc(q.status) + '</div></span><span style="text-align:right">' +
-      (ms.length ? 'avg <b>' + avg + (q.max ? '/' + esc(q.max) : '') + '</b><div class="sub">' + ms.length + ' of ' + Object.keys(q.marks).length + ' marked</div>' : '<span class="sub">no marks yet</span>') + '</span></div>';
-  }).join('') + '</div>';
+    return [esc(q.topic) + '<div class="sub">' + esc(q.status) + '</div>', esc(fmtDate(String(q.date).slice(0, 10)).slice(0, 5)),
+      ms.length ? '<b>' + avg + '</b>' + (q.max ? '<span class="sub">/' + esc(q.max) + '</span>' : '') : '<span class="sub">–</span>', ms.length + ' of ' + Object.keys(q.marks).length];
+  }), { wrap: [0], num: [2, 3], tap: function (i) { return 'showQuiz(\'' + esc(qs[i].id) + '\')'; } });
 }
 
 // ---------- Quizzes screen (from Groups, a group's page, or To do) ----------
@@ -2200,15 +2222,20 @@ function showQuiz(id) {
         '⏳ Provisional: families see the mark only, until ' + (missingGroups.length ? esc(missingGroups.join(', ')) + ' ' + (missingGroups.length > 1 ? 'are' : 'is') + ' marked' : 'all marks are in') + ', or you publish now.') + '</div>' +
       (q.stats ? '<div class="chips">' + (q.published ? '<a class="chip act danger" href="#" onclick="publishLevels(\'' + esc(q.id) + '\', true);return false">↩️ Withdraw early publishing</a>' : q.levelsFinal ? '' :
         '<a class="chip act" href="#" onclick="publishLevels(\'' + esc(q.id) + '\');return false">📢 Publish levels now (fix boundaries)</a>') + '</div>' : '') + '</div>' +
-    (q.boundaries.length ? '<h2>Level boundaries</h2><div class="card">' + q.boundaries.slice().reverse().map(function (b) {
-        var next = q.boundaries.filter(function (x) { return x.level === b.level + 1; })[0];
-        return '<div class="row"><span>Level ' + b.level + '</span><span>' + (next ? b.from + '–' + (next.from - 1) : b.from + ' or more (no upper limit)') + '</span></div>'; }).join('') +
-      '<div class="row"><span>Level 1</span><span>below ' + q.boundaries[0].from + '</span></div>' +
-      '<div style="margin-top:10px">' + counts.map(function (c, k) { return '<div style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="width:52px">Level ' + (k + 1) + '</span><span style="height:12px;border-radius:0 4px 4px 0;background:var(--accent);width:' + Math.round(c / top * 70) + '%"></span><span class="sub">' + c + '</span></div>'; }).join('') + '</div></div>' : '') +
-    '<h2>Everyone who took it</h2><div class="card">' + (rows.map(function (r) {
-      return '<div class="row"><span>' + (r.mine ? '<b>' + esc(r.name) + '</b>' : esc(r.name)) + '<div class="sub">' + esc(r.group) + (r.atHome ? ' · at home' : r.absent ? ' · absent' : '') + '</div></span><span style="text-align:right">' +
-        (r.mark === '' ? '<span class="sub">no mark</span>' : '<b>' + esc(r.mark) + (r.max ? '/' + esc(r.max) : '') + '</b>' + (r.max ? ' <span class="sub">' + Math.round(r.mark / r.max * 1000) / 10 + '%</span>' : '') + (r.level ? '<div class="sub">Level ' + r.level + '</div>' : '')) + '</span></div>';
-    }).join('') || '<div class="sub">No marks yet.</div>') + '</div>';
+    // Levels 7 → 1: the marks for each, and how many students got it (with a bar).
+    (q.boundaries.length ? '<h2>Level boundaries</h2>' + table(['Level', 'Marks', 'Students'], [7, 6, 5, 4, 3, 2, 1].map(function (lv) {
+        var b = q.boundaries.filter(function (x) { return x.level === lv; })[0], next = q.boundaries.filter(function (x) { return x.level === lv + 1; })[0];
+        var range = lv === 1 ? 'below ' + q.boundaries[0].from : !b ? '–' : next ? b.from + '–' + (next.from - 1) : b.from + '+';
+        var c = counts[lv - 1];
+        return ['<b>' + lv + '</b>', range, '<span style="display:inline-flex;align-items:center;gap:6px;min-width:90px"><span style="height:10px;border-radius:0 4px 4px 0;background:var(--accent);width:' + Math.round(c / top * 60) + 'px"></span><span class="sub">' + c + '</span></span>'];
+      })) : '') +
+    '<h2>Everyone who took it</h2>' + (rows.length ? table(['Student', 'Group', 'Mark', '%', 'Level'], rows.map(function (r) {
+      return [(r.mine ? '<b>' + esc(r.name) + '</b>' : esc(r.name)) + (r.atHome ? '<div class="sub">at home</div>' : r.absent ? '<div class="sub">absent</div>' : ''),
+        '<span class="sub">' + esc(String(r.group).replace(/^B\d+\s*/, '')) + '</span>',
+        r.mark === '' ? '<span class="sub">–</span>' : '<b>' + esc(r.mark) + '</b>' + (r.max ? '<span class="sub">/' + esc(r.max) + '</span>' : ''),
+        r.mark === '' || !r.max ? '' : Math.round(r.mark / r.max * 1000) / 10,
+        r.level ? '<b>' + r.level + '</b>' : ''];
+    }), { num: [2, 3, 4] }) : '<div class="card sub">No marks yet.</div>');
 }
 
 function quizMarksFromScreen(id) {
@@ -2312,6 +2339,12 @@ function showGroup(name) {
         return '<div class="sub">' + esc(fmtDate(t.slice(0, 10))) + ' · ' + esc(t.slice(11)) + ' (Cairo)</div>'; }).join('') : '<div class="sub">None in the calendar for 3 weeks.</div>') +
         '<div class="actions">' +
         (g['WhatsApp link'] ? '<button onclick="window.open(\'' + esc(g['WhatsApp link']) + '\',\'_blank\')">💬 WhatsApp group</button>' : '') +
+        '</div>' +
+        // The group's folders in Drive.
+        '<div class="chips" style="margin-top:8px">' +
+          ((d.drive || {}).recordings ? '<a class="chip act" href="' + esc(d.drive.recordings) + '" target="_blank">🎥 Recordings</a>' : '') +
+          (d.folder ? '<a class="chip act" href="' + esc(d.folder) + '" target="_blank">🗂️ Assignments</a>' : '') +
+          ((d.drive || {}).notes ? '<a class="chip act" href="' + esc(d.drive.notes) + '" target="_blank">📝 Notes</a>' : '') +
         '</div></div>' +
       assignmentsBox(d) +
       '<h2>' + d.members.length + ' students</h2>' + d.members.map(function (m, i) {
@@ -2786,10 +2819,10 @@ function drawPayments() {
       '<div class="sub">Has it reached your account?</div><div class="actions"><button class="primary" onclick="transferArrived(' + i + ')">✅ Arrived: record it</button>' +
       '<button class="secondary" onclick="PAY_SEL=TODO.payments.transfers[' + i + '];saveTransfer(true)">It wasn\'t sent after all</button></div></div>';
   }).join('');
-  if (p.waiting.length) html += '<details class="card"><summary><b>Waiting for payment (' + p.waiting.length + ')</b></summary>' + p.waiting.map(function (r, i) {
-    return '<div class="item" style="margin-top:8px;cursor:pointer" onclick="payActions(\'waiting\',' + i + ')"><span>' + cur(r) + ' ' + esc(r.name) +
-      '<div class="sub">Sent ' + esc(fmtDate(r.sent)) + (r.sentAmount && r.sentAmount !== r.amount ? ' as ' + amt(r.sentAmount, r.currency) + ', now ' + r.sessions + ' sessions' : '') + (r.status === 'Transfer sent' ? ' · transfer on its way' : '') + (r.reminders ? ' · ' + r.reminders + ' reminders' : '') + '</div></span><span>' + amt(r.amount, r.currency) + ' ›</span></div>';
-  }).join('') + '</details>';
+  if (p.waiting.length) html += '<details class="card"><summary><b>Waiting for payment (' + p.waiting.length + ')</b></summary>' + table(['Student', 'Amount', 'Sent', '🔔'], p.waiting.map(function (r) {
+    return [cur(r) + ' ' + esc(r.name) + (r.status === 'Transfer sent' ? '<div class="sub">transfer on its way</div>' : '') + (r.sentAmount && r.sentAmount !== r.amount ? '<div class="sub">sent as ' + amt(r.sentAmount, r.currency) + ', now ' + r.sessions + ' sessions</div>' : ''),
+      amt(r.amount, r.currency), esc(fmtDate(r.sent).slice(0, 5)), r.reminders || '–'];
+  }), { wrap: [0], num: [1, 3], tap: function (i) { return 'payActions(\'waiting\',' + i + ')'; } }).replace(/^<div class="card tbl-wrap">/, '<div class="tbl-wrap" style="padding:0;margin-top:6px">') + '<div class="sub">Tap one for its options.</div></details>';
   html += '<div id="todo-sms"></div>';
   box.innerHTML = html;
   loadSms();
@@ -3307,8 +3340,9 @@ function localPreview(args, studentId) {
   }
   var credited = r2(amount + rounding);
   var after = localPosition(entries.concat([{ 'Entry ID': 'NEW', 'Date': args.date, 'Type': 'Payment', 'Amount': credited, 'Currency': args.currency, 'Allocated to': '', 'Deleted': '' }]));
-  var still = {}; after.unpaid.forEach(function (u) { still[u.entry['Entry ID']] = true; });
+  var still = {}, leftAfter = {}; after.unpaid.forEach(function (u) { still[u.entry['Entry ID']] = true; leftAfter[u.entry['Entry ID']] = u.left; });
   return { before: before.balance, after: after.balance,
+    rows: before.unpaid.map(function (u) { return { date: u.entry['Date'], description: u.entry['Description'], owed: u.left, left: leftAfter[u.entry['Entry ID']] || 0 }; }),
     covers: before.unpaid.filter(function (u) { return !still[u.entry['Entry ID']]; }).map(function (u) { return u.entry['Date'] + ' ' + u.entry['Description']; }),
     creditAfter: after.credit, owedAfter: after.owed, sessionsStillUnpaid: after.unpaid.length, rounding: rounding, credited: credited,
     impliedRate: args.egpReceived && credited ? Math.round(Number(args.egpReceived) / credited * 100) / 100 : '' };
