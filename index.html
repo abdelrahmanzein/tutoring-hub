@@ -3314,9 +3314,12 @@ var TOPIC_NAMES = { '1': 'Number and algebra', '2': 'Functions', '3': 'Geometry 
 function syllabusBox(p) {
   if (p['Started IB'] === 'No') return '<div class="sub" style="margin-top:8px">📘 Hasn\'t started the IB course yet.</div>';
   if (!p.syllabus) return '';
+  // One line per topic (tap to see every subtopic: ✅ taken, ⚠️ hard, ⬜ not taken yet).
   return '<div class="card" style="margin-top:10px"><b>📘 Syllabus checklist (' + esc(p['Level'] || '') + ')</b>' + p.syllabus.map(function (t) {
-    return '<div class="row"><span>' + t.topic + '. ' + TOPIC_NAMES[t.topic] + (t.hard.length ? '<div class="sub">⚠️ ' + t.hard.map(esc).join('<br>⚠️ ') + '</div>' : '') + '</span>' +
-      '<span class="sub" style="text-align:right;white-space:nowrap">✅ ' + t.taken + (t.hard.length ? ' · ⚠️ ' + t.hard.length : '') + ' / ' + t.total + '</span></div>'; }).join('') +
+    return '<details style="border-top:1px solid var(--line);padding:6px 0"><summary style="display:flex;justify-content:space-between;gap:8px;cursor:pointer"><span>' + t.topic + '. ' + TOPIC_NAMES[t.topic] + '</span>' +
+      '<span class="sub" style="text-align:right;white-space:nowrap">✅ ' + t.taken + (t.hard.length ? ' · ⚠️ ' + t.hard.length : '') + ' / ' + t.total + '</span></summary>' +
+      (t.items ? t.items.map(function (x) { return '<div style="font-size:14px;margin:3px 0 0 4px">' + (x.state === 'taken' ? '✅' : x.state === 'hard' ? '⚠️' : '⬜') + ' ' + esc(x.code) + ' ' + esc(x.name) + (x.ahl ? ' <span class="sub">(HL)</span>' : '') + '</div>'; }).join('')
+        : (t.hard.length ? '<div class="sub">⚠️ ' + t.hard.map(esc).join('<br>⚠️ ') + '</div>' : '')) + '</details>'; }).join('') +
     '<div class="sub" style="margin-top:4px">✅ taken at school · ⚠️ taken, but finding it hard · the rest: not taken yet</div></div>';
 }
 
@@ -3325,8 +3328,14 @@ function showProspect(i) {
   var wa = function (text, label, next) {
     return '<button class="primary" style="width:100%;margin-top:8px" onclick="prospectSend(' + i + ',\'' + text + '\',\'' + (next || '') + '\')">' + label + '</button>';
   };
-  var body = '<div class="sub">' + esc([p['Course'] + ' ' + p['Level'], p['Batch'], p['Country'], p['School']].filter(function (x) { return x && String(x).trim(); }).join(' · ')) +
-    (p['Parent name'] ? '<br>Parent: ' + esc(p['Parent name']) : '') + (p['Notes'] ? '<br>' + esc(p['Notes']) : '') + '</div>' + syllabusBox(p);
+  // Everything they filled in on the form.
+  var row = function (k, v) { return v ? '<dt>' + k + '</dt><dd>' + v + '</dd>' : ''; };
+  var tel = function (n) { var d = String(n || '').replace(/[^0-9]/g, ''); return n ? '<a href="https://wa.me/' + d + '" target="_blank">' + esc(n) + '</a>' : ''; };
+  var body = '<dl>' + row('Course', esc(p['Course'] + ' ' + p['Level'])) + row('Exams', p['Batch'] ? 'May ' + esc(p['Batch']) : '') + row('School', esc(p['School'] || '')) +
+    row('Country', esc(p['Country'] || '')) + row('Started IB', esc(p['Started IB'] || '')) +
+    row('Parent', esc((p['Parent name'] || '') + (p['Parent relation'] ? ' (' + p['Parent relation'] + ')' : ''))) + row('Parent WhatsApp', tel(p['Parent WhatsApp'])) +
+    row('Student WhatsApp', tel(p['Student WhatsApp'])) + row('Contact', esc(p['Contact'] || '')) + row('Enquired', esc(fmtDate(String(p['Created'] || '').slice(0, 10)))) +
+    row('Notes', esc(p['Notes'] || '')) + '</dl>' + syllabusBox(p);
   if (st === 'New' || st === 'Details sent') {
     // The details (fees, how sessions work, payment) are shown to them on the enquiry form after they send it.
     body += '<div class="sub" style="margin-top:14px">Book the trial</div>' + trialPicker(p) + '<button style="width:100%;margin-top:6px" onclick="bookTrial(' + i + ')">Book trial</button>';
