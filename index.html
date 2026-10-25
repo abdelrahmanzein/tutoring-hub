@@ -192,6 +192,7 @@
   .pname { font-size:21px; font-weight:700; }
   .parabic { font-size:17px; color:var(--muted); margin:2px 0 4px; }
   details.card summary { cursor:pointer; color:var(--accent); font-weight:600; }
+  summary[style*="list-style:none"]::-webkit-details-marker { display:none; }
 
   /* A secondary action that still reads clearly as a button */
   button.secondary { width:100%; padding:11px; border:1px solid var(--accent); color:var(--accent); background:var(--card); font-weight:600; }
@@ -3316,8 +3317,8 @@ function syllabusBox(p) {
   if (!p.syllabus) return '';
   // One line per topic (tap to see every subtopic: ✅ taken, ⚠️ hard, ⬜ not taken yet).
   return '<div class="card" style="margin-top:10px"><b>📘 Syllabus checklist (' + esc(p['Level'] || '') + ')</b>' + p.syllabus.map(function (t) {
-    return '<details style="border-top:1px solid var(--line);padding:6px 0"><summary style="display:flex;justify-content:space-between;gap:8px;cursor:pointer"><span>' + t.topic + '. ' + TOPIC_NAMES[t.topic] + '</span>' +
-      '<span class="sub" style="text-align:right;white-space:nowrap">✅ ' + t.taken + (t.hard.length ? ' · ⚠️ ' + t.hard.length : '') + ' / ' + t.total + '</span></summary>' +
+    return '<details style="border-top:1px solid var(--line);padding:6px 0"><summary style="cursor:pointer;list-style:none"><div style="display:flex;justify-content:space-between;gap:8px"><span>▸ ' + t.topic + '. ' + TOPIC_NAMES[t.topic] + '</span>' +
+      '<span class="sub" style="text-align:right;white-space:nowrap">✅ ' + t.taken + (t.hard.length ? ' · ⚠️ ' + t.hard.length : '') + ' / ' + t.total + '</span></div></summary>' +
       (t.items ? t.items.map(function (x) { return '<div style="font-size:14px;margin:3px 0 0 4px">' + (x.state === 'taken' ? '✅' : x.state === 'hard' ? '⚠️' : '⬜') + ' ' + esc(x.code) + ' ' + esc(x.name) + (x.ahl ? ' <span class="sub">(HL)</span>' : '') + '</div>'; }).join('')
         : (t.hard.length ? '<div class="sub">⚠️ ' + t.hard.map(esc).join('<br>⚠️ ') + '</div>' : '')) + '</details>'; }).join('') +
     '<div class="sub" style="margin-top:4px">✅ taken at school · ⚠️ taken, but finding it hard · the rest: not taken yet</div></div>';
