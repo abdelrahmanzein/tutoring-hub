@@ -3325,7 +3325,7 @@ function showProspect(i) {
   var wa = function (text, label, next) {
     return '<button class="primary" style="width:100%;margin-top:8px" onclick="prospectSend(' + i + ',\'' + text + '\',\'' + (next || '') + '\')">' + label + '</button>';
   };
-  var body = '<div class="sub">' + esc([p['Course'] + ' ' + p['Level'], p['Batch'], p['Country'], p['School']].filter(function (x) { return x && x.trim(); }).join(' · ')) +
+  var body = '<div class="sub">' + esc([p['Course'] + ' ' + p['Level'], p['Batch'], p['Country'], p['School']].filter(function (x) { return x && String(x).trim(); }).join(' · ')) +
     (p['Parent name'] ? '<br>Parent: ' + esc(p['Parent name']) : '') + (p['Notes'] ? '<br>' + esc(p['Notes']) : '') + '</div>' + syllabusBox(p);
   if (st === 'New' || st === 'Details sent') {
     // The details (fees, how sessions work, payment) are shown to them on the enquiry form after they send it.
