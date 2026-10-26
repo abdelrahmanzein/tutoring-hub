@@ -1917,6 +1917,9 @@ function loadNextHomework() {
   if (!n) return;
   if (!g) { n.textContent = '…'; return; }
   n.textContent = '…';
+  // Past-papers groups: the homework names the papers they'll solve.
+  var gl = cached('groups') || [], pp = gl.some(function (x) { return x.group === g && x.pastPapers; });
+  document.getElementById('snh').placeholder = pp ? 'Past papers, e.g. M19 TZ2 Paper 1 & 2' : 'Title, e.g. Rational Functions';
   call('nextHomework', { group: g, day: d }, function (r) {
     if (!document.getElementById('snhn')) return;
     document.getElementById('snhn').textContent = r.number + '.';
@@ -2450,22 +2453,20 @@ function showGroup(name) {
           ((d.drive || {}).notes ? '<a class="chip act" href="' + esc(d.drive.notes) + '" target="_blank">📝 Notes</a>' : '') +
         '</div></div>' +
       assignmentsBox(d) +
+      '<h2>Recent sessions</h2>' + sessionsTable(d) +
       '<h2>' + d.members.length + ' students</h2>' + d.members.map(function (m, i) {
         return '<div class="card"><div class="item"><div class="nav-row" style="flex:1" onclick="showProfile(\'' + esc(m.id) + '\')"><span><b>' + esc(m.name) + '</b>' +
           '<div class="sub">' + esc(m.country || '') + ' · since ' + (m.firstEver || m.since ? esc(fmtDate(m.firstEver || m.since)) : '?') + (m.role && m.role !== 'Member' ? ' · ' + esc(m.role) : '') + '</div></span><span>›</span></div>' +
           '<button class="small" style="width:auto;flex:none" onclick="moveForm(' + i + ')">Move</button></div><div id="mv' + i + '"></div></div>';
       }).join('') +
       groupQuizzes(g['Group']) +
-      '<h2>Recent sessions</h2>' + sessionsTable(d) +
-      (d.sessions.length ? '<div class="sub" style="margin:-4px 0 4px">Correct a session:</div><div class="chips" style="margin:0 0 8px">' + d.sessions.filter(function (s) { return s.status === 'Logged'; }).map(function (s) {
-        return '<a class="chip act" href="#" onclick="editSession(\'' + esc(s.id) + '\');return false">✏️ ' + esc(fmtDate(s.date).slice(0, 5)) + '</a>'; }).join('') + '</div>' : '') +
       '<div class="card"><b>Details</b>' +
         '<div class="sub" style="margin-top:8px">Status</div>' + sel('gst', paused ? 'Paused' : 'Active', [['Active', 'Active'], ['Paused', 'Paused (off Sessions and reminders, no charges)']]) +
         '<div class="sub" style="margin-top:8px">WhatsApp group link</div><input id="gwa" value="' + esc(g['WhatsApp link'] || '') + '">' +
         '<div class="sub" style="margin-top:8px">Notes</div><input id="gno" value="' + esc(g['Notes'] || '') + '">' +
         '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);saveGroup()">Save</button>' +
-        '<div class="sub" style="margin-top:14px">Homework: ' + (d.pastPapersLink ? 'past papers' : 'homework folders') + '</div><div class="chips">' + (d.pastPapersLink
-          ? '<a class="chip act" href="' + esc(d.pastPapersLink) + '" target="_blank">📊 Follow-up sheet</a><a class="chip act" href="#" onclick="ppOff();return false">↩️ Back to homework folders</a>'
+        '<div class="sub" style="margin-top:14px">' + (d.pastPapersLink ? 'Past papers: homework folders plus the follow-up sheet' : 'Homework folders') + '</div><div class="chips">' + (d.pastPapersLink
+          ? '<a class="chip act" href="' + esc(d.pastPapersLink) + '" target="_blank">📊 Follow-up sheet</a><a class="chip act" href="#" onclick="ppOff();return false">↩️ Stop using the sheet</a>'
           : '<a class="chip act" href="#" onclick="ppForm();return false">📝 Switch to past papers</a>') + '</div><div id="ppbox"></div>' +
         '<div class="chips" style="margin-top:14px"><a class="chip act danger" href="#" onclick="archiveForm();return false">🗄️ Archive this group…</a></div></div>';
   });
@@ -2475,10 +2476,34 @@ function showGroup(name) {
 function sessionsTable(d) {
   if (!d.sessions.length) return '<div class="card sub">None yet.</div>';
   var mark = function (v) { return !v ? '–' : v === 'P' ? '✅' : v === 'A' ? '❌' : '⏰ ' + v.slice(1) + "'"; };
-  return table(['Student'].concat(d.sessions.map(function (s) { return esc(fmtDate(s.date).slice(0, 5)) + (s.status !== 'Logged' ? '<div class="sub">' + esc(s.status) + '</div>' : ''); })),
+  return '<div class="sub" style="margin:-4px 0 4px">Tap a date to change its lesson title or attendance.</div>' +
+    table(['Student'].concat(d.sessions.map(function (s, i) {
+      return s.status === 'Logged' ? '<button class="chip act" style="margin:0" onclick="groupSess(' + i + ')">' + esc(fmtDate(s.date).slice(0, 5)) + '</button>'
+        : esc(fmtDate(s.date).slice(0, 5)) + '<div class="sub">' + esc(s.status) + '</div>'; })),
     d.members.map(function (m) {
       return ['<b>' + esc(m.name.split(' ')[0]) + '</b>'].concat(d.sessions.map(function (s) { return mark(d.attendance[s.id + '|' + m.id]); }));
     }).concat([['<span class="sub">Title</span>'].concat(d.sessions.map(function (s) { return '<span class="sub">' + esc(String(s.title || '').slice(0, 28)) + '</span>'; }))]));
+}
+
+// A held session from the table: its lesson title (renames its recording too) and attendance.
+function groupSess(i) {
+  var s = GROUP.sessions[i], name = GROUP.group['Group'];
+  sheet(name + ' · ' + fmtDate(s.date), '<div class="sub">Lesson: what you taught. It names the session and its recording.</div>' +
+    '<input id="gslt" value="' + esc(s.title && s.title !== 'Group Session' ? s.title : '') + '" style="margin-top:8px">' +
+    '<button class="primary" style="width:100%;margin-top:8px" onclick="hold(this);groupSessSave(' + i + ')">Save the lesson title</button>' +
+    '<button style="width:100%;margin-top:8px" onclick="closeSheet();editSession(\'' + esc(s.id) + '\')">✏️ Correct attendance</button>');
+}
+function groupSessSave(i) {
+  var s = GROUP.sessions[i], name = GROUP.group['Group'], t = document.getElementById('gslt').value.trim();
+  if (!t) return notice('Enter the lesson title.');
+  call('setLessonTitle', { sessionId: s.id, title: t }, function (r) {
+    patchLocal(function () {
+      var g = cached('group', { group: name }); if (g) g.sessions.forEach(function (x) { if (x.id === s.id) x.title = t; });
+      var log = cached('sessionLog'); if (log) log.forEach(function (x) { if (x.sessionId === s.id) x.title = t; });
+    });
+    closeSheet(); showGroup(name);
+    notice('Saved.' + (r && r.renamed && r.renamed.length ? ' Recording renamed: ' + r.renamed[0] : ''));
+  });
 }
 
 // The group's homework, newest first: tap one for each student's status and its Drive folder.
@@ -2548,12 +2573,11 @@ function saveGroup() {
 
 // The switch to past papers: an existing follow-up sheet, or a new one made from the B27 AI SL G1 sheet.
 function ppForm() {
-  document.getElementById('ppbox').innerHTML = '<div class="sub" style="margin-top:10px">Already have a follow-up sheet? Paste its link:</div>' +
-    '<input id="pplink" placeholder="https://docs.google.com/spreadsheets/d/…">' +
-    '<button class="primary" style="width:100%;margin-top:6px" onclick="hold(this);ppSwitch(false)">Use this sheet</button>' +
-    '<div class="sub" style="margin-top:14px">Or make a new one: a copy of the B27 AI SL G1 sheet with one column per student, ticks and questions cleared. Check the list of papers fits this course.</div>' +
-    '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="ppshare" checked style="width:auto"> Anyone with the link can edit (like the current sheet, so students can tick)</label>' +
-    '<button style="width:100%;margin-top:6px" onclick="hold(this);ppSwitch(true)">Create the sheet and switch</button>';
+  document.getElementById('ppbox').innerHTML = '<div class="sub" style="margin-top:10px">The app makes the follow-up sheet in the group\'s Drive folder: a copy of the template with one column per student, ticks and questions cleared (check the list of papers fits this course). Homework folders carry on: name the past papers they\'ll solve as the next homework when you log a session.</div>' +
+    '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="ppshare" checked style="width:auto"> Anyone with the link can edit (so students can tick)</label>' +
+    '<button class="primary" style="width:100%;margin-top:6px" onclick="hold(this);ppSwitch(true)">Create the sheet and switch</button>' +
+    '<details style="margin-top:10px"><summary class="sub">Already have a follow-up sheet?</summary><input id="pplink" placeholder="https://docs.google.com/spreadsheets/d/…" style="margin-top:6px">' +
+    '<button style="width:100%;margin-top:6px" onclick="hold(this);ppSwitch(false)">Use this sheet</button></details>';
 }
 
 function ppSwitch(create) {
@@ -2561,17 +2585,17 @@ function ppSwitch(create) {
   var args = create ? { group: name, create: true, share: document.getElementById('ppshare').checked } : { group: name, link: document.getElementById('pplink').value.trim() };
   call('setPastPapers', args, function (r) {
     showGroup(name);
-    notice('Switched to past papers. Session cards and reminders use the sheet from now on.' + (r.note ? ' ' + r.note : ''));
+    notice('Switched to past papers. The sheet is in the group\'s folder; session cards and reminders show it alongside the homework.' + (r.note ? ' ' + r.note : ''));
   });
 }
 
-// Back to homework folders (second tap confirms).
+// Stops using the follow-up sheet (second tap confirms); homework folders carry on.
 var pendingPpOff = false;
 function ppOff() {
-  if (!pendingPpOff) { pendingPpOff = true; return notice('Tap again to switch back to homework folders. The sheet itself is kept.'); }
+  if (!pendingPpOff) { pendingPpOff = true; return notice('Tap again to stop using the follow-up sheet (homework folders carry on). The sheet itself is kept.'); }
   pendingPpOff = false;
   var name = GROUP.group['Group'];
-  call('setPastPapers', { group: name, off: true }, function () { showGroup(name); notice('Back to homework folders.'); });
+  call('setPastPapers', { group: name, off: true }, function () { showGroup(name); notice('The follow-up sheet is no longer used.'); });
 }
 
 // Moving a student: new group and the first session there; the history in this group stays.
