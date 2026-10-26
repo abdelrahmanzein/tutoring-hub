@@ -346,6 +346,7 @@ function loadSnapshots() {
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
         if (!j || !j.data) return;
+        if (SNAP_AT[name] && Date.parse(j.at) < SNAP_AT[name]) return;      // never step back to older data
         SNAP_AT[name] = Date.parse(j.at);
         Object.keys(j.data).forEach(function (k) { CACHE[k] = { data: j.data[k], at: Date.now(), snap: true }; });
       }).catch(function () {});
