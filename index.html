@@ -382,13 +382,14 @@ function afterSave(stale, serverAt) {
 
 // Saves that go to Google directly: it's asked to upload the new screens straight away (in the background), instead
 // of at its next 5-minute check. One upload at a time; a save during one asks for one more after it.
-var PUBLISHING = false, PUBLISH_AGAIN = false;
-function publishSoon() {
+var PUBLISHING = false, PUBLISH_NEXT = [];
+function publishSoon(action, args) {
   if (!READ_URL) return;
-  if (PUBLISHING) { PUBLISH_AGAIN = true; return; }
-  PUBLISHING = true;
-  var next = function () { PUBLISHING = false; loadSnapshots(); if (PUBLISH_AGAIN) { PUBLISH_AGAIN = false; publishSoon(); } };
-  google.script.run.withSuccessHandler(next).withFailureHandler(next).api(TOKEN, 'publishNow', {});
+  PUBLISH_NEXT.push({ action: action, args: args || {} });
+  if (PUBLISHING) return;                                   // goes with the next upload, together with any others
+  var jobs = PUBLISH_NEXT; PUBLISH_NEXT = []; PUBLISHING = true;
+  var next = function () { PUBLISHING = false; loadSnapshots(); if (PUBLISH_NEXT.length) { var j = PUBLISH_NEXT.pop(); publishSoon(j.action, j.args); } };
+  google.script.run.withSuccessHandler(next).withFailureHandler(next).api(TOKEN, 'publishNow', { jobs: jobs });
 }
 
 // Local changes shown straight away (before the server's new data arrives). fn edits CACHE; it's applied now and
@@ -624,7 +625,7 @@ function call(action, args, done, opts) {
         var stale = STALE_WRITES.indexOf(action) >= 0;
         if (stale) staleAll();
         afterSave(stale, res.fetchedAt);
-        publishSoon();
+        publishSoon(action, args);
         // Optimistic saves already updated the screen; others continue where you are (or just confirm if you moved on).
         if (opts.optimistic) { if (opts.confirmed) withSave(saveId, function () { opts.confirmed(res.data); }); return; }
         if (myView !== VIEW) { notice('Saved ✓'); if (stale && refreshView) refreshView(); return; }
