@@ -292,7 +292,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['removeFromSession', 'undoLastMove', 'leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -1698,9 +1698,26 @@ function openSessRow(k) {
         '<div class="chips">' + (l.recording.length ? l.recording.map(function (u, n) { return '<a class="chip act" href="' + esc(u) + '" target="_blank">🎥 Recording' + (l.recording.length > 1 ? ' ' + (n + 1) : '') + '</a>'; }).join('') : '<span class="sub">No recording found yet.</span>') + '</div>'
         : '<div class="sub">Didn\'t happen' + (l.note ? ': ' + esc(l.note) : '') + '</div>') +
       '<div class="actions">' + (l.notes === 'not sent' ? '<button class="primary" onclick="notesDone(\'' + esc(l.sessionId) + '\')">✓ Notes sent</button>' : l.notes ? '<button class="secondary" onclick="notesDone(\'' + esc(l.sessionId) + '\', true)">Notes not sent after all</button>' : '') +
-        (l.status === 'Logged' ? '<button onclick="editSession(\'' + esc(l.sessionId) + '\')">✏️ Correct attendance</button>' : '<button class="secondary" onclick="undoSess(\'' + esc(l.sessionId) + '\')">Undo "didn\'t happen"</button>') +
+        (l.status === 'Logged' ? '<button onclick="editLesson(' + k + ')">✏️ Lesson title</button><button onclick="editSession(\'' + esc(l.sessionId) + '\')">✏️ Correct attendance</button>' : '<button class="secondary" onclick="undoSess(\'' + esc(l.sessionId) + '\')">Undo "didn\'t happen"</button>') +
       '<button class="secondary" onclick="showGroup(\'' + esc(l.group) + '\')">Open the group</button></div>');
   }
+}
+
+// Changes a held session's lesson title; its recordings are renamed to match.
+function editLesson(k) {
+  var l = SESS_ROWS[k] && SESS_ROWS[k].s;
+  if (!l) return;
+  sheet('Lesson title · ' + l.group + ' · ' + fmtDate(l.day), '<div class="sub">What you taught. It names the session (family page, progress sheet) and its recording.</div>' +
+    '<input id="elt" value="' + esc(l.title || '') + '" style="margin-top:8px"><button class="primary" style="width:100%;margin-top:8px" onclick="hold(this);saveLesson(' + k + ')">Save and rename the recording</button>');
+}
+function saveLesson(k) {
+  var l = SESS_ROWS[k].s, t = document.getElementById('elt').value.trim();
+  if (!t) return notice('Enter the lesson title.');
+  call('setLessonTitle', { sessionId: l.sessionId, title: t }, function (r) {
+    patchLocal(function () { var log = cached('sessionLog'); if (log) log.forEach(function (x) { if (x.sessionId === l.sessionId) x.title = t; }); });
+    l.title = t; document.querySelectorAll('.sheet-bg').forEach(function (b) { b.remove(); }); showToday();
+    notice('Saved.' + (r && r.renamed && r.renamed.length ? ' Recording renamed: ' + r.renamed[0] : ''));
+  });
 }
 
 // A sheet that closes itself when one of its buttons is used (the button opens the next step).
@@ -1881,6 +1898,7 @@ function sessionForm(i) {
     '<div class="sub" style="margin-top:8px">What was it</div><input id="st" list="stl" value="Group Session"><datalist id="stl"><option>Group Session</option><option>Recorded Session</option><option>Quiz Session</option><option>1-on-1 Session</option></datalist>' +
     '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="sq" style="width:auto"' + (q ? ' checked' : '') + ' onchange="quizToggle()"> 📝 Quiz this session</label>' +
     '<div id="sqf" style="display:' + (q ? '' : 'none') + '">' + quizFields('sq', q, s ? s.group : '') + '</div>' +
+    '<div class="sub" style="margin-top:8px">Lesson: what you taught (names the session and its recording)</div><input id="slt" placeholder="' + (q ? 'Quiz – ' + esc(q.topic || 'topic') : 'e.g. Maclaurin Series (empty: the homework title)') + '">' +
     '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="snoh" style="width:auto"' + (q ? ' checked' : '') + ' onchange="noHwToggle()"> No homework for next session</label>' +
     '<div id="snhb" style="display:' + (q ? 'none' : '') + '"><div class="sub" style="margin-top:8px">Next homework (optional: its folder is made with this title)</div>' +
     '<div class="filters" style="margin:0;align-items:center"><b id="snhn" style="flex:none;min-width:2em">…</b><input id="snh" placeholder="Title, e.g. Rational Functions"></div><div id="snhx" class="sub"></div></div>' +
@@ -1985,6 +2003,14 @@ function meetLine(m) {
     ' · ' + m.minutesInClass + ' min' + (m.contributions !== '' ? ' · ' + m.contributions + ' contributions, ' + m.questions + ' questions' : '') + '</div>';
 }
 
+// A student's status now for the homework due at this session (the first choice: kept unless you pick another).
+var HW_WORDS = { 'On time': 'On time', 'Late': 'Late', 'Missing': 'Not submitted', 'Excused': 'Excused', 'Not yet': 'Nothing uploaded yet', 'Not due yet': 'Nothing uploaded yet' };
+function hwNow(id) {
+  var x = SESS_HW && SESS_HW.statuses && SESS_HW.statuses[id];
+  if (!x || !x.status) return 'Now: nothing uploaded yet';
+  return 'Now: ' + (HW_WORDS[x.status] || x.status) + (x.manual ? ' (set by you)' : '');
+}
+
 // Draws the student lines (attendance, participation, homework) and the save button.
 function drawSessionRows() {
   var others = sessData.people.filter(function (p) { return !sessRows.some(function (r) { return r.id === p.id; }); });
@@ -1999,7 +2025,7 @@ function drawSessionRows() {
         return '<option' + (r.participation === p ? ' selected' : '') + '>' + p + '</option>';
       }).join('') + '</select></div>' +
       (SESS_HW ? '<div class="filters" style="margin:6px 0 0;align-items:center"><span class="sub" style="flex:none">Homework ' + esc(SESS_HW.number) + '</span>' +
-        '<select onchange="sessRows[' + i + '].homeworkStatus=this.value">' + [['', 'As uploaded (automatic)'], ['On time', 'On time'], ['Late', 'Late'], ['Missing', 'Not submitted'], ['Excused', 'Excused']].map(function (o) {
+        '<select onchange="sessRows[' + i + '].homeworkStatus=this.value">' + [['', hwNow(r.id)], ['On time', 'On time'], ['Late', 'Late'], ['Missing', 'Not submitted'], ['Excused', 'Excused']].map(function (o) {
           return '<option value="' + o[0] + '"' + ((r.homeworkStatus || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' : '') + '</div>';
   }).join('') +
     '<div class="filters">' + sel('sadd', '', [['', '＋ Add a visiting student']].concat(others.map(function (p) { return [p.id, p.name]; }))) + '</div>' +
@@ -2015,7 +2041,7 @@ function saveSession() {
   var quiz = quizValues('sq'), noHw = document.getElementById('snoh').checked;
   if (quiz && !quiz.topic) return notice('Enter the quiz topic (or untick "Quiz this session").');
   var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value,
-    noteNext: document.getElementById('sn').value, homeworkNumber: SESS_HW ? SESS_HW.number : '', nextHomework: (document.getElementById('snh') || {}).value || '', rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined,
+    noteNext: document.getElementById('sn').value, homeworkNumber: SESS_HW ? SESS_HW.number : '', nextHomework: (document.getElementById('snh') || {}).value || '', lessonTitle: (document.getElementById('slt') || {}).value || '', rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined,
     noHomework: noHw, quiz: quiz || (SESS_QUIZ ? false : null) };
   if (noHw) args.nextHomework = '';
   call('logSession', args, function (r) {

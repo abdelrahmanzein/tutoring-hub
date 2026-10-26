@@ -226,7 +226,7 @@ function performance(p) {
       return '<button class="' + (RANGE === o[0] ? 'on' : '') + '" onclick="setRange(\'' + o[0] + '\')">' + o[1] + '</button>'; }).join('') + '</div></div>';
   h += list.length ? '<div class="card tbl wide"><table><thead><tr><th>' + t('session') + '</th><th>' + t('att') + '</th><th>' + t('part') + '</th><th>' + t('hw') + '</th></tr></thead><tbody>' +
     list.map(function (r) {
-      return '<tr><td>' + esc(day(r.date)) + '</td><td>' + attCell(r) + '</td><td>' + (r.participation ? esc(val(r.participation)) : '<span class="sub">–</span>') + '</td>' +
+      return '<tr><td>' + esc(day(r.date)) + (r.lesson ? '<div class="sub">' + esc(r.lesson) + '</div>' : '') + '</td><td>' + attCell(r) + '</td><td>' + (r.participation ? esc(val(r.participation)) : '<span class="sub">–</span>') + '</td>' +
         '<td>' + (r.homework ? '<span class="' + hwClass(r.homework.status) + '">' + esc(val(r.homework.status)) + '</span> <span class="sub">' + esc(r.homework.title) + '</span>' : '<span class="sub">–</span>') + '</td></tr>';
     }).join('') + '</tbody></table></div>' + summary(list) : '<div class="card sub">' + t('none') + '</div>';
   if (p.coverNotes && p.coverNotes.length) h += '<h2>' + t('cover') + '</h2>' + p.coverNotes.map(function (c) {
