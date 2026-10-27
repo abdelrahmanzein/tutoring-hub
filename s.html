@@ -57,7 +57,7 @@
 <body>
 <main id="main"><p class="sub">Loading…</p></main>
 <script>
-var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 9;
+var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 10;
 var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^0-9a-f]/g, '');
 var P = null, TAB = 'fin', FROM = '', TO = ymd(new Date()), RANGE = 'last8', LANG = 'en';
 try { LANG = localStorage.getItem('lang') === 'ar' ? 'ar' : 'en'; } catch (e) {}
@@ -72,7 +72,7 @@ var T = {
     egp: function (n, f) { return n + ' session' + (n > 1 ? 's' : '') + ' taken since the last payment, ' + f + ' each. Shown in yellow below.'; },
     usdEgp: function (e) { return 'Paid in Egyptian pounds at the rate on the transfer day' + (e ? ' (about ' + e + ' today)' : '') + '.'; },
     usd: function (n, a, f) { return n + ' session' + (n > 1 ? 's' : '') + ' taken (yellow)' + (a ? ' + a down payment for the next ' + a + ' sessions (blue)' : '') + ', ' + f + ' each.'; },
-    sessions: 'Sessions', att: 'Attendance', part: 'Participation', hw: 'Homework for this session', from: 'From', to: 'To',
+    sessions: 'Sessions', att: 'Attendance', part: 'Participation', hw: 'Homework on this lesson', lesson: 'Lesson', date: 'Date', dueOn: 'Due', from: 'From', to: 'To',
     lastMonth: 'Last month', last3: 'Last 3 months', all: 'Everything', last8: 'Last 8 sessions', none: 'No sessions in these dates.',
     onTime: 'On time', lateMin: function (m) { return 'Late, ' + m + ' min'; },
     sAtt: 'Sessions attended', sTime: 'Arrived on time', sHw: 'Homework on time', of: 'of',
@@ -87,7 +87,7 @@ var T = {
     key: ['<span class="ok">On time</span> Joined when the session started.', '<span class="late">Late, 6 min</span> (example) Joined more than 2 minutes after the start; the minutes are shown.',
       '<span class="miss">Absent</span> Missed the session: the recording is sent and the session is charged.', '<span class="ok">Attended</span> Present, from before join times were recorded.',
       '<b>Participation</b> (from the session\'s transcript, compared with the rest of the group): Very active = well above the group\'s average · Active = about average · Occasional = a few times · Quiet = hardly spoke · <span class="sub">–</span> = not measured that session.',
-      '<b>Homework</b> (shown as e.g. <span class="ok">On time</span> <span class="sub">4. Integration</span>): <span class="ok">On time</span> uploaded by 11:59 PM (Cairo) the night before the session. <span class="late">Late</span> uploaded after that, within 7 days. <span class="miss">Missing</span> not uploaded, or uploaded more than 7 days late. <span class="ok">Excused</span> agreed with Mr Zein.',
+      '<b>Homework on this lesson</b> (the homework set on what was taught in that session, shown as e.g. 4. Integration <span class="ok">On time</span>): <span class="ok">On time</span> uploaded by 11:59 PM (Cairo) the night before the next session. <span class="late">Late</span> uploaded after that, within 7 days. <span class="miss">Missing</span> not uploaded, or uploaded more than 7 days late. <span class="ok">Excused</span> agreed with Mr Zein.',
       '<b>Quizzes</b> (shown as e.g. <b>30/40</b> <span class="sub">Level 6 of 7</span>): the quiz mark, and where it falls among all the students who took the same quiz (7 is the highest; not an official IB grade). <span class="sub">Level coming soon</span> until everyone has taken it.',
       '🟢 most of the time · 🟡 often · 🔴 needs attention.'],
     v: {}, invalid: 'This link is not valid.', incomplete: 'This link is not complete.', offline: 'Could not load the page. Please check the internet and try again.' },
@@ -99,7 +99,7 @@ var T = {
     egp: function (k, f) { return sessAr(k) + ' منذ آخر دفعة، ' + f + ' للحصة، موضحة باللون الأصفر بالأسفل.'; },
     usdEgp: function (e) { return 'يُدفع بما يعادله بالجنيه المصري يوم التحويل' + (e ? ' (حوالي ' + e + ' اليوم)' : '') + '.'; },
     usd: function (k, a, f) { return sessAr(k) + ' تمت (بالأصفر)' + (a ? ' + دفعة مقدمة لـ' + sessAr(a) + ' قادمة (بالأزرق)' : '') + '، ' + f + ' للحصة.'; },
-    sessions: 'الحصص', att: 'الحضور', part: 'المشاركة', hw: 'واجب هذه الحصة', from: 'من', to: 'إلى',
+    sessions: 'الحصص', att: 'الحضور', part: 'المشاركة', hw: 'واجب هذا الدرس', lesson: 'الدرس', date: 'التاريخ', dueOn: 'موعد التسليم', from: 'من', to: 'إلى',
     lastMonth: 'آخر شهر', last3: 'آخر ٣ أشهر', all: 'الكل', last8: 'آخر ٨ حصص', none: 'لا توجد حصص في هذه الفترة.',
     onTime: 'في الموعد', lateMin: function (m) { return 'متأخر ' + m + ' دقائق'; },
     sAtt: 'الحصص التي حضرها', sTime: 'الحضور في الموعد', sHw: 'تسليم الواجب في الموعد', of: 'من',
@@ -114,7 +114,7 @@ var T = {
     key: ['<span class="ok">في الموعد</span> دخل عند بدء الحصة.', '<span class="late">متأخر ٦ دقائق</span> (مثال) دخل بعد بدء الحصة بأكثر من دقيقتين، مع عدد الدقائق.',
       '<span class="miss">غائب</span> لم يحضر الحصة، ويُرسل له التسجيل وتُحتسب الحصة.', '<span class="ok">حضر</span> حاضر، من قبل بدء تسجيل وقت الدخول.',
       '<b>المشاركة</b> (من نص الحصة، مقارنةً ببقية المجموعة): نشِط جدًا = أعلى بكثير من متوسط المجموعة · نشِط = في حدود المتوسط · أحيانًا = بضع مرات · هادئ = نادرًا ما شارك · <span class="sub">–</span> = لم تُقَس في تلك الحصة.',
-      '<b>الواجب</b> (يظهر مثلًا هكذا: <span class="ok">في الموعد</span> <span class="sub">4. Integration</span>): <span class="ok">في الموعد</span> رُفع الواجب قبل الساعة ١١:٥٩ مساءً (بتوقيت القاهرة) في الليلة السابقة للحصة. <span class="late">متأخر</span> رُفع بعد ذلك خلال ٧ أيام. <span class="miss">لم يُسلَّم</span> لم يُرفع، أو رُفع بعد أكثر من ٧ أيام من موعده. <span class="ok">معفى</span> بالاتفاق مع الأستاذ زين.',
+      '<b>واجب هذا الدرس</b> (الواجب المطلوب على ما شُرح في تلك الحصة، ويظهر مثلًا هكذا: 4. Integration <span class="ok">في الموعد</span>): <span class="ok">في الموعد</span> رُفع الواجب قبل الساعة ١١:٥٩ مساءً (بتوقيت القاهرة) في الليلة السابقة للحصة التالية. <span class="late">متأخر</span> رُفع بعد ذلك خلال ٧ أيام. <span class="miss">لم يُسلَّم</span> لم يُرفع، أو رُفع بعد أكثر من ٧ أيام من موعده. <span class="ok">معفى</span> بالاتفاق مع الأستاذ زين.',
       '<b>الاختبارات</b> (تظهر مثلًا هكذا: <b>٣٠/٤٠</b> <span class="sub">المستوى ٦ من ٧</span>): درجة الاختبار، وموقعها بين جميع الطلاب الذين أدّوا الاختبار نفسه (٧ هو الأعلى، وليس درجة IB رسمية). <span class="sub">يظهر المستوى قريبًا</span> حتى يؤدي الجميع الاختبار.',
       '🟢 أغلب الوقت · 🟡 كثيرًا · 🔴 يحتاج إلى متابعة.'],
     v: { 'On time': 'في الموعد', 'Late': 'متأخر', 'Missing': 'لم يُسلَّم', 'Excused': 'معفى', 'Very active': 'نشِط جدًا', 'Active': 'نشِط', 'Occasional': 'أحيانًا', 'Quiet': 'هادئ' },
@@ -194,7 +194,7 @@ function attCell(r) {
 function hwClass(s) { return s === 'On time' || s === 'Excused' ? 'ok' : s === 'Late' ? 'late' : s === 'Missing' ? 'miss' : ''; }
 function summary(list) {
   var came = list.filter(function (r) { return r.attended; }), timed = came.filter(function (r) { return !r.lateUnknown; }), onTime = timed.filter(function (r) { return !r.late; });
-  var hw = list.filter(function (r) { return r.homework; }), hwOk = hw.filter(function (r) { return /On time|Excused/.test(r.homework.status); });
+  var hw = list.filter(function (r) { return r.homework && !r.homework.due; }), hwOk = hw.filter(function (r) { return /On time|Excused/.test(r.homework.status); });
   var early = list.filter(function (r) { return r.lateUnknown; }).length;
   var line = function (label, a, b, note) {
     if (!b) return '';
@@ -232,10 +232,11 @@ function performance(p) {
   var dash = '<span class="sub">–</span>', rowOf = function (label, cell, cls) {
     return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><th>' + label + '</th>' + list.map(function (r) { return '<td>' + cell(r) + '</td>'; }).join('') + '</tr>'; };
   h += list.length ? '<div class="card tbl cols"><table><tbody>' +
-    rowOf(t('session'), function (r) { return esc(day(r.date)) + (r.lesson ? '<div class="sub" style="font-weight:400">' + esc(r.lesson) + '</div>' : ''); }, 'head') +
+    rowOf(t('date'), function (r) { return esc(day(r.date)); }, 'head') +
+    rowOf(t('lesson'), function (r) { return r.lesson ? esc(r.lesson) : dash; }) +
     rowOf(t('att'), attCell) +
     rowOf(t('part'), function (r) { return r.participation ? esc(val(r.participation)) : dash; }) +
-    rowOf(t('hw'), function (r) { return r.homework ? '<span class="' + hwClass(r.homework.status) + '">' + esc(val(r.homework.status)) + '</span><div class="sub">' + esc(r.homework.title) + '</div>' : dash; }) +
+    rowOf(t('hw'), function (r) { var w = r.homework; return w ? esc(w.title) + '<div>' + (w.due ? '<span class="sub">' + t('dueOn') + ' ' + esc(day(w.due)) + '</span>' : '<span class="' + hwClass(w.status) + '">' + esc(val(w.status)) + '</span>') + '</div>' : dash; }) +
     '</tbody></table></div>' + summary(list) : '<div class="card sub">' + t('none') + '</div>';
   if (p.coverNotes && p.coverNotes.length) h += '<h2>' + t('cover') + '</h2>' + p.coverNotes.map(function (c) {
     return '<div class="card"><div class="sub">' + esc(d(c.date)) + ' · ' + t('with') + ' ' + esc(c.from) + '</div>' + (c.covered ? '<div><b>' + t('covered') + ':</b> ' + esc(c.covered) + '</div>' : '') + '<div style="white-space:pre-wrap">' + esc(c.text) + '</div></div>'; }).join('');
