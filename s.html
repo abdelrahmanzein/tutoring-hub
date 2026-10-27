@@ -33,6 +33,10 @@
     .tbl th { text-align:start; font-size:12px; font-weight:600; color:var(--sub); padding:6px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
     .tbl td { padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap; vertical-align:top; }
     .tbl tr:last-child td { border-bottom:0; } .num { text-align:end; }
+    .tbl.cols td { white-space:normal; min-width:104px; max-width:150px; }
+    .tbl.cols th { position:sticky; inset-inline-start:0; z-index:1; background:var(--card); white-space:normal; width:92px; min-width:92px; max-width:92px; padding:9px 10px; box-shadow:inset -1px 0 var(--line); vertical-align:top; }
+    html[dir=rtl] .tbl.cols th { box-shadow:inset 1px 0 var(--line); }
+    .tbl.cols tr:last-child th { border-bottom:0; } .tbl.cols tr.head td { font-weight:600; }
     tr.due td { background:var(--due-bg); } tr.ahead td { background:var(--ahead-bg); color:var(--ahead); } tr.total td { font-weight:700; }
     .pill { display:inline-block; font-size:12px; font-weight:600; border-radius:999px; padding:1px 8px; }
     .pill.due { background:var(--due-edge); color:#1f1a00; } .pill.ahead { background:var(--ahead); color:#fff; }
@@ -53,7 +57,7 @@
 <body>
 <main id="main"><p class="sub">Loading…</p></main>
 <script>
-var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 8;
+var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 9;
 var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^0-9a-f]/g, '');
 var P = null, TAB = 'fin', FROM = '', TO = ymd(new Date()), RANGE = 'last8', LANG = 'en';
 try { LANG = localStorage.getItem('lang') === 'ar' ? 'ar' : 'en'; } catch (e) {}
@@ -224,11 +228,15 @@ function performance(p) {
   h += '<h2>' + t('sessions') + '</h2><div class="card"><div class="filter"><label>' + t('from') + '<input type="date" id="f" value="' + FROM + '"></label><label>' + t('to') + '<input type="date" id="t" value="' + TO + '"></label></div>' +
     '<div class="chips">' + [['last8', t('last8')], ['m1', t('lastMonth')], ['m3', t('last3')], ['all', t('all')]].map(function (o) {
       return '<button class="' + (RANGE === o[0] ? 'on' : '') + '" onclick="setRange(\'' + o[0] + '\')">' + o[1] + '</button>'; }).join('') + '</div></div>';
-  h += list.length ? '<div class="card tbl wide"><table><thead><tr><th>' + t('session') + '</th><th>' + t('att') + '</th><th>' + t('part') + '</th><th>' + t('hw') + '</th></tr></thead><tbody>' +
-    list.map(function (r) {
-      return '<tr><td>' + esc(day(r.date)) + (r.lesson ? '<div class="sub">' + esc(r.lesson) + '</div>' : '') + '</td><td>' + attCell(r) + '</td><td>' + (r.participation ? esc(val(r.participation)) : '<span class="sub">–</span>') + '</td>' +
-        '<td>' + (r.homework ? '<span class="' + hwClass(r.homework.status) + '">' + esc(val(r.homework.status)) + '</span> <span class="sub">' + esc(r.homework.title) + '</span>' : '<span class="sub">–</span>') + '</td></tr>';
-    }).join('') + '</tbody></table></div>' + summary(list) : '<div class="card sub">' + t('none') + '</div>';
+  // One column per session (newest first) and one row per detail, so a session reads top to bottom.
+  var dash = '<span class="sub">–</span>', rowOf = function (label, cell, cls) {
+    return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><th>' + label + '</th>' + list.map(function (r) { return '<td>' + cell(r) + '</td>'; }).join('') + '</tr>'; };
+  h += list.length ? '<div class="card tbl cols"><table><tbody>' +
+    rowOf(t('session'), function (r) { return esc(day(r.date)) + (r.lesson ? '<div class="sub" style="font-weight:400">' + esc(r.lesson) + '</div>' : ''); }, 'head') +
+    rowOf(t('att'), attCell) +
+    rowOf(t('part'), function (r) { return r.participation ? esc(val(r.participation)) : dash; }) +
+    rowOf(t('hw'), function (r) { return r.homework ? '<span class="' + hwClass(r.homework.status) + '">' + esc(val(r.homework.status)) + '</span><div class="sub">' + esc(r.homework.title) + '</div>' : dash; }) +
+    '</tbody></table></div>' + summary(list) : '<div class="card sub">' + t('none') + '</div>';
   if (p.coverNotes && p.coverNotes.length) h += '<h2>' + t('cover') + '</h2>' + p.coverNotes.map(function (c) {
     return '<div class="card"><div class="sub">' + esc(d(c.date)) + ' · ' + t('with') + ' ' + esc(c.from) + '</div>' + (c.covered ? '<div><b>' + t('covered') + ':</b> ' + esc(c.covered) + '</div>' : '') + '<div style="white-space:pre-wrap">' + esc(c.text) + '</div></div>'; }).join('');
   return h;
