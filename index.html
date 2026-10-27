@@ -1459,6 +1459,17 @@ function saveNewStudent(confirmSimilar) {
   });
 }
 
+// The parent page link in a short message (Arabic, then English), shown first, then sent on WhatsApp to the parent.
+var PAGE_MSG = null, lastProfile = null;
+function sendParentPage(id) {
+  var p = lastProfile, i = p.detail.info, first = String(lastMoneyStudent.student.name || '').split(' ')[0], ar = i['Arabic first name'] || first;
+  PAGE_MSG = { phone: i['Parent WhatsApp'] || '', id: id, text: 'السلام عليكم،\nهذه صفحة ' + ar + ' المحدَّثة، وفيها الموقف المالي الحالي والحضور والواجبات ونتائج الاختبارات.\n\n' +
+    'Hello,\nHere is ' + first + '\'s up-to-date page, with the current financials, attendance, homework and quiz results.\n\n' + p.detail.livePage };
+  sheet('Send the parent page', '<div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(PAGE_MSG.text) + '</div>' +
+    '<button class="primary" style="width:100%" onclick="waSend(PAGE_MSG.phone, PAGE_MSG.text, \'Parent page\', { studentId: PAGE_MSG.id })">💬 Send on WhatsApp</button>' +
+    '<div class="sub" style="margin-top:6px">' + (PAGE_MSG.phone ? 'Opens the chat with ' + esc(PAGE_MSG.phone) + '.' : 'No parent WhatsApp saved: you pick the chat.') + '</div>');
+}
+
 // The student's recent homework; tap one to set it by hand.
 var HW_LIST = [];
 function homeworkCard(list, id) {
@@ -1551,7 +1562,7 @@ function showProfile(id) {
   document.getElementById('title').textContent = BACK.tab;
   call('profile', { id: id }, function (p) {
     var i = p.detail.info, m = p.money, st = m.student;
-    lastMoneyStudent = m;
+    lastMoneyStudent = m; lastProfile = p;
     var group = p.detail.memberships.filter(function (x) { return !x['Until']; })
       .map(function (x) { return x['Group'] + (x['Since'] ? ' (since ' + fmtDate(x['Since']) + ')' : ''); }).join(', ') || 'No group';
     var money = Object.keys(m.positions).map(function (c) {
@@ -1577,7 +1588,7 @@ function showProfile(id) {
       '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button><button onclick="moveFromProfile(\'' + esc(id) + '\')">Move group</button>' +
         ((p.detail.memberships || []).filter(function (m) { return !m['Until'] && /^Moved from /.test(m['Note'] || ''); }).map(function (m) {
           return '<button class="secondary" onclick="undoMove(\'' + esc(id) + '\', \'' + esc(m['Group']) + '\', \'' + esc(String(m['Note']).replace('Moved from ', '')) + '\')">↩️ Undo last move</button>'; })[0] || '') +
-        (p.detail.livePage ? '<button onclick="openInApp(\'' + esc(p.detail.livePage) + '\', \'What the family sees\')">Parent page</button><button class="secondary" onclick="resetLink(\'' + esc(id) + '\')">🔄 Reset page link</button>' : '') +
+        (p.detail.livePage ? '<button onclick="openInApp(\'' + esc(p.detail.livePage) + '\', \'What the family sees\')">Parent page</button><button onclick="sendParentPage(\'' + esc(id) + '\')">💬 Send page</button><button class="secondary" onclick="resetLink(\'' + esc(id) + '\')">🔄 Reset page link</button>' : '') +
         (/^(Active|Trial)$/.test(i['Status']) ? '<button onclick="coverForm(\'' + esc(id) + '\')">Cover tutor</button>' : '') +
         (/^(Active|Trial)$/.test(i['Status']) ? '<button class="secondary" onclick="leaveForm(\'' + esc(id) + '\')">Leaving…</button>' : '') + '</div>' +
       '<h2>Money</h2>' + money +
