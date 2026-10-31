@@ -2463,6 +2463,7 @@ function showGroup(name) {
           (d.folder ? '<a class="chip act" href="' + esc(d.folder) + '" target="_blank">🗂️ Assignments</a>' : '') +
           ((d.drive || {}).notes ? '<a class="chip act" href="' + esc(d.drive.notes) + '" target="_blank">📝 Notes</a>' : '') +
         '</div></div>' +
+      quizSubBox(d) +
       assignmentsBox(d) +
       '<h2>Recent sessions</h2>' + sessionsTable(d) +
       '<h2>' + d.members.length + ' students</h2>' + d.members.map(function (m, i) {
@@ -2519,6 +2520,50 @@ function groupSessSave(i) {
 
 // The group's homework, newest first: tap one for each student's status and its Drive folder.
 var HW_COUNT_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Excused': '🙏', 'Not yet': '⏳' };
+// Quiz submissions: the open quiz with who has submitted (tap to open the PDF) and Close; otherwise Open now. Plus the
+// group's permanent quiz link, sent once to the group and pinned there.
+function quizSubBox(d) {
+  var q = d.quizSub;
+  if (!q) return '';
+  var o = q.open, h = '<div class="card">';
+  if (o) {
+    var done = o.rows.filter(function (r) { return r.at; }).length;
+    h += '<div class="item"><span><b>📝 Quiz: ' + esc(o.topic) + '</b><div class="sub">Open for submissions' + (o.openedAt ? ' since ' + esc(fmtDate(String(o.openedAt).slice(0, 10)).slice(0, 5) + ' ' + String(o.openedAt).slice(11)) : '') + '</div></span>' +
+      '<button class="small" style="width:auto;flex:none" onclick="quizSubsRefresh()">↻</button></div>' +
+      '<div class="item"><span>Submitted</span><b>' + done + ' of ' + o.rows.length + '</b></div>' +
+      o.rows.map(function (r) {
+        return '<div class="item"><span>' + esc(r.name) + (r.absent ? ' <span class="sub">(absent: at home)</span>' : '') + '</span>' +
+          (r.at ? '<a class="ok" href="' + esc(r.link) + '" target="_blank">' + esc(String(r.at).slice(11) || fmtDate(String(r.at).slice(0, 10)).slice(0, 5)) + (r.versions > 1 ? ' · ' + r.versions + ' versions' : '') + ' ›</a>' : '<span class="miss">Not yet</span>') + '</div>';
+      }).join('') +
+      '<div class="chips" style="margin-top:8px">' + (o.folder ? '<a class="chip act" href="' + esc(o.folder) + '" target="_blank">🗂️ Submissions folder</a>' : '') + '</div>' +
+      '<button style="width:100%;margin-top:10px;color:var(--bad);border-color:var(--bad)" onclick="quizSubsClose(\'' + esc(o.id) + '\')">Close submissions</button>' +
+      '<div class="sub" style="margin-top:6px">Stays open (also for students taking it at home) until you close it.</div>';
+  } else {
+    h += '<b>📝 Open quiz submissions</b><div class="sub" style="margin:4px 0 8px">' + (q.planned ? 'Today\'s quiz "' + esc(q.planned) + '" opens by itself when the session starts, or open it now.' : 'Students can submit through the group\'s quiz link from now until you close it.') + '</div>' +
+      '<div class="sub">Topic (optional, you can add it later)</div><input id="qstopic" value="' + esc(q.planned || '') + '">' +
+      '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);quizSubsOpen()">Open now</button>';
+  }
+  return h + '<div class="item" style="margin-top:10px"><span><b>📎 Quiz link</b><div class="sub">The same for every quiz: send it once and pin it in the group.</div></span>' +
+    '<button class="small" style="width:auto;flex:none" onclick="quizLinkSend()">💬 Send</button></div></div>';
+}
+function quizSubsPatch(r) {
+  var name = GROUP.group['Group'];
+  patchLocal(function () { var g = cached('group', { group: name }); if (g) g.quizSub = r; });
+  GROUP.quizSub = r; showGroup(name);
+}
+function quizSubsOpen() {
+  call('openQuizSubmissions', { group: GROUP.group['Group'], topic: document.getElementById('qstopic').value.trim() }, function (r) { quizSubsPatch(r); notice('Open: students can submit now.'); });
+}
+function quizSubsClose(id) {
+  if (!confirm('Close submissions? The link will say no quiz is open.')) return;
+  call('closeQuizSubmissions', { quizId: id }, function (r) { quizSubsPatch(r); notice('Closed.'); });
+}
+function quizSubsRefresh() { call('quizSubs', { group: GROUP.group['Group'], at: Date.now() }, quizSubsPatch); }
+function quizLinkSend() {
+  var g = GROUP.group['Group'], link = GROUP.quizSub.link;
+  groupSend(g, '📎 Quiz link for ' + g + ' (the same for every quiz: please pin it)\n' + link + '\nWhen a quiz is open: tap your name, choose your PDF and tap Submit. Only Mr Zein sees what you submit.', 'Quiz link');
+}
+
 function assignmentsBox(d) {
   var list = d.assignments || [];
   return '<details class="card"><summary><b>Assignments (' + list.length + ')</b>' + (d.folder ? ' <a class="chip act" style="margin-left:6px" href="' + esc(d.folder) + '" target="_blank" onclick="event.stopPropagation()">🗂️ Folder</a>' : '') + '</summary>' +
@@ -3595,7 +3640,7 @@ var google = { script: { get run() {
       // Google sometimes answers with an error page (cold start); one quiet retry fixes almost all of them.
       // Only reads and self-protecting saves are retried (payments re-check the balance, sessions refuse duplicates,
       // imports and deletes are safe to repeat). Other saves are never repeated automatically.
-      var retry = ['tutorReport', 'joinSubmit', 'addAdjustment', 'addAccount', 'undoSession', 'undoStudentEdit', 'updateStudent', 'confirmAccount'].indexOf(action) < 0;
+      var retry = ['quizSubmit', 'tutorReport', 'joinSubmit', 'addAdjustment', 'addAccount', 'undoSession', 'undoStudentEdit', 'updateStudent', 'confirmAccount'].indexOf(action) < 0;
       var attempt = function (n) {
         fetch(EXEC_URL, { method: 'POST', credentials: 'omit', redirect: 'follow', body: JSON.stringify({ token: token, action: action, args: args }) })
           .then(function (r) { return r.json(); })
