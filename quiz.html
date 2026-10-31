@@ -117,25 +117,45 @@ function pick(el) {
   var f = el.files && el.files[0];
   if (!f) return;
   if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') { FILE = null; draw(); document.getElementById('err').textContent = 'Please choose a PDF file.'; return; }
-  if (f.size > 25 * 1024 * 1024) { FILE = null; draw(); document.getElementById('err').textContent = 'This PDF is larger than 25 MB. Please make it smaller and try again.'; return; }
+  if (f.size > 100 * 1024 * 1024) { FILE = null; draw(); document.getElementById('err').textContent = 'This PDF is larger than 100 MB. Please make it smaller and try again.'; return; }
   FILE = f; draw();
 }
-// Reads the PDF and sends it (one try: a failed upload is never repeated by itself).
+// Reads the PDF and sends it (one try: a failed upload is never repeated by itself). Over 20 MB it goes straight to
+// Google Drive through a one-time upload address, with progress.
 function send() {
   var b = document.getElementById('go'), err = document.getElementById('err');
   b.disabled = true; b.textContent = 'Sending… keep this page open'; err.textContent = '';
+  if (FILE.size > 20 * 1024 * 1024) return sendBig(b, err);
   var r = new FileReader();
   r.onload = function () {
-    api('quizSubmit', { key: KEY, quizId: P.quiz.id, studentId: WHO, data: String(r.result).split(',')[1] }, function (res) {
-      var at = String(res.at || '').slice(11);
-      document.getElementById('main').innerHTML = head('Quiz: ' + P.quiz.topic, P.group) +
-        '<div class="card done"><div style="font-size:40px">✅</div><b>Received, ' + esc(res.name) + '</b><div>' + (at ? 'at ' + esc(at) : '') + '</div>' +
-        '<div class="sub" style="margin-top:6px">Sent the wrong file? Go back, choose your name and submit again while the quiz is open.</div></div>' +
-        '<button class="btn sec" onclick="FILE=null;WHO=\'\';draw()">Back</button>';
-    }, function (e) { b.disabled = false; b.textContent = 'Submit'; err.textContent = /did not match|didn.t answer|Not sure/.test(e) ? 'It may not have arrived (connection problem). Please submit again.' : e; });
+    api('quizSubmit', { key: KEY, quizId: P.quiz.id, studentId: WHO, data: String(r.result).split(',')[1] }, received, function (e) { b.disabled = false; b.textContent = 'Submit'; err.textContent = /did not match|didn.t answer|Not sure/.test(e) ? 'It may not have arrived (connection problem). Please submit again.' : e; });
   };
   r.onerror = function () { b.disabled = false; b.textContent = 'Submit'; err.textContent = 'Could not read this file. Please choose it again.'; };
   r.readAsDataURL(FILE);
+}
+function received(res) {
+  var at = String(res.at || '').slice(11);
+  document.getElementById('main').innerHTML = head('Quiz: ' + P.quiz.topic, P.group) +
+    '<div class="card done"><div style="font-size:40px">✅</div><b>Received, ' + esc(res.name) + '</b><div>' + (at ? 'at ' + esc(at) : '') + '</div>' +
+    '<div class="sub" style="margin-top:6px">Sent the wrong file? Go back, choose your name and submit again while the quiz is open.</div></div>' +
+    '<button class="btn sec" onclick="FILE=null;WHO=\'\';draw()">Back</button>';
+}
+function sendBig(b, err) {
+  var again = function (msg) { b.disabled = false; b.textContent = 'Submit'; err.textContent = msg || 'It didn\'t arrive (connection problem). Please submit again.'; };
+  var args = { key: KEY, quizId: P.quiz.id, studentId: WHO };
+  api('quizUploadStart', Object.assign({ size: FILE.size }, args), function (r) {
+    var x = new XMLHttpRequest();
+    x.open('PUT', r.url);
+    x.upload.onprogress = function (e) { if (e.lengthComputable) b.textContent = 'Sending… ' + Math.floor(e.loaded / e.total * 100) + '% · keep this page open'; };
+    x.onload = function () {
+      if (x.status >= 300) return again();
+      var id = ''; try { id = JSON.parse(x.responseText).id || ''; } catch (e) { id = ''; }
+      b.textContent = 'Almost done…';
+      api('quizUploadDone', Object.assign({ fileId: id }, args), received, again);
+    };
+    x.onerror = function () { again(); };
+    x.send(FILE);
+  }, again);
 }
 if (!KEY) { P = { valid: false }; draw(); }
 else api('quizPage', { key: KEY }, function (p) { P = p; draw(); }, function () { document.getElementById('main').innerHTML = head('Quiz') + '<div class="card">Couldn\'t load just now. Please refresh the page.</div>'; });
