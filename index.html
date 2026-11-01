@@ -2163,12 +2163,13 @@ function recFromLog(k, j, undo) {
 // One after each chapter: planned on an upcoming session (or ticked when logging). Absent students take it at home
 // (To do prepares the message to their parent with your instructions); marks are entered later from To do.
 // Default instructions for a new quiz: Settings → quiz_instructions (this text only if that's empty).
-var QUIZ_INSTR = '- Solve on separate paper\n- No calculators allowed\n- Duration: 60 minutes; the first 5 are for reading the quiz\n- The quiz is out of {cap} marks{bonus}\n- As soon as you finish, scan your work into one PDF and upload it through the link below';
+var QUIZ_INSTR = '- Solve on separate paper\n- {calculator}\n- Duration: {minutes} minutes; the first 5 are for reading the quiz\n- The quiz is out of {cap} marks{bonus}\n- As soon as you finish, scan your work into one PDF and upload it through the link below';
 // Settings → quiz_instructions has {cap} and {bonus} (the server fills the Arabic the same way).
 function quizDefaultInstr(cap, available) {
   var a = cached('adminData'), x = a && (a.settings || []).filter(function (r) { return r.key === 'quiz_instructions'; })[0], t = (x && x.value) || QUIZ_INSTR;
   cap = Number(cap) || quizDefaultCap(); available = Number(available) || cap;
-  return String(t).replace(/\{cap\}/g, cap).replace(/\{bonus\}/g, available > cap ? ' (' + available + ' marks are available, so anything above ' + cap + ' is a bonus)' : '');
+  return String(t).replace(/\{cap\}/g, cap).replace(/\{bonus\}/g, available > cap ? ' (' + available + ' marks are available, so anything above ' + cap + ' is a bonus)' : '')
+    .replace(/\{minutes\}/g, 60).replace(/\{calculator\}/g, 'No calculators allowed');
 }
 // The same quiz given to another group of the batch: its quizzes are compared (levels across groups) only when the
 // topic matches exactly, so "Same quiz as…" copies the topic, total marks, instructions and link from it.
@@ -2186,31 +2187,54 @@ function useSameQuiz(p, k) {
   document.getElementById(p + 'i').value = x.instructions || ''; document.getElementById(p + 'l').value = x.link || ''; if (document.getElementById(p + 'd')) document.getElementById(p + 'd').value = String(x.deadline || '').slice(0, 10);
   notice('Copied from ' + x.group + ': the levels will be worked out across both groups.');
 }
+// The quiz: pick its paper (Quiz papers) and everything is filled in, shown as one line ("Change" opens the fields).
+// "Another quiz" (not in the list) is typed in as before.
+var QUIZ_PAPERS = {};
 function quizFields(p, q, group) {
   q = q || {};
   var instr = q.instructions || quizDefaultInstr(q.max, q.available);
-  return (group && !q.topic ? sameQuizChips(p, group) : '') + '<div class="sub" style="margin-top:6px">Topic (the chapter)</div><input id="' + p + 't" value="' + esc(q.topic || '') + '" placeholder="e.g. Functions">' +
+  return '<div class="sub" style="margin-top:6px">Quiz paper</div><select id="' + p + 'pp" onchange="quizPaperPick(\'' + p + '\')"><option value="">Loading quizzes…</option></select>' +
+    '<input type="hidden" id="' + p + 'pid" value="' + esc(q.paperId || '') + '"><input type="hidden" id="' + p + 'iar" value="">' +
+    '<div id="' + p + 'sum" class="sub" style="margin-top:6px;display:none"></div>' +
+    '<div id="' + p + 'det"' + (q.paperId ? ' style="display:none"' : '') + '>' +
+    (group && !q.topic ? sameQuizChips(p, group) : '') + '<div class="sub" style="margin-top:6px">Topic (the chapter)</div><input id="' + p + 't" value="' + esc(q.topic || '') + '" placeholder="e.g. Functions">' +
     '<div class="filters" style="margin:6px 0 0"><label class="sub" style="flex:1">Marks available (whole paper)<input id="' + p + 'a" type="number" inputmode="numeric" min="1" value="' + esc(q.available || q.max || '') + '" placeholder="e.g. 61" oninput="quizCapToInstr(\'' + p + '\')"></label>' +
     '<label class="sub" style="flex:1">Graded out of (cap)<input id="' + p + 'm" type="number" inputmode="numeric" min="1" value="' + esc(q.max || quizDefaultCap()) + '" oninput="quizCapToInstr(\'' + p + '\')"></label></div>' +
     '<div class="sub">Marks above the cap are bonus: a student can score e.g. 51/40, which is level 7.</div>' +
-    '<div class="sub" style="margin-top:6px">Instructions (to parents and the group when it\'s taken at home; the default is in Settings)</div><textarea id="' + p + 'i" data-auto="' + esc(q.instructions ? '' : instr) + '" rows="5" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)">' + esc(instr) + '</textarea>' +
+    '<div class="sub" style="margin-top:6px">Instructions (to parents and the group when it\'s taken at home; the default is in Settings)</div><textarea id="' + p + 'i" data-auto="' + esc(q.instructions ? '' : instr) + '" rows="5" oninput="document.getElementById(\'' + p + 'iar\').value=\'\'" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)">' + esc(instr) + '</textarea>' +
+    '<div class="sub" style="margin-top:6px">The quiz file (link)</div><input id="' + p + 'l" value="' + esc(q.link || '') + '" placeholder="paste the Drive link">' +
+    '</div>' +
     '<div class="sub" style="margin-top:6px">Deadline when taken at home (empty: ' + quizHomeDays() + ' days after it\'s sent)</div><input id="' + p + 'd" type="date" value="' + esc(String(q.deadline || '').slice(0, 10)) + '">' +
-    '<div class="sub" style="margin-top:6px">The quiz file (for absent students): from Tutoring Quizzes, uploaded in the last month</div>' +
-    '<select id="' + p + 'ls" onchange="if (this.value !== \'*\') document.getElementById(\'' + p + 'l\').value = this.value"><option value="">Loading files…</option></select>' +
-    '<input id="' + p + 'l" value="' + esc(q.link || '') + '" placeholder="or paste a link" style="margin-top:6px">' + quizFilesLoad(p, q.link || '');
+    quizPapersLoad(p, q.paperId || '', group);
 }
-// Fills the quiz-file list (after the form is drawn); the current link is kept even if older than a month.
-function quizFilesLoad(p, current) {
+function quizPapersLoad(p, current, group) {
   setTimeout(function () {
-    call('quizFiles', {}, function (files) {
-      var el = document.getElementById(p + 'ls'); if (!el) return;
-      var has = files.some(function (f) { return f.url === current; });
-      el.innerHTML = '<option value="">' + (files.length ? 'Pick the quiz file…' : 'No files uploaded in the last month') + '</option>' +
-        (current && !has ? '<option value="' + esc(current) + '" selected>(the file linked now)</option>' : '') +
-        files.map(function (f) { return '<option value="' + esc(f.url) + '"' + (f.url === current ? ' selected' : '') + '>' + esc(f.name) + ' · ' + esc(fmtDate(f.created)) + '</option>'; }).join('');
+    call('quizPapers', { group: group || '' }, function (list) {
+      var el = document.getElementById(p + 'pp'); if (!el) return;
+      list.forEach(function (x) { QUIZ_PAPERS[x.id] = x; });
+      el.innerHTML = '<option value="">' + (list.length ? 'Pick the quiz…' : 'No quiz papers yet') + '</option>' +
+        list.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === current ? ' selected' : '') + '>' + esc(x.title) + ' · ' + esc(x.available) + ' marks</option>'; }).join('') +
+        '<option value="*">Another quiz (type it in)</option>';
+      if (current && QUIZ_PAPERS[current]) quizPaperSummary(p, QUIZ_PAPERS[current]);
     }, { part: true });
   }, 0);
   return '';
+}
+function quizPaperSummary(p, x) {
+  var el = document.getElementById(p + 'sum'); if (!el) return;
+  el.style.display = '';
+  el.innerHTML = '📝 <b>' + esc(x.topic) + '</b> · ' + esc(x.available) + ' marks, graded out of ' + esc(x.max) + ' · ' + esc(x.minutes) + ' min · ' + (x.calc ? 'calculator' : 'no calculator') +
+    ' · <a href="#" onclick="document.getElementById(\'' + p + 'det\').style.display=\'\';this.parentNode.style.display=\'none\';return false">Change</a>';
+}
+// A paper picked: its topic, marks, instructions (and their Arabic) and file fill the fields.
+function quizPaperPick(p) {
+  var v = document.getElementById(p + 'pp').value, x = QUIZ_PAPERS[v], det = document.getElementById(p + 'det'), sum = document.getElementById(p + 'sum');
+  if (!x) { document.getElementById(p + 'pid').value = ''; document.getElementById(p + 'iar').value = ''; sum.style.display = 'none'; det.style.display = ''; return; }
+  document.getElementById(p + 'pid').value = x.id; document.getElementById(p + 'iar').value = x.instructionsAr || '';
+  document.getElementById(p + 't').value = x.topic; document.getElementById(p + 'a').value = x.available; document.getElementById(p + 'm').value = x.max;
+  var i = document.getElementById(p + 'i'); i.value = x.instructions; i.setAttribute('data-auto', '');
+  document.getElementById(p + 'l').value = x.link;
+  det.style.display = 'none'; quizPaperSummary(p, x);
 }
 function quizDefaultCap() { var a = cached('adminData'), x = a && (a.settings || []).filter(function (r) { return r.key === 'quiz_default_cap'; })[0]; return Number(x && x.value) || 40; }
 function quizHomeDays() { var a = cached('adminData'), x = a && (a.settings || []).filter(function (r) { return r.key === 'quiz_home_days'; })[0]; return Number(x && x.value) || 2; }
@@ -2223,7 +2247,8 @@ function quizCapToInstr(p) {
 }
 function quizValues(p) {
   var on = document.getElementById(p); if (on && on.type === 'checkbox' && !on.checked) return null;
-  return { topic: document.getElementById(p + 't').value.trim(), max: document.getElementById(p + 'm').value, available: document.getElementById(p + 'a').value, instructions: document.getElementById(p + 'i').value.trim(), link: document.getElementById(p + 'l').value.trim(), deadline: (document.getElementById(p + 'd') || {}).value || '' };
+  return { topic: document.getElementById(p + 't').value.trim(), max: document.getElementById(p + 'm').value, available: document.getElementById(p + 'a').value, instructions: document.getElementById(p + 'i').value.trim(), link: document.getElementById(p + 'l').value.trim(), deadline: (document.getElementById(p + 'd') || {}).value || '',
+    paperId: (document.getElementById(p + 'pid') || {}).value || '', instructionsAr: (document.getElementById(p + 'iar') || {}).value || '' };
 }
 function quizToggle() {
   var on = document.getElementById('sq').checked;
