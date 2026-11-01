@@ -292,7 +292,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['recordingSent', 'quizGroupTold', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['recordingSent', 'quizGroupTold', 'quizReminderSent', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['removeFromSession', 'undoLastMove', 'leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -2163,8 +2163,13 @@ function recFromLog(k, j, undo) {
 // One after each chapter: planned on an upcoming session (or ticked when logging). Absent students take it at home
 // (To do prepares the message to their parent with your instructions); marks are entered later from To do.
 // Default instructions for a new quiz: Settings → quiz_instructions (this text only if that's empty).
-var QUIZ_INSTR = '- Solve in an external paper\n- No calculators allowed\n- Duration is 62 minutes: the first 5 minutes are just for reading and going through the assessment\n- The quiz is out of 40 marks (even though the available marks are more than that, so any extra marks you collect are bonus)\n- Scan your response as a PDF as soon as you finish\n- Send the PDF to abdelrahman.zein@gmail.com\n- Make the subject: First + Last names';
-function quizDefaultInstr() { var a = cached('adminData'), x = a && (a.settings || []).filter(function (r) { return r.key === 'quiz_instructions'; })[0]; return (x && x.value) || QUIZ_INSTR; }
+var QUIZ_INSTR = '- Solve on separate paper\n- No calculators allowed\n- Duration: 60 minutes; the first 5 are for reading the quiz\n- The quiz is out of {cap} marks{bonus}\n- As soon as you finish, scan your work into one PDF and upload it through the link below';
+// Settings → quiz_instructions has {cap} and {bonus} (the server fills the Arabic the same way).
+function quizDefaultInstr(cap, available) {
+  var a = cached('adminData'), x = a && (a.settings || []).filter(function (r) { return r.key === 'quiz_instructions'; })[0], t = (x && x.value) || QUIZ_INSTR;
+  cap = Number(cap) || quizDefaultCap(); available = Number(available) || cap;
+  return String(t).replace(/\{cap\}/g, cap).replace(/\{bonus\}/g, available > cap ? ' (' + available + ' marks are available, so anything above ' + cap + ' is a bonus)' : '');
+}
 // The same quiz given to another group of the batch: its quizzes are compared (levels across groups) only when the
 // topic matches exactly, so "Same quiz as…" copies the topic, total marks, instructions and link from it.
 var SAME_Q = [];
@@ -2178,17 +2183,18 @@ function sameQuizChips(p, group) {
 function useSameQuiz(p, k) {
   var x = SAME_Q[k];
   document.getElementById(p + 't').value = x.topic; document.getElementById(p + 'm').value = x.max || ''; document.getElementById(p + 'a').value = x.available || x.max || '';
-  document.getElementById(p + 'i').value = x.instructions || ''; document.getElementById(p + 'l').value = x.link || '';
+  document.getElementById(p + 'i').value = x.instructions || ''; document.getElementById(p + 'l').value = x.link || ''; if (document.getElementById(p + 'd')) document.getElementById(p + 'd').value = String(x.deadline || '').slice(0, 10);
   notice('Copied from ' + x.group + ': the levels will be worked out across both groups.');
 }
 function quizFields(p, q, group) {
   q = q || {};
-  var instr = q.instructions || quizDefaultInstr().replace(/out of \d+ marks/i, 'out of ' + (q.max || quizDefaultCap()) + ' marks');
+  var instr = q.instructions || quizDefaultInstr(q.max, q.available);
   return (group && !q.topic ? sameQuizChips(p, group) : '') + '<div class="sub" style="margin-top:6px">Topic (the chapter)</div><input id="' + p + 't" value="' + esc(q.topic || '') + '" placeholder="e.g. Functions">' +
-    '<div class="filters" style="margin:6px 0 0"><label class="sub" style="flex:1">Marks available (whole paper)<input id="' + p + 'a" type="number" inputmode="numeric" min="1" value="' + esc(q.available || q.max || '') + '" placeholder="e.g. 61"></label>' +
+    '<div class="filters" style="margin:6px 0 0"><label class="sub" style="flex:1">Marks available (whole paper)<input id="' + p + 'a" type="number" inputmode="numeric" min="1" value="' + esc(q.available || q.max || '') + '" placeholder="e.g. 61" oninput="quizCapToInstr(\'' + p + '\')"></label>' +
     '<label class="sub" style="flex:1">Graded out of (cap)<input id="' + p + 'm" type="number" inputmode="numeric" min="1" value="' + esc(q.max || quizDefaultCap()) + '" oninput="quizCapToInstr(\'' + p + '\')"></label></div>' +
     '<div class="sub">Marks above the cap are bonus: a student can score e.g. 51/40, which is level 7.</div>' +
-    '<div class="sub" style="margin-top:6px">Instructions for taking it at home (sent to absent students\' parents)</div><textarea id="' + p + 'i" rows="3" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)">' + esc(instr) + '</textarea>' +
+    '<div class="sub" style="margin-top:6px">Instructions (to parents and the group when it\'s taken at home; the default is in Settings)</div><textarea id="' + p + 'i" data-auto="' + esc(q.instructions ? '' : instr) + '" rows="5" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)">' + esc(instr) + '</textarea>' +
+    '<div class="sub" style="margin-top:6px">Deadline when taken at home (empty: ' + quizHomeDays() + ' days after it\'s sent)</div><input id="' + p + 'd" type="date" value="' + esc(String(q.deadline || '').slice(0, 10)) + '">' +
     '<div class="sub" style="margin-top:6px">The quiz file (for absent students): from Tutoring Quizzes, uploaded in the last month</div>' +
     '<select id="' + p + 'ls" onchange="if (this.value !== \'*\') document.getElementById(\'' + p + 'l\').value = this.value"><option value="">Loading files…</option></select>' +
     '<input id="' + p + 'l" value="' + esc(q.link || '') + '" placeholder="or paste a link" style="margin-top:6px">' + quizFilesLoad(p, q.link || '');
@@ -2207,14 +2213,17 @@ function quizFilesLoad(p, current) {
   return '';
 }
 function quizDefaultCap() { var a = cached('adminData'), x = a && (a.settings || []).filter(function (r) { return r.key === 'quiz_default_cap'; })[0]; return Number(x && x.value) || 40; }
-// The instructions follow the cap ("The quiz is out of 40 marks" → the new cap).
+function quizHomeDays() { var a = cached('adminData'), x = a && (a.settings || []).filter(function (r) { return r.key === 'quiz_home_days'; })[0]; return Number(x && x.value) || 2; }
+// Untouched default instructions follow the marks; edited ones only get the new cap ("out of 40 marks").
 function quizCapToInstr(p) {
-  var v = document.getElementById(p + 'm').value, el = document.getElementById(p + 'i');
-  if (el && v) el.value = el.value.replace(/out of \d+ marks/i, 'out of ' + v + ' marks');
+  var cap = document.getElementById(p + 'm').value, av = document.getElementById(p + 'a').value, el = document.getElementById(p + 'i');
+  if (!el || !cap) return;
+  if (el.value === el.getAttribute('data-auto')) { el.value = quizDefaultInstr(cap, av); el.setAttribute('data-auto', el.value); }
+  else el.value = el.value.replace(/out of \d+ marks/i, 'out of ' + cap + ' marks');
 }
 function quizValues(p) {
   var on = document.getElementById(p); if (on && on.type === 'checkbox' && !on.checked) return null;
-  return { topic: document.getElementById(p + 't').value.trim(), max: document.getElementById(p + 'm').value, available: document.getElementById(p + 'a').value, instructions: document.getElementById(p + 'i').value.trim(), link: document.getElementById(p + 'l').value.trim() };
+  return { topic: document.getElementById(p + 't').value.trim(), max: document.getElementById(p + 'm').value, available: document.getElementById(p + 'a').value, instructions: document.getElementById(p + 'i').value.trim(), link: document.getElementById(p + 'l').value.trim(), deadline: (document.getElementById(p + 'd') || {}).value || '' };
 }
 function quizToggle() {
   var on = document.getElementById('sq').checked;
@@ -2315,8 +2324,18 @@ function saveQuizMarks() {
 function quizSendHome(k) {
   var h = TODO.quizzes.home[k];
   waSend(h.phone, h.message, 'Quiz sent home', { studentId: h.id, label: 'Quiz to ' + h.name + '\'s parent · ' + h.topic }, function () {
-    call('quizSentHome', { quizId: h.quizId, id: h.id }, function () {}, { optimistic: function () {}, quiet: true });
+    call('quizSentHome', { quizId: h.quizId, id: h.id, due: h.due }, function () {}, { optimistic: function () {}, quiet: true });
     patchLocal(function () { var t = cached('todo'); if (t && t.quizzes) t.quizzes.home = t.quizzes.home.filter(function (x) { return !(x.quizId === h.quizId && x.id === h.id); }); });
+    showTodo();
+  });
+}
+
+// A quiz past its due date and not uploaded: a reminder to the parent (offered again 2 days later).
+function quizRemind(k) {
+  var h = TODO.quizzes.overdue[k];
+  waSend(h.phone, h.message, 'Quiz reminder', { studentId: h.id, label: 'Quiz reminder · ' + h.name + ' · ' + h.topic }, function () {
+    call('quizReminderSent', { quizId: h.quizId, id: h.id }, function () {}, { optimistic: function () {}, quiet: true });
+    patchLocal(function () { var t = cached('todo'); if (t && t.quizzes && t.quizzes.overdue) t.quizzes.overdue = t.quizzes.overdue.filter(function (x) { return !(x.quizId === h.quizId && x.id === h.id); }); });
     showTodo();
   });
 }
@@ -2598,7 +2617,7 @@ function quizSubBox(d) {
       '<div class="item"><span>Submitted</span><b>' + done + ' of ' + o.rows.length + '</b></div>' +
       o.rows.map(function (r) {
         return '<div class="item"><span>' + esc(r.name) + (r.absent ? ' <span class="sub">(absent: at home)</span>' : '') + '</span>' +
-          (r.at ? '<a class="ok" href="' + esc(r.link) + '" target="_blank">' + esc(String(r.at).slice(11) || fmtDate(String(r.at).slice(0, 10)).slice(0, 5)) + (r.versions > 1 ? ' · ' + r.versions + ' versions' : '') + ' ›</a>' : '<span class="miss">Not yet</span>') + '</div>';
+          (r.at ? '<a class="ok" href="' + esc(r.link) + '" target="_blank">' + esc(String(r.at).slice(11) || fmtDate(String(r.at).slice(0, 10)).slice(0, 5)) + (r.versions > 1 ? ' · ' + r.versions + ' versions' : '') + (r.late ? ' · late' : '') + ' ›</a>' : '<span class="miss">Not yet</span>') + '</div>';
       }).join('') +
       '<div class="chips" style="margin-top:8px">' + (o.folder ? '<a class="chip act" href="' + esc(o.folder) + '" target="_blank">🗂️ Submissions folder</a>' : '') + '</div>' +
       '<button style="width:100%;margin-top:10px;color:var(--bad);border-color:var(--bad)" onclick="quizSubsClose(\'' + esc(o.id) + '\')">Close submissions</button>' +
@@ -2874,11 +2893,15 @@ function showTodo() {
     var qz = d.quizzes || { marks: [], home: [] };
     var qg = qz.groups || [];
     if (qz.home.length || qg.length) parts.push('<h2>Quizzes to send home</h2>' + qg.map(function (g, k) {
-      return '<div class="card"><div class="item"><span><b>' + esc(g.group) + '</b> takes the ' + esc(g.topic) + ' quiz at home<div class="sub">The instructions and upload link to the group (no quiz file)</div></span></div>' +
+      return '<div class="card"><div class="item"><span><b>' + esc(g.group) + '</b> takes the ' + esc(g.topic) + ' quiz at home<div class="sub">The instructions and upload link to the group (no quiz file) · due ' + esc(fmtDate(g.due)) + '</div></span></div>' +
         '<div class="actions"><button class="primary" onclick="quizTellGroup(' + k + ')">💬 Send to the group</button></div></div>';
     }).join('') + qz.home.map(function (h, k) {
-      return '<div class="card"><div class="item"><span><b>' + esc(h.name) + '</b> ' + (h.planned ? 'takes' : 'missed') + ' the ' + esc(h.topic) + ' quiz<div class="sub">' + esc(h.group) + (h.phone ? '' : ' · no parent WhatsApp: you pick the chat') + '</div></span></div>' +
+      return '<div class="card"><div class="item"><span><b>' + esc(h.name) + '</b> ' + (h.planned ? 'takes' : 'missed') + ' the ' + esc(h.topic) + ' quiz<div class="sub">' + esc(h.group) + ' · due ' + esc(fmtDate(h.due)) + (h.phone ? '' : ' · no parent WhatsApp: you pick the chat') + '</div></span></div>' +
         '<div class="actions"><button class="primary" onclick="quizSendHome(' + k + ')">💬 Send to the parent</button></div></div>';
+    }).join(''));
+    if ((qz.overdue || []).length) parts.push('<h2>Quizzes not uploaded</h2>' + qz.overdue.map(function (h, k) {
+      return '<div class="card"><div class="item"><span><b>' + esc(h.name) + '</b> · ' + esc(h.topic) + '<div class="sub">' + esc(h.group) + ' · was due ' + esc(fmtDate(h.due)) + (h.reminders ? ' · reminded before' : '') + '</div></span></div>' +
+        '<div class="actions"><button class="primary" onclick="quizRemind(' + k + ')">💬 Remind the parent</button></div></div>';
     }).join(''));
     if (qz.marks.length) parts.push('<h2>Quiz marks to enter</h2>' + qz.marks.map(function (q, k) {
       var left = q.students ? q.students.filter(function (p) { return p.mark === '' || p.mark === undefined; }).length : q.missing;
