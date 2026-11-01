@@ -3460,8 +3460,12 @@ function tutorRow(i) {
 }
 // A tutor's sessions not paid yet, oldest first, with the total. "Send payment message" opens WhatsApp with the message
 // and the link to their page (which lists these sessions); once you confirm it was sent, they are marked paid.
-function tutorUnpaid(i) {
-  var t = TUT.tutors[i], list = unpaidOf(t['Tutor ID']);
+// Up to the end of last month by default (you pay at the start of each month); this month's sessions can be added.
+var PAY_ALL = false;
+function tutorUnpaid(i, all) {
+  PAY_ALL = !!all;
+  var t = TUT.tutors[i], every = unpaidOf(t['Tutor ID'], true), list = unpaidOf(t['Tutor ID']), later = every.length - list.length;
+  if (!PAY_ALL && !list.length && later) return tutorUnpaid(i, true);
   if (!list.length) return sheet(t['Name'], '<div class="card sub">Nothing unpaid. ✓</div>');
   var p = payInfo(list);
   sheet(t['Name'] + ' · unpaid sessions', '<div class="sub">' + list.length + ' session' + (list.length > 1 ? 's' : '') + ', ' + esc(p.period) + '</div>' +
@@ -3469,12 +3473,16 @@ function tutorUnpaid(i) {
       return [esc(fmtDate(c['Date'])) + (c['Confirmed on'] ? '' : ' <span class="sub">*</span>'), esc(c.studentName), esc(c['Minutes'] || '–'), amt(c['Tutor fee'] || 0, c['Fee currency'] || 'EGP')];
     }).concat([['<b>Total</b>', '', '', '<b>' + p.total + '</b>']]), { wrap: [1], num: [2, 3] }) +
     (list.some(function (c) { return !c['Confirmed on']; }) ? '<div class="sub" style="margin:-4px 0 8px">* not confirmed by you yet</div>' : '') +
+    (later && !PAY_ALL ? '<div class="sub" style="margin:0 0 8px">' + later + ' more from ' + esc(monthName(today().slice(0, 7), true)) + ' (next payment). <a href="#" onclick="closeSheet();tutorUnpaid(' + i + ',true);return false">Include them</a></div>' :
+      PAY_ALL && every.length > unpaidOf(t['Tutor ID'], false).length && unpaidOf(t['Tutor ID'], false).length ? '<div class="sub" style="margin:0 0 8px">Including ' + esc(monthName(today().slice(0, 7), true)) + '. <a href="#" onclick="closeSheet();tutorUnpaid(' + i + ');return false">Only up to last month</a></div>' : '') +
     '<button class="primary" style="width:100%" onclick="payTutor(' + i + ', true)">💬 Send payment message (' + p.total + ')</button>' +
     '<button class="secondary" style="width:100%;margin-top:8px" onclick="payTutor(' + i + ', false)">Mark paid without a message</button>' +
     '<div class="sub" style="margin-top:6px">Send the money first. Once you confirm the message was sent, these sessions are marked paid and show on their page as your latest payment.</div>');
 }
-function unpaidOf(tid) {
-  return TUT.covers.filter(function (c) { return c['Tutor ID'] === tid && c['Status'] === 'Reported' && !c['Fee paid on']; })
+function unpaidOf(tid, all) {
+  var month = today().slice(0, 7);
+  if (all === undefined) all = PAY_ALL;
+  return TUT.covers.filter(function (c) { return c['Tutor ID'] === tid && c['Status'] === 'Reported' && !c['Fee paid on'] && (all || String(c['Date']).slice(0, 7) < month); })
     .sort(function (a, b) { return String(a['Date']).localeCompare(String(b['Date'])); });
 }
 function payInfo(list) {
