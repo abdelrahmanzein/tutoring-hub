@@ -3456,7 +3456,33 @@ function tutorRow(i) {
   cardSheet(t['Name'], '<dl><dt>WhatsApp</dt><dd>' + esc(t['WhatsApp'] || '–') + '</dd>' +
     '<dt>Student pays</dt><dd>' + (t['Student rate Egypt'] ? amt(t['Student rate Egypt'], 'EGP') : '–') + ' (Egypt) · ' + (t['Student rate abroad'] ? amt(t['Student rate abroad'], 'USD') : '–') + ' (abroad)</dd>' +
     '<dt>Tutor earns</dt><dd>' + (t['Earns Egypt'] ? amt(t['Earns Egypt'], 'EGP') : '–') + ' (Egypt student) · ' + (t['Earns abroad'] ? amt(t['Earns abroad'], 'EGP') : '–') + ' (student abroad)</dd><dt>Students (' + names.length + ')</dt><dd>' + (names.map(esc).join('<br>') || '– (assign them from a student\'s page → Cover tutor)') + '</dd></dl>' +
-    '<div class="actions"><button onclick="tutorForm(' + i + ')">Edit rates</button><button onclick="tutorLink(' + i + ')">Their link</button></div>');
+    '<div class="actions"><button class="primary" onclick="tutorUnpaid(' + i + ')">💵 Unpaid sessions</button><button onclick="tutorForm(' + i + ')">Edit rates</button><button onclick="tutorLink(' + i + ')">Their link</button></div>');
+}
+// A tutor's sessions not paid yet, oldest first, with the total: made to screenshot and send with the monthly payment.
+// Then "Mark all paid" records the payment for exactly these sessions.
+function tutorUnpaid(i) {
+  var t = TUT.tutors[i], list = TUT.covers.filter(function (c) { return c['Tutor ID'] === t['Tutor ID'] && c['Status'] === 'Reported' && !c['Fee paid on']; })
+    .sort(function (a, b) { return String(a['Date']).localeCompare(String(b['Date'])); });
+  if (!list.length) return sheet(t['Name'], '<div class="card sub">Nothing unpaid. ✓</div>');
+  var total = {}, open = list.filter(function (c) { return !c['Confirmed on']; }).length;
+  list.forEach(function (c) { var cur = c['Fee currency'] || 'EGP'; total[cur] = (total[cur] || 0) + (Number(c['Tutor fee']) || 0); });
+  var sum = Object.keys(total).map(function (cur) { return amt(total[cur], cur); }).join(' + ');
+  var from = fmtDate(list[0]['Date']), to = fmtDate(list[list.length - 1]['Date']);
+  sheet(t['Name'] + ' · unpaid sessions', '<div class="sub">' + list.length + ' session' + (list.length > 1 ? 's' : '') + ', ' + esc(from === to ? from : from + ' – ' + to) + ' · as of ' + esc(fmtDate(today())) + '</div>' +
+    table(['Date', 'Student', 'Min', 'Fee'], list.map(function (c) {
+      return [esc(fmtDate(c['Date'])) + (c['Confirmed on'] ? '' : ' <span class="sub">*</span>'), esc(c.studentName), esc(c['Minutes'] || '–'), amt(c['Tutor fee'] || 0, c['Fee currency'] || 'EGP')];
+    }).concat([['<b>Total</b>', '', '', '<b>' + sum + '</b>']]), { wrap: [1], num: [2, 3] }) +
+    (open ? '<div class="sub" style="margin:-4px 0 8px">* not confirmed by you yet</div>' : '') +
+    '<button class="primary" style="width:100%" onclick="payAllFees(\'' + esc(t['Tutor ID']) + '\', this)">✓ Mark all ' + list.length + ' paid (' + sum + ')</button>' +
+    '<div class="sub" style="margin-top:6px">Take the screenshot first: once marked paid, they leave this list.</div>');
+}
+function payAllFees(tid, btn) {
+  var list = TUT.covers.filter(function (c) { return c['Tutor ID'] === tid && c['Status'] === 'Reported' && !c['Fee paid on']; });
+  if (!confirm('Mark these ' + list.length + ' sessions as paid today?')) return;
+  btn.disabled = true; btn.textContent = '✓ Marked paid';
+  call('payTutorFee', { coverIds: list.map(function (c) { return c['Cover ID']; }) }, function () {}, { optimistic: function () {
+    list.forEach(function (c) { c['Fee paid on'] = today(); }); drawTutorsFrom(); } });
+  notice('Marked ' + list.length + ' paid.');
 }
 // Old entry point (Settings): draws nothing now; the tutors live under Sessions → Cover tutors.
 function drawTutors() {
