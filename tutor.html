@@ -15,6 +15,8 @@
     input, select, textarea { width:100%; margin-top:4px; padding:10px 12px; font:inherit; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--text); }
     button { width:100%; margin-top:12px; padding:12px; font:inherit; font-weight:600; border:0; border-radius:12px; background:var(--accent); color:#fff; } button:disabled { opacity:.6; }
     .ok { color:var(--ok); } .err { color:var(--bad); margin-top:8px; }
+    table.pay { width:100%; border-collapse:collapse; margin-top:8px; font-size:15px; } .pay td { padding:7px 0; border-bottom:1px solid var(--line); vertical-align:top; } .pay td.num { text-align:right; white-space:nowrap; padding-left:8px; }
+    .pay tr.tot td { border-bottom:0; font-weight:700; }
   </style>
 </head>
 <body>
@@ -119,7 +121,23 @@ function draw(p) {
         '<label>Homework set (if any)<input id="h' + i + '" value="' + esc(s.homework || '') + '"></label>' +
         '<label>Comments<textarea id="k' + i + '" rows="3">' + esc(s.comments || '') + '</textarea></label>' +
         '<button id="b' + i + '" onclick="fix(' + i + ')">Save changes</button><div id="e' + i + '" class="err"></div></details>';
-    }).join('') : '');
+    }).join('') : '') + payments(p.pay);
+  if (location.hash === '#pay' && document.getElementById('pay')) document.getElementById('pay').scrollIntoView();
+}
+
+// Payments: the latest payment and the sessions it covered, then any sessions not paid yet.
+function payments(pay) {
+  if (!pay || (!pay.last.length && !pay.unpaid.length)) return '';
+  var money = function (n, cur) { return Number(n).toLocaleString('en-GB') + ' ' + cur; };
+  var list = function (rows) {
+    var total = {};
+    rows.forEach(function (c) { total[c.currency] = (total[c.currency] || 0) + c.fee; });
+    return '<table class="pay">' + rows.map(function (c) { return '<tr><td>' + esc(d(c.date)) + '</td><td>' + esc(c.student) + '<div class="sub">' + esc(c.minutes) + ' min</div></td><td class="num">' + money(c.fee, c.currency) + '</td></tr>'; }).join('') +
+      '<tr class="tot"><td colspan="2">Total · ' + rows.length + ' session' + (rows.length > 1 ? 's' : '') + '</td><td class="num">' + Object.keys(total).map(function (k) { return money(total[k], k); }).join(' + ') + '</td></tr></table>';
+  };
+  return '<h2 id="pay" style="font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);margin:22px 0 8px">Payments</h2>' +
+    (pay.last.length ? '<div class="card"><b class="ok">✓ Paid on ' + esc(d(pay.lastOn)) + '</b>' + list(pay.last) + '</div>' : '') +
+    (pay.unpaid.length ? '<div class="card"><b>Not paid yet</b><div class="sub">Paid at the beginning of each month.</div>' + list(pay.unpaid) + '</div>' : '');
 }
 
 function logNew() {

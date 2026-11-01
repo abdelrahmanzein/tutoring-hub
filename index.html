@@ -3458,69 +3458,42 @@ function tutorRow(i) {
     '<dt>Tutor earns</dt><dd>' + (t['Earns Egypt'] ? amt(t['Earns Egypt'], 'EGP') : '–') + ' (Egypt student) · ' + (t['Earns abroad'] ? amt(t['Earns abroad'], 'EGP') : '–') + ' (student abroad)</dd><dt>Students (' + names.length + ')</dt><dd>' + (names.map(esc).join('<br>') || '– (assign them from a student\'s page → Cover tutor)') + '</dd></dl>' +
     '<div class="actions"><button class="primary" onclick="tutorUnpaid(' + i + ')">💵 Unpaid sessions</button><button onclick="tutorForm(' + i + ')">Edit rates</button><button onclick="tutorLink(' + i + ')">Their link</button></div>');
 }
-// A tutor's sessions not paid yet, oldest first, with the total: made to screenshot and send with the monthly payment.
-// Then "Mark all paid" records the payment for exactly these sessions.
+// A tutor's sessions not paid yet, oldest first, with the total. "Send payment message" opens WhatsApp with the message
+// and the link to their page (which lists these sessions); once you confirm it was sent, they are marked paid.
 function tutorUnpaid(i) {
-  var t = TUT.tutors[i], list = TUT.covers.filter(function (c) { return c['Tutor ID'] === t['Tutor ID'] && c['Status'] === 'Reported' && !c['Fee paid on']; })
-    .sort(function (a, b) { return String(a['Date']).localeCompare(String(b['Date'])); });
+  var t = TUT.tutors[i], list = unpaidOf(t['Tutor ID']);
   if (!list.length) return sheet(t['Name'], '<div class="card sub">Nothing unpaid. ✓</div>');
-  var total = {}, open = list.filter(function (c) { return !c['Confirmed on']; }).length;
-  list.forEach(function (c) { var cur = c['Fee currency'] || 'EGP'; total[cur] = (total[cur] || 0) + (Number(c['Tutor fee']) || 0); });
-  var sum = Object.keys(total).map(function (cur) { return amt(total[cur], cur); }).join(' + ');
-  var from = fmtDate(list[0]['Date']), to = fmtDate(list[list.length - 1]['Date']);
-  sheet(t['Name'] + ' · unpaid sessions', '<div class="sub">' + list.length + ' session' + (list.length > 1 ? 's' : '') + ', ' + esc(from === to ? from : from + ' – ' + to) + ' · as of ' + esc(fmtDate(today())) + '</div>' +
+  var p = payInfo(list);
+  sheet(t['Name'] + ' · unpaid sessions', '<div class="sub">' + list.length + ' session' + (list.length > 1 ? 's' : '') + ', ' + esc(p.period) + '</div>' +
     table(['Date', 'Student', 'Min', 'Fee'], list.map(function (c) {
       return [esc(fmtDate(c['Date'])) + (c['Confirmed on'] ? '' : ' <span class="sub">*</span>'), esc(c.studentName), esc(c['Minutes'] || '–'), amt(c['Tutor fee'] || 0, c['Fee currency'] || 'EGP')];
-    }).concat([['<b>Total</b>', '', '', '<b>' + sum + '</b>']]), { wrap: [1], num: [2, 3] }) +
-    (open ? '<div class="sub" style="margin:-4px 0 8px">* not confirmed by you yet</div>' : '') +
-    '<button class="primary" style="width:100%" onclick="payAllFees(\'' + esc(t['Tutor ID']) + '\', this)">✓ Mark all ' + list.length + ' paid (' + sum + ')</button>' +
-    '<div class="sub" style="margin-top:6px">Take the screenshot first: once marked paid, they leave this list.</div>');
+    }).concat([['<b>Total</b>', '', '', '<b>' + p.total + '</b>']]), { wrap: [1], num: [2, 3] }) +
+    (list.some(function (c) { return !c['Confirmed on']; }) ? '<div class="sub" style="margin:-4px 0 8px">* not confirmed by you yet</div>' : '') +
+    '<button class="primary" style="width:100%" onclick="payTutor(' + i + ', true)">💬 Send payment message (' + p.total + ')</button>' +
+    '<button class="secondary" style="width:100%;margin-top:8px" onclick="payTutor(' + i + ', false)">Mark paid without a message</button>' +
+    '<div class="sub" style="margin-top:6px">Send the money first. Once you confirm the message was sent, these sessions are marked paid and show on their page as your latest payment.</div>');
 }
-function payAllFees(tid, btn) {
-  var list = TUT.covers.filter(function (c) { return c['Tutor ID'] === tid && c['Status'] === 'Reported' && !c['Fee paid on']; });
-  if (!confirm('Mark these ' + list.length + ' sessions as paid today?')) return;
-  btn.disabled = true; btn.textContent = '✓ Marked paid';
-  call('payTutorFee', { coverIds: list.map(function (c) { return c['Cover ID']; }) }, function () {}, { optimistic: function () {
-    list.forEach(function (c) { c['Fee paid on'] = today(); }); drawTutorsFrom(); } });
-  notice('Marked ' + list.length + ' paid.');
+function unpaidOf(tid) {
+  return TUT.covers.filter(function (c) { return c['Tutor ID'] === tid && c['Status'] === 'Reported' && !c['Fee paid on']; })
+    .sort(function (a, b) { return String(a['Date']).localeCompare(String(b['Date'])); });
 }
-// Old entry point (Settings): draws nothing now; the tutors live under Sessions → Cover tutors.
-function drawTutors() {
-  if (SESS_MODE === 'cover' && document.querySelector('.seg')) return showToday();
-  var box = document.getElementById('tutors');
-  if (box) box.innerHTML = '<h2>Cover tutors</h2><div class="card"><a href="#" onclick="SESS_MODE=\'cover\';openTab(\'Sessions\');return false">Now under Sessions → Cover tutors ›</a></div>';
+function payInfo(list) {
+  var total = {};
+  list.forEach(function (c) { var cur = c['Fee currency'] || 'EGP'; total[cur] = (total[cur] || 0) + (Number(c['Tutor fee']) || 0); });
+  var from = fmtDate(list[0]['Date']), to = fmtDate(list[list.length - 1]['Date']);
+  return { total: Object.keys(total).map(function (cur) { return amt(total[cur], cur); }).join(' + '), period: from === to ? from : from + ' – ' + to };
 }
-// Add or edit a tutor: per session, what a student pays and what the tutor earns (Egypt in EGP, abroad in USD).
-function tutorForm(i) {
-  var t = typeof i === 'number' ? TUT.tutors[i] : {};
-  var num = function (id, v, ph) { return '<input id="' + id + '" type="number" inputmode="decimal" value="' + esc(v || '') + '" placeholder="' + ph + '">'; };
-  sheet(t['Name'] ? 'Edit ' + t['Name'] : 'New cover tutor', '<div class="sub">Name</div><input id="tn" value="' + esc(t['Name'] || '') + '"><div class="sub" style="margin-top:8px">WhatsApp</div><input id="tw" type="tel" value="' + esc(t['WhatsApp'] || '') + '">' +
-    '<div class="sub" style="margin-top:10px"><b>Student pays</b> per session</div><div class="filters" style="margin:4px 0 0">' + num('tre', t['Student rate Egypt'], 'Egypt (EGP)') + num('tra', t['Student rate abroad'], 'Abroad (USD)') + '</div>' +
-    '<div class="sub" style="margin-top:10px"><b>Tutor earns</b> per session, always in EGP</div><div class="filters" style="margin:4px 0 0">' + num('tee', t['Earns Egypt'], 'Egypt student (EGP)') + num('tea', t['Earns abroad'], 'Student abroad (EGP)') + '</div>' +
-    '<div class="sub" style="margin-top:6px">The student\'s currency decides which applies (EGP students: Egypt; USD students: abroad). Students abroad are charged in USD; the tutor still earns in EGP.</div>' +
-    '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);saveTutor(\'' + esc(t['Tutor ID'] || '') + '\')">' + (t['Name'] ? 'Save' : 'Add') + '</button>');
-}
-function saveTutor(id) {
-  var v = function (x) { return document.getElementById(x).value.trim(); };
-  var a = { id: id, name: v('tn'), whatsapp: v('tw'), rateEg: v('tre'), rateAb: v('tra'), earnEg: v('tee'), earnAb: v('tea') };
-  if (!a.name) return notice('Enter the tutor\'s name.');
-  call('saveTutor', a, function () { closeSheet(); notice(id ? 'Saved.' : 'Added. Their link is ready under Link.'); drawTutors(); });
-}
-function tutorLink(i) {
-  var t = TUT.tutors[i];
-  TLINK = t.link;
-  sheet(t['Name'], '<div class="sub">Their private link: they see only the sessions you book for them (first name and group), and report each one. No money or other students.</div>' +
-    '<div class="card" style="word-break:break-all;font-size:13px">' + esc(t.link) + '</div>' +
-    '<button class="primary" style="width:100%" onclick="waSend(\'' + esc(String(t['WhatsApp'] || '').replace(/[^0-9]/g, '')) + '\', \'Hi ' + esc(t['Name'].split(' ')[0]) + ', here is your link for the cover sessions (please report each session there after it\\\'s done): \' + TLINK, \'Tutor link\', { close: true })">💬 Send on WhatsApp</button>');
-}
-var TLINK = '';
-function payFee(i) {
-  var c = TUT.covers[i];
-  call('payTutorFee', { coverId: c['Cover ID'] }, function () {}, { optimistic: function () { c['Fee paid on'] = today(); drawTutorsFrom(); } });
-}
-function approveComment(i, on) {
-  var c = TUT.covers[i];
-  call('approveCoverComment', { coverId: c['Cover ID'], approve: on }, function () {}, { optimistic: function () { c['Comment approved'] = on; drawTutorsFrom(); } });
+function payTutor(i, message) {
+  var t = TUT.tutors[i], list = unpaidOf(t['Tutor ID']), p = payInfo(list);
+  var done = function () {
+    call('payTutorFee', { coverIds: list.map(function (c) { return c['Cover ID']; }) }, function () {}, { optimistic: function () {
+      list.forEach(function (c) { c['Fee paid on'] = today(); }); drawTutorsFrom(); } });
+    closeSheet(); notice('Marked ' + list.length + ' session' + (list.length > 1 ? 's' : '') + ' paid.');
+  };
+  if (!message) { if (confirm('Mark these ' + list.length + ' sessions as paid today, without a message?')) done(); return; }
+  var text = String(TUT.payMessage || '').replace(/\{(\w+)\}/g, function (m, k) {
+    return { first: t['Name'].split(' ')[0], total: p.total, count: list.length, s: list.length > 1 ? 's' : '', period: p.period, link: t.link + '#pay' }[k] || m; });
+  waSend(t['WhatsApp'], text, 'Tutor payment', {}, done);
 }
 function drawTutorsFrom() { var d = TUT; CACHE['tutors|{}'] = { data: d, at: Date.now(), snap: true }; drawTutors(); }
 
