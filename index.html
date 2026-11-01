@@ -501,11 +501,32 @@ function waitForSave(id, action, opts) {
 }
 
 // Opens WhatsApp with a message (to a number, or you pick the chat) and notes it in the Messages log.
-function waSend(phone, text, kind, ids) {
+// Every WhatsApp message from the hub goes through here (or groupSend). Opening WhatsApp isn't proof the message went
+// (1 Nov 2026), so it's logged as "Opened" and you're asked "Did you send it?": only "Yes, sent" logs it as sent and
+// runs onSent (e.g. it leaves To do). "Not yet" leaves everything as it was.
+// ids: {studentId, prospectId, label (what the question shows), close (also close the message's own sheet once sent)}
+function waSend(phone, text, kind, ids, onSent) {
   var num = String(phone || '').replace(/[^0-9]/g, '');
   window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(text), '_blank');
+  if (!num) notice('No number saved: pick the chat in WhatsApp.');
+  waAsk(num, text, kind, ids, onSent);
+}
+var WA_PENDING = null;
+function waAsk(to, text, kind, ids, onSent) {
   ids = ids || {};
-  call('logMessage', { kind: kind, text: text, to: num, studentId: ids.studentId || '', prospectId: ids.prospectId || '' }, function () {}, { optimistic: function () {}, quiet: true });
+  var ev = window.event, from = ids.close && ev && ev.target && ev.target.closest ? ev.target.closest('.sheet-bg') : null;
+  var msg = { id: 'M-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), kind: kind, text: text, to: to, studentId: ids.studentId || '', prospectId: ids.prospectId || '' };
+  call('logMessage', Object.assign({ status: 'Opened' }, msg), function () {}, { optimistic: function () {}, quiet: true });
+  WA_PENDING = { msg: msg, onSent: onSent, from: from };
+  sheet('Did you send it?', '<div class="sub">' + esc(ids.label || kind) + '</div>' +
+    '<div class="actions"><button class="primary" onclick="this.closest(\'.sheet-bg\').remove();waSent()">Yes, sent</button><button onclick="this.closest(\'.sheet-bg\').remove()">Not yet</button></div>');
+}
+function waSent() {
+  var p = WA_PENDING; WA_PENDING = null;
+  if (!p) return;
+  call('logMessage', Object.assign({}, p.msg, { status: 'Sent' }), function () {}, { optimistic: function () {}, quiet: true });
+  if (p.from && p.from.parentNode) p.from.remove();
+  if (p.onSent) p.onSent();
 }
 
 // Shows a page (e.g. what a family sees) inside the app, full screen, with a Close button; the page itself is unchanged.
@@ -520,13 +541,13 @@ function openInApp(url, title) {
 
 // Group messages: WhatsApp can't open a group chat with the text already typed, so with the group's invite link (Groups
 // › Details) the message is copied and the group opened, ready to paste; without one, WhatsApp opens to pick the chat.
-function groupSend(group, text, kind) {
+function groupSend(group, text, kind, onSent) {
   var g = cached('group', { group: group }), link = g && g.group && g.group['WhatsApp link'];
+  var pick = function () { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); };
   if (link && /chat\.whatsapp\.com|wa\.me/.test(link)) {
-    var open = function () { window.open(link, '_blank'); };
-    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { notice('Message copied: paste it in the group.'); open(); }, function () { waSend('', text, kind); });
-    call('logMessage', { kind: kind, text: text, to: 'group ' + group }, function () {}, { optimistic: function () {}, quiet: true });
-  } else waSend('', text, kind);
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { notice('Message copied: paste it in the group.'); window.open(link, '_blank'); }, pick);
+  } else pick();
+  waAsk('group ' + group, text, kind, { label: kind + ' · ' + group }, onSent);
 }
 
 // Send reminder: the session time, the homework, or both.
@@ -1405,7 +1426,7 @@ function createJoin() {
 function showJoinLink(r) {
   sheet('Joining form', '<div class="sub" style="margin-bottom:8px">Send this to the parent. When they submit, it shows under Students → Joining forms.</div>' +
     '<div class="card" style="white-space:pre-wrap;font-size:14px">' + esc(r.message) + '</div>' +
-    '<button class="primary" style="width:100%" onclick="window.open(\'https://wa.me/?text=\' + encodeURIComponent(JOIN_MSG), \'_blank\')">💬 Send on WhatsApp</button>' +
+    '<button class="primary" style="width:100%" onclick="waSend(\'\', JOIN_MSG, \'Joining form\', { close: true })">💬 Send on WhatsApp</button>' +
     '<button style="width:100%;margin-top:8px" onclick="navigator.clipboard.writeText(JOIN_LINK).then(function(){notice(\'Link copied.\');})">Copy link only</button>');
   JOIN_MSG = r.message; JOIN_LINK = r.link;
 }
@@ -1451,9 +1472,9 @@ function saveNewStudent(confirmSimilar) {
     }
     showProfile(r.added); notice('Added. They are in the group from ' + fmtDate(args.since) + '.');
     if (r.welcome) {
-      WELCOME = r.welcome;
+      WELCOME = Object.assign({ id: r.added }, r.welcome);
       sheet('Welcome message', '<div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(r.welcome.text) + '</div>' +
-        '<button class="primary" style="width:100%" onclick="window.open(\'https://wa.me/\' + (WELCOME.phone || \'\') + \'?text=\' + encodeURIComponent(WELCOME.text), \'_blank\')">💬 Send on WhatsApp</button>' +
+        '<button class="primary" style="width:100%" onclick="waSend(WELCOME.phone, WELCOME.text, \'Welcome\', { studentId: WELCOME.id, close: true })">💬 Send on WhatsApp</button>' +
         '<div class="sub" style="margin-top:6px">Add them to the group\'s WhatsApp yourself.</div>');
     }
   });
@@ -1466,7 +1487,7 @@ function sendParentPage(id) {
   PAGE_MSG = { phone: i['Parent WhatsApp'] || '', id: id, text: 'السلام عليكم،\nهذه صفحة ' + ar + ' المحدَّثة، وفيها الموقف المالي الحالي والحضور والواجبات ونتائج الاختبارات.\n\n' +
     'Hello,\nHere is ' + first + '\'s up-to-date page, with the current financials, attendance, homework and quiz results.\n\n' + p.detail.livePage };
   sheet('Send the parent page', '<div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(PAGE_MSG.text) + '</div>' +
-    '<button class="primary" style="width:100%" onclick="waSend(PAGE_MSG.phone, PAGE_MSG.text, \'Parent page\', { studentId: PAGE_MSG.id })">💬 Send on WhatsApp</button>' +
+    '<button class="primary" style="width:100%" onclick="waSend(PAGE_MSG.phone, PAGE_MSG.text, \'Parent page\', { studentId: PAGE_MSG.id, close: true })">💬 Send on WhatsApp</button>' +
     '<div class="sub" style="margin-top:6px">' + (PAGE_MSG.phone ? 'Opens the chat with ' + esc(PAGE_MSG.phone) + '.' : 'No parent WhatsApp saved: you pick the chat.') + '</div>');
 }
 
@@ -1806,7 +1827,7 @@ function saveNotHeld(i) {
     confirmed: function (r) {
       NH_MSG = r.message;
       sheet('Tell the group?', '<div class="card" style="white-space:pre-wrap;font-size:14px">' + esc(r.message) + '</div>' +
-        '<button class="primary" style="width:100%" onclick="window.open(\'https://wa.me/?text=\' + encodeURIComponent(NH_MSG), \'_blank\')">💬 Send on WhatsApp</button>');
+        '<button class="primary" style="width:100%" onclick="waSend(\'\', NH_MSG, \'Session not held (group)\', { close: true })">💬 Send on WhatsApp</button>');
     }
   });
 }
@@ -2109,15 +2130,11 @@ function sendRecording(i) {
 }
 
 // Sends an absent student the recording on WhatsApp (sharing it so they can open it). It counts as sent only when you
-// confirm it: opening WhatsApp doesn't mean the message went. Until then it stays in To do and on the session's card.
-var REC_PENDING = null;
+// confirm it (waSend asks); until then it stays in To do and on the session's card.
 function recSend(o) {
-  waSend(o.phone, 'Hi ' + o.first + ', here is the recording of the ' + o.group + ' session you missed (' + fmtDate(o.date) + '):\n' + o.links.join('\n') + '\nPlease watch it before the next session.', 'Recording to absent student (opened)', { studentId: o.id });
   o.links.forEach(function (u) { var m = u.match(/\/d\/([-\w]+)/); if (m) call('shareRecording', { fileId: m[1] }, function () {}, { optimistic: function () {}, quiet: true }); });
-  if (!o.phone) notice('No WhatsApp number saved: pick the chat in WhatsApp.');
-  REC_PENDING = o;
-  sheet('Did you send it?', '<div class="sub">The recording to ' + esc(o.first) + ' · ' + esc(o.group) + ' · ' + esc(fmtDate(o.date)) + '</div>' +
-    '<div class="actions"><button class="primary" onclick="closeSheet();recDone(REC_PENDING)">Yes, sent</button><button onclick="closeSheet()">Not yet</button></div>');
+  waSend(o.phone, 'Hi ' + o.first + ', here is the recording of the ' + o.group + ' session you missed (' + fmtDate(o.date) + '):\n' + o.links.join('\n') + '\nPlease watch it before the next session.', 'Recording to absent student',
+    { studentId: o.id, label: 'Recording to ' + o.first + ' · ' + o.group + ' · ' + fmtDate(o.date) }, function () { recDone(o); });
 }
 // Records it as sent (or, undo, as not sent after all: it comes back in To do).
 function recDone(o, undo) {
@@ -2294,13 +2311,14 @@ function saveQuizMarks() {
   } });
 }
 
-// Sends the quiz to an absent student's parent (WhatsApp, your instructions) and notes it.
+// Sends the quiz to an absent student's parent (WhatsApp, your instructions); noted (and out of To do) once you confirm.
 function quizSendHome(k) {
   var h = TODO.quizzes.home[k];
-  waSend(h.phone, h.message, 'Quiz sent home', { studentId: h.id });
-  call('quizSentHome', { quizId: h.quizId, id: h.id }, function () {}, { optimistic: function () {}, quiet: true });
-  patchLocal(function () { var t = cached('todo'); if (t && t.quizzes) t.quizzes.home = t.quizzes.home.filter(function (x) { return !(x.quizId === h.quizId && x.id === h.id); }); });
-  showTodo();
+  waSend(h.phone, h.message, 'Quiz sent home', { studentId: h.id, label: 'Quiz to ' + h.name + '\'s parent · ' + h.topic }, function () {
+    call('quizSentHome', { quizId: h.quizId, id: h.id }, function () {}, { optimistic: function () {}, quiet: true });
+    patchLocal(function () { var t = cached('todo'); if (t && t.quizzes) t.quizzes.home = t.quizzes.home.filter(function (x) { return !(x.quizId === h.quizId && x.id === h.id); }); });
+    showTodo();
+  });
 }
 
 // A student's quizzes (their page): raw mark and level, like the family sees, plus where they stand.
@@ -2927,7 +2945,7 @@ function nudge(hi, pi) {
   var h = TODO.homework[hi], p = h.missing[pi];
   var text = 'Hi ' + p.first + ', I haven\'t seen homework ' + h.title + ' in the folder yet. If you upload it by tonight, it will still count. ' +
     'Please send me a message once it\'s uploaded so I can check it 🙂' + (h.link ? '\n' + h.link : '');
-  waSend(p.phone, text, 'Homework nudge', { studentId: p.id });
+  waSend(p.phone, text, 'Homework nudge', { studentId: p.id, label: 'Homework nudge · ' + p.first + ' · ' + h.title });
 }
 
 // Sends an absent student the recording; it leaves To do once you confirm you sent it.
@@ -3071,10 +3089,7 @@ function previewPay(list, i) {
 // Opens WhatsApp with the request; it's recorded as sent only when you confirm you sent it.
 function sendRequest(i) {
   var r = TODO.payments.ready[i];
-  waSend(r.phone, r.message, 'Payment request (opened)', { studentId: r.id });
-  if (!r.phone) notice('No WhatsApp number saved: pick the chat in WhatsApp.');
-  sheet('Did you send it?', '<div class="sub">' + esc(r.name) + ' · ' + amt(r.amount, r.currency) + '</div>' +
-    '<div class="actions"><button class="primary" onclick="closeSheet();confirmRequest(' + i + ')">Yes, sent</button><button onclick="closeSheet()">Not yet</button></div>');
+  waSend(r.phone, r.message, 'Payment request', { studentId: r.id, label: 'Payment request · ' + r.name + ' · ' + amt(r.amount, r.currency) }, function () { confirmRequest(i); });
 }
 function confirmRequest(i) {
   var r = TODO.payments.ready[i];
@@ -3091,9 +3106,7 @@ function confirmRequest(i) {
 
 function sendReminderPay(i) {
   var r = TODO.payments.reminders[i];
-  waSend(r.phone, r.message, 'Payment reminder (opened)', { studentId: r.id });
-  sheet('Did you send it?', '<div class="sub">Reminder to ' + esc(r.name) + '</div>' +
-    '<div class="actions"><button class="primary" onclick="closeSheet();confirmReminder(' + i + ')">Yes, sent</button><button onclick="closeSheet()">Not yet</button></div>');
+  waSend(r.phone, r.message, 'Payment reminder', { studentId: r.id, label: 'Payment reminder · ' + r.name }, function () { confirmReminder(i); });
 }
 function confirmReminder(i) {
   var r = TODO.payments.reminders[i];
@@ -3379,7 +3392,7 @@ function tutorLink(i) {
   TLINK = t.link;
   sheet(t['Name'], '<div class="sub">Their private link: they see only the sessions you book for them (first name and group), and report each one. No money or other students.</div>' +
     '<div class="card" style="word-break:break-all;font-size:13px">' + esc(t.link) + '</div>' +
-    '<button class="primary" style="width:100%" onclick="waSend(\'' + esc(String(t['WhatsApp'] || '').replace(/[^0-9]/g, '')) + '\', \'Hi ' + esc(t['Name'].split(' ')[0]) + ', here is your link for the cover sessions (please report each session there after it\\\'s done): \' + TLINK, \'Tutor link\')">💬 Send on WhatsApp</button>');
+    '<button class="primary" style="width:100%" onclick="waSend(\'' + esc(String(t['WhatsApp'] || '').replace(/[^0-9]/g, '')) + '\', \'Hi ' + esc(t['Name'].split(' ')[0]) + ', here is your link for the cover sessions (please report each session there after it\\\'s done): \' + TLINK, \'Tutor link\', { close: true })">💬 Send on WhatsApp</button>');
 }
 var TLINK = '';
 function payFee(i) {
@@ -3511,13 +3524,13 @@ function bookTrial(i) {
 
 // Opens WhatsApp with a ready message, and moves the stage on if given.
 function prospectSend(i, kind, next) {
-  var p = PROS[i];
-  waSend(p.phone, p.messages[kind], kind === 'trial' ? 'Trial invitation' : 'Details', { prospectId: p['Prospect ID'] });
-  if (!p.phone) notice('No number saved: pick the chat in WhatsApp.');
-  if (next && p['Stage'] !== next) call('updateProspect', { id: p['Prospect ID'], changes: { 'Stage': next } }, function () {}, { optimistic: function () {
-    patchLocal(function () { var l = cached('prospects'); if (l) l.forEach(function (x) { if (x['Prospect ID'] === p['Prospect ID']) x['Stage'] = next; }); });
-    closeSheet(); if (refreshView === showTodo) showTodo(); else showStudents();
-  } });
+  var p = PROS[i], what = kind === 'trial' ? 'Trial invitation' : 'Details';
+  waSend(p.phone, p.messages[kind], what, { prospectId: p['Prospect ID'], label: what + ' · ' + p['Student name'] }, function () {
+    if (next && p['Stage'] !== next) call('updateProspect', { id: p['Prospect ID'], changes: { 'Stage': next } }, function () {}, { optimistic: function () {
+      patchLocal(function () { var l = cached('prospects'); if (l) l.forEach(function (x) { if (x['Prospect ID'] === p['Prospect ID']) x['Stage'] = next; }); });
+      if (refreshView === showTodo) showTodo(); else showStudents();
+    } });
+  });
 }
 
 // The decision after the trial.
