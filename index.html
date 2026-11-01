@@ -292,7 +292,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['recordingSent', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['removeFromSession', 'undoLastMove', 'leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -1705,6 +1705,10 @@ function openSessRow(k) {
     var l = r.s, list = function (a) { return a.length ? a.map(esc).join(', ') : '–'; };
     cardSheet(l.group + ' · ' + fmtDate(l.day), (l.title ? '<div><b>' + esc(l.title) + '</b></div>' : '') +
       (l.status === 'Logged' ? '<dl style="margin-top:6px"><dt>Came (' + l.came.length + ')</dt><dd>' + list(l.came) + '</dd><dt>Absent (' + l.absent.length + ')</dt><dd>' + list(l.absent) + '</dd></dl>' +
+        ((l.recs || []).length ? '<div style="margin-top:6px">🎥 Recording to absent students:</div>' + l.recs.map(function (a, j) {
+          return '<div class="item" style="margin-top:4px"><span>' + esc(a.first) + ': ' + (a.sent ? '✓ sent ' + esc(fmtDate(String(a.sent).slice(0, 10))) : '<span class="miss">not sent</span>') + '</span>' +
+            (a.sent ? '<button class="small secondary" style="width:auto" onclick="recFromLog(' + k + ',' + j + ',true)">Not sent after all</button>'
+              : l.recording.length ? '<button class="primary" style="width:auto;padding:6px 12px" onclick="recFromLog(' + k + ',' + j + ')">💬 Send</button>' : '<span class="sub">no recording yet</span>') + '</div>'; }).join('') : '') +
         (l.notes ? '<div style="margin-top:6px">📝 Notes: ' + (l.notes === 'not sent' ? '<span class="miss">not sent yet</span>' : 'sent ' + esc(fmtDate(l.notes))) + '</div>' : '') +
         '<div class="chips">' + (l.recording.length ? l.recording.map(function (u, n) { return '<a class="chip act" href="' + esc(u) + '" target="_blank">🎥 Recording' + (l.recording.length > 1 ? ' ' + (n + 1) : '') + '</a>'; }).join('') : '<span class="sub">No recording found yet.</span>') + '</div>'
         : '<div class="sub">Didn\'t happen' + (l.note ? ': ' + esc(l.note) : '') + '</div>') +
@@ -2089,8 +2093,8 @@ function afterLogged(r) {
     (r.homeworkError ? ' Homework folder not created: ' + esc(r.homeworkError) + '.' : '') + '</div>';
   if (r.absent && r.absent.length) {
     html += r.recording && r.recording.length ? '<div class="chips" style="margin-top:10px">' + r.recording.map(function (x, k) { return '<a class="chip act" href="' + esc(x.url) + '" target="_blank">🎥 Recording' + (r.recording.length > 1 ? ' ' + (k + 1) : '') + '</a>'; }).join('') + '</div>' +
-      r.absent.map(function (a, i) { return '<button style="width:100%;margin-top:6px" onclick="sendRecording(' + i + ')">💬 Send the recording to ' + esc(a.first) + (a.phone ? '' : ' (pick the chat)') + '</button>'; }).join('')
-      : '<div class="sub" style="margin-top:10px">No recording found yet (Meet takes a while to save it). Absent: ' + r.absent.map(function (a) { return esc(a.first); }).join(', ') + '.</div>';
+      r.absent.map(function (a, i) { return '<button style="width:100%;margin-top:6px" data-rec="' + esc(r.sessionId + '|' + a.id) + '" onclick="sendRecording(' + i + ')">💬 Send the recording to ' + esc(a.first) + (a.phone ? '' : ' (pick the chat)') + '</button>'; }).join('')
+      : '<div class="sub" style="margin-top:10px">No recording found yet (Meet takes a while to save it). It\'ll be in To do for ' + r.absent.map(function (a) { return esc(a.first); }).join(', ') + ' once it\'s saved.</div>';
   }
   // The notes PDF for the group's WhatsApp (also stays in To do until ticked).
   var grp = r.sessionId.replace(/^\d{4}-\d{2}-\d{2} /, '').replace(/ \d{2}:\d{2}$/, ''), g = cached('group', { group: grp }), wa = g && g.group && g.group['WhatsApp link'];
@@ -2100,9 +2104,42 @@ function afterLogged(r) {
   sheet('Logged ' + r.sessionId, html);
 }
 function sendRecording(i) {
-  var a = LOGGED.absent[i], rec = LOGGED.recording;
-  rec.forEach(function (x) { call('shareRecording', { fileId: x.id }, function () {}, { optimistic: function () {}, quiet: true }); });
-  waSend(a.phone, 'Hi ' + a.first + ', here is the recording of the session you missed:\n' + rec.map(function (x) { return x.url; }).join('\n') + '\nPlease watch it before the next session.', 'Recording to absent student', { studentId: a.id });
+  var a = LOGGED.absent[i], grp = LOGGED.sessionId.replace(/^\d{4}-\d{2}-\d{2} /, '').replace(/ \d{2}:\d{2}$/, '');
+  recSend({ sessionId: LOGGED.sessionId, id: a.id, first: a.first, phone: a.phone, group: grp, date: LOGGED.sessionId.slice(0, 10), links: LOGGED.recording.map(function (x) { return x.url; }) });
+}
+
+// Sends an absent student the recording on WhatsApp (sharing it so they can open it). It counts as sent only when you
+// confirm it: opening WhatsApp doesn't mean the message went. Until then it stays in To do and on the session's card.
+var REC_PENDING = null;
+function recSend(o) {
+  waSend(o.phone, 'Hi ' + o.first + ', here is the recording of the ' + o.group + ' session you missed (' + fmtDate(o.date) + '):\n' + o.links.join('\n') + '\nPlease watch it before the next session.', 'Recording to absent student (opened)', { studentId: o.id });
+  o.links.forEach(function (u) { var m = u.match(/\/d\/([-\w]+)/); if (m) call('shareRecording', { fileId: m[1] }, function () {}, { optimistic: function () {}, quiet: true }); });
+  if (!o.phone) notice('No WhatsApp number saved: pick the chat in WhatsApp.');
+  REC_PENDING = o;
+  sheet('Did you send it?', '<div class="sub">The recording to ' + esc(o.first) + ' · ' + esc(o.group) + ' · ' + esc(fmtDate(o.date)) + '</div>' +
+    '<div class="actions"><button class="primary" onclick="closeSheet();recDone(REC_PENDING)">Yes, sent</button><button onclick="closeSheet()">Not yet</button></div>');
+}
+// Records it as sent (or, undo, as not sent after all: it comes back in To do).
+function recDone(o, undo) {
+  call('recordingSent', { sessionId: o.sessionId, studentId: o.id, undo: !!undo }, function () {}, { optimistic: function () {
+    patchLocal(function () {
+      var t = cached('todo');
+      if (t && t.recordings) {
+        t.recordings = t.recordings.filter(function (x) { return !(x.id === o.id && x.sessionId === o.sessionId); });
+        if (undo && o.links.length) t.recordings.push(o);
+      }
+      (cached('sessionLog') || []).forEach(function (l) { if (l.sessionId === o.sessionId) (l.recs || []).forEach(function (x) { if (x.id === o.id) x.sent = undo ? '' : today(); }); });
+    });
+    document.querySelectorAll('[data-rec="' + o.sessionId + '|' + o.id + '"]').forEach(function (b) { b.disabled = true; b.textContent = '✓ Sent to ' + o.first; });
+    notice(undo ? 'Marked as not sent: it\'s back in To do.' : 'Recording to ' + o.first + ' marked as sent.');
+    if (refreshView) refreshView();
+  } });
+}
+// From a held session's card. j: the absent student.
+function recFromLog(k, j, undo) {
+  var l = SESS_ROWS[k].s, a = l.recs[j];
+  var o = { sessionId: l.sessionId, id: a.id, first: a.first, phone: a.phone, group: l.group, date: l.day, links: l.recording };
+  if (undo) recDone(o, true); else recSend(o);
 }
 
 // ---------- Quizzes ----------
@@ -2893,14 +2930,8 @@ function nudge(hi, pi) {
   waSend(p.phone, text, 'Homework nudge', { studentId: p.id });
 }
 
-// Sends an absent student the recording (sharing it so they can open it) and logs it.
-function sendRec(i) {
-  var r = TODO.recordings[i];
-  waSend(r.phone, 'Hi ' + r.first + ', here is the recording of the ' + r.group + ' session you missed (' + fmtDate(r.date) + '):\n' + r.links.join('\n') + '\nPlease watch it before the next session.', 'Recording to absent student', { studentId: r.id });
-  r.links.forEach(function (u) { var m = u.match(/\/d\/([-\w]+)/); if (m) call('shareRecording', { fileId: m[1] }, function () {}, { optimistic: function () {}, quiet: true }); });
-  patchLocal(function () { var t = cached('todo'); if (t) t.recordings = t.recordings.filter(function (x) { return !(x.id === r.id && x.sessionId === r.sessionId); }); });
-  showTodo();
-}
+// Sends an absent student the recording; it leaves To do once you confirm you sent it.
+function sendRec(i) { recSend(TODO.recordings[i]); }
 
 // Makes a homework folder that failed when the session was logged (or dismisses the note).
 function retryFolder(k, dismiss) {
