@@ -2121,7 +2121,7 @@ function afterLogged(r) {
   var grp = r.sessionId.replace(/^\d{4}-\d{2}-\d{2} /, '').replace(/ \d{2}:\d{2}$/, ''), g = cached('group', { group: grp }), wa = g && g.group && g.group['WhatsApp link'];
   html += '<div class="note" style="margin-top:10px">📝 Send the session notes (PDF) to the group.</div><div class="actions">' +
     (wa ? '<button onclick="window.open(\'' + esc(wa) + '\',\'_blank\')">💬 Open the group</button>' : '') +
-    '<button class="primary" onclick="this.disabled=true;notesDone(\'' + esc(r.sessionId) + '\')">✓ Notes sent</button></div><div class="sub">Not now? It stays in To do until you tick it.</div>';
+    '<button class="primary" onclick="notesDone(\'' + esc(r.sessionId) + '\', false, this)">✓ Notes sent</button></div><div class="sub">Not now? It stays in To do until you tick it.</div>';
   sheet('Logged ' + r.sessionId, html);
 }
 function sendRecording(i) {
@@ -2638,8 +2638,10 @@ function quizSubsPatch(r) {
 function quizSubsOpen() {
   call('openQuizSubmissions', { group: GROUP.group['Group'], topic: document.getElementById('qstopic').value.trim() }, function (r) { quizSubsPatch(r); notice('Open: students can submit now.'); });
 }
+// Closing stops students taking it at home from uploading too: they're named first.
 function quizSubsClose(id) {
-  if (!confirm('Close submissions? The link will say no quiz is open.')) return;
+  var o = (GROUP.quizSub || {}).open, home = o ? o.rows.filter(function (r) { return r.absent && !r.at; }).map(function (r) { return r.name; }) : [];
+  if (!confirm((home.length ? 'Still taking it at home, not uploaded: ' + home.join(', ') + '. They won\'t be able to upload.\n\n' : '') + 'Close submissions? The link will say no quiz is open.')) return;
   call('closeQuizSubmissions', { quizId: id }, function (r) { quizSubsPatch(r); notice('Closed.'); });
 }
 function quizSubsRefresh() { call('quizSubs', { group: GROUP.group['Group'], at: Date.now() }, quizSubsPatch); }
@@ -3014,7 +3016,9 @@ function deleteCover(k) {
 }
 
 // Notes ticked as sent (from To do or a past session's card); undo puts them back on the list.
-function notesDone(sessionId, undo) {
+// btn (on a sheet that stays open): turns into "Notes marked as sent", so you can see it worked.
+function notesDone(sessionId, undo, btn) {
+  if (btn) { btn.disabled = true; btn.className = 'secondary'; btn.textContent = '✓ Notes marked as sent'; }
   call('notesSent', { sessionId: sessionId, undo: !!undo }, function () {}, { optimistic: function () {
     patchLocal(function () {
       var t = cached('todo'); if (t && t.notes && !undo) t.notes = t.notes.filter(function (x) { return x.sessionId !== sessionId; });
