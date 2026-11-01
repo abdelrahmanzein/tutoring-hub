@@ -292,7 +292,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['recordingSent', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['recordingSent', 'quizGroupTold', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['removeFromSession', 'undoLastMove', 'leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -2321,6 +2321,16 @@ function quizSendHome(k) {
   });
 }
 
+// A quiz the whole group takes at home: the instructions and upload link to the group (out of To do once confirmed).
+function quizTellGroup(k) {
+  var g = TODO.quizzes.groups[k];
+  groupSend(g.group, g.message, 'Quiz instructions (group)', function () {
+    call('quizGroupTold', { quizId: g.quizId }, function () {}, { optimistic: function () {}, quiet: true });
+    patchLocal(function () { var t = cached('todo'); if (t && t.quizzes && t.quizzes.groups) t.quizzes.groups = t.quizzes.groups.filter(function (x) { return x.quizId !== g.quizId; }); });
+    showTodo();
+  });
+}
+
 // A student's quizzes (their page): raw mark and level, like the family sees, plus where they stand.
 function quizCard(id) {
   var qs = (cached('quizzes') || []).filter(function (q) { return q.marks[id]; });
@@ -2862,8 +2872,12 @@ function showTodo() {
         (r.links.length ? '<div class="actions"><button class="primary" onclick="sendRec(' + i + ')">💬 Send the recording</button></div>' : '<div class="sub">Meet hasn\'t saved the recording yet.</div>') + '</div>';
     }).join(''));
     var qz = d.quizzes || { marks: [], home: [] };
-    if (qz.home.length) parts.push('<h2>Quizzes to send home</h2>' + qz.home.map(function (h, k) {
-      return '<div class="card"><div class="item"><span><b>' + esc(h.name) + '</b> missed the ' + esc(h.topic) + ' quiz<div class="sub">' + esc(h.group) + (h.phone ? '' : ' · no parent WhatsApp: you pick the chat') + '</div></span></div>' +
+    var qg = qz.groups || [];
+    if (qz.home.length || qg.length) parts.push('<h2>Quizzes to send home</h2>' + qg.map(function (g, k) {
+      return '<div class="card"><div class="item"><span><b>' + esc(g.group) + '</b> takes the ' + esc(g.topic) + ' quiz at home<div class="sub">The instructions and upload link to the group (no quiz file)</div></span></div>' +
+        '<div class="actions"><button class="primary" onclick="quizTellGroup(' + k + ')">💬 Send to the group</button></div></div>';
+    }).join('') + qz.home.map(function (h, k) {
+      return '<div class="card"><div class="item"><span><b>' + esc(h.name) + '</b> ' + (h.planned ? 'takes' : 'missed') + ' the ' + esc(h.topic) + ' quiz<div class="sub">' + esc(h.group) + (h.phone ? '' : ' · no parent WhatsApp: you pick the chat') + '</div></span></div>' +
         '<div class="actions"><button class="primary" onclick="quizSendHome(' + k + ')">💬 Send to the parent</button></div></div>';
     }).join(''));
     if (qz.marks.length) parts.push('<h2>Quiz marks to enter</h2>' + qz.marks.map(function (q, k) {
