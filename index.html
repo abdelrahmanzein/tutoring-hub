@@ -292,7 +292,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['recordingSent', 'quizGroupTold', 'quizReminderSent', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['setSessionSends', 'recordingSent', 'quizGroupTold', 'quizReminderSent', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['removeFromSession', 'undoLastMove', 'leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -1726,14 +1726,18 @@ function openSessRow(k) {
     var l = r.s, list = function (a) { return a.length ? a.map(esc).join(', ') : '–'; };
     cardSheet(l.group + ' · ' + fmtDate(l.day), (l.title ? '<div><b>' + esc(l.title) + '</b></div>' : '') +
       (l.status === 'Logged' ? '<dl style="margin-top:6px"><dt>Came (' + l.came.length + ')</dt><dd>' + list(l.came) + '</dd><dt>Absent (' + l.absent.length + ')</dt><dd>' + list(l.absent) + '</dd></dl>' +
-        ((l.recs || []).length ? '<div style="margin-top:6px">🎥 Recording to absent students:</div>' + l.recs.map(function (a, j) {
+        (l.noRecording && (l.recs || []).length ? '<div style="margin-top:6px">🎥 Recording: not sent to absent students (nothing worth sending)</div>' :
+        (l.recs || []).length ? '<div style="margin-top:6px">🎥 Recording to absent students:</div>' + l.recs.map(function (a, j) {
           return '<div class="item" style="margin-top:4px"><span>' + esc(a.first) + ': ' + (a.sent ? '✓ sent ' + esc(fmtDate(String(a.sent).slice(0, 10))) : '<span class="miss">not sent</span>') + '</span>' +
             (a.sent ? '<button class="small secondary" style="width:auto" onclick="recFromLog(' + k + ',' + j + ',true)">Not sent after all</button>'
               : l.recording.length ? '<button class="primary" style="width:auto;padding:6px 12px" onclick="recFromLog(' + k + ',' + j + ')">💬 Send</button>' : '<span class="sub">no recording yet</span>') + '</div>'; }).join('') : '') +
-        (l.notes ? '<div style="margin-top:6px">📝 Notes: ' + (l.notes === 'not sent' ? '<span class="miss">not sent yet</span>' : 'sent ' + esc(fmtDate(l.notes))) + '</div>' : '') +
+        (l.notes ? '<div style="margin-top:6px">📝 Notes: ' + (l.notes === 'not sent' ? '<span class="miss">not sent yet</span>' : l.notes === 'none' ? 'none this session' : 'sent ' + esc(fmtDate(l.notes))) + '</div>' : '') +
         '<div class="chips">' + (l.recording.length ? l.recording.map(function (u, n) { return '<a class="chip act" href="' + esc(u) + '" target="_blank">🎥 Recording' + (l.recording.length > 1 ? ' ' + (n + 1) : '') + '</a>'; }).join('') : '<span class="sub">No recording found yet.</span>') + '</div>'
         : '<div class="sub">Didn\'t happen' + (l.note ? ': ' + esc(l.note) : '') + '</div>') +
-      '<div class="actions">' + (l.notes === 'not sent' ? '<button class="primary" onclick="notesDone(\'' + esc(l.sessionId) + '\')">✓ Notes sent</button>' : l.notes ? '<button class="secondary" onclick="notesDone(\'' + esc(l.sessionId) + '\', true)">Notes not sent after all</button>' : '') +
+      '<div class="actions">' + (l.notes === 'not sent' ? '<button class="primary" onclick="notesDone(\'' + esc(l.sessionId) + '\')">✓ Notes sent</button><button class="secondary" onclick="sessSends(\'' + esc(l.sessionId) + '\', { noNotes: true })">No notes this session</button>' :
+        l.notes === 'none' ? '<button class="secondary" onclick="sessSends(\'' + esc(l.sessionId) + '\', { noNotes: false })">There are notes after all</button>' : l.notes ? '<button class="secondary" onclick="notesDone(\'' + esc(l.sessionId) + '\', true)">Notes not sent after all</button>' : '') +
+        ((l.recs || []).length && l.status === 'Logged' ? (l.noRecording ? '<button class="secondary" onclick="sessSends(\'' + esc(l.sessionId) + '\', { noRecording: false })">Send the recording after all</button>'
+          : l.recs.some(function (a) { return !a.sent; }) ? '<button class="secondary" onclick="sessSends(\'' + esc(l.sessionId) + '\', { noRecording: true })">No recording worth sending</button>' : '') : '') +
         (l.status === 'Logged' ? '<button onclick="editLesson(' + k + ')">✏️ Lesson title</button><button onclick="editSession(\'' + esc(l.sessionId) + '\')">✏️ Correct attendance</button>' : '<button class="secondary" onclick="undoSess(\'' + esc(l.sessionId) + '\')">Undo "didn\'t happen"</button>') +
       '<button class="secondary" onclick="showGroup(\'' + esc(l.group) + '\')">Open the group</button></div>');
   }
@@ -1933,7 +1937,10 @@ function sessionForm(i) {
     '<div class="sub" style="margin-top:8px">Date</div><input id="sd" type="date" value="' + (s ? s.day : today()) + '">' +
     '<div class="sub" style="margin-top:8px">What was it</div><input id="st" list="stl" value="Group Session"><datalist id="stl"><option>Group Session</option><option>Recorded Session</option><option>Quiz Session</option><option>1-on-1 Session</option></datalist>' +
     '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="sq" style="width:auto"' + (q ? ' checked' : '') + ' onchange="quizToggle()"> 📝 Quiz this session</label>' +
-    '<div id="sqf" style="display:' + (q ? '' : 'none') + '">' + quizFields('sq', q, s ? s.group : '') + '</div>' +
+    '<div id="sqf" style="display:' + (q ? '' : 'none') + '">' + quizFields('sq', q, s ? s.group : '') +
+      '<div class="sub" style="margin-top:8px">Quiz straight away? Untick what doesn\'t exist:</div>' +
+      '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:4px"><input type="checkbox" id="snotes" style="width:auto" checked> 📝 There are notes to send the group</label>' +
+      '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:4px"><input type="checkbox" id="srec" style="width:auto" checked> 🎥 Send the recording to absent students</label></div>' +
     '<div class="sub" style="margin-top:8px">Lesson: what you taught (names the session and its recording)</div><input id="slt" placeholder="' + (q ? 'Quiz – ' + esc(q.topic || 'topic') : 'e.g. Maclaurin Series (empty: the homework title)') + '">' +
     '<label class="sub" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="snoh" style="width:auto"' + (q ? ' checked' : '') + ' onchange="noHwToggle()"> No homework for next session</label>' +
     '<div id="snhb" style="display:' + (q ? 'none' : '') + '"><div class="sub" style="margin-top:8px">Next homework (optional: its folder is made with this title)</div>' +
@@ -2081,7 +2088,8 @@ function saveSession() {
   if (quiz && !quiz.topic) return notice('Enter the quiz topic (or untick "Quiz this session").');
   var args = { group: document.getElementById('sg').value, date: document.getElementById('sd').value, title: document.getElementById('st').value,
     noteNext: document.getElementById('sn').value, homeworkNumber: SESS_HW ? SESS_HW.number : '', nextHomework: (document.getElementById('snh') || {}).value || '', lessonTitle: (document.getElementById('slt') || {}).value || '', rows: sessRows, eventId: sessEvent || '', sessionId: SESS_ID, meetHeld: sessMeet ? sessMeet.held : undefined,
-    noHomework: noHw, quiz: quiz || (SESS_QUIZ ? false : null) };
+    noHomework: noHw, quiz: quiz || (SESS_QUIZ ? false : null),
+    noNotes: !!quiz && !document.getElementById('snotes').checked, noRecording: !!quiz && !document.getElementById('srec').checked };
   if (noHw) args.nextHomework = '';
   call('logSession', args, function (r) {
     if (r.queued) {
@@ -2112,14 +2120,14 @@ function afterLogged(r) {
   LOGGED = r;
   var html = '<div class="sub">' + r.charged + ' charged.' + (r.homeworkFolder ? (r.homeworkFolder.renamed ? ' The student\'s folder "' + esc(r.homeworkFolder.renamed) + '" is now ' : ' Homework folder created: ') + '<b>' + esc(r.homeworkFolder.name) + '</b>.<div class="chips" style="margin-top:4px"><a class="chip act" href="' + esc(r.homeworkFolder.url) + '" target="_blank">🗂️ Open the folder</a></div>' : '') +
     (r.homeworkError ? ' Homework folder not created: ' + esc(r.homeworkError) + '.' : '') + '</div>';
-  if (r.absent && r.absent.length) {
+  if (r.absent && r.absent.length && !r.noRecording) {
     html += r.recording && r.recording.length ? '<div class="chips" style="margin-top:10px">' + r.recording.map(function (x, k) { return '<a class="chip act" href="' + esc(x.url) + '" target="_blank">🎥 Recording' + (r.recording.length > 1 ? ' ' + (k + 1) : '') + '</a>'; }).join('') + '</div>' +
       r.absent.map(function (a, i) { return '<button style="width:100%;margin-top:6px" data-rec="' + esc(r.sessionId + '|' + a.id) + '" onclick="sendRecording(' + i + ')">💬 Send the recording to ' + esc(a.first) + (a.phone ? '' : ' (pick the chat)') + '</button>'; }).join('')
       : '<div class="sub" style="margin-top:10px">No recording found yet (Meet takes a while to save it). It\'ll be in To do for ' + r.absent.map(function (a) { return esc(a.first); }).join(', ') + ' once it\'s saved.</div>';
   }
   // The notes PDF for the group's WhatsApp (also stays in To do until ticked).
   var grp = r.sessionId.replace(/^\d{4}-\d{2}-\d{2} /, '').replace(/ \d{2}:\d{2}$/, ''), g = cached('group', { group: grp }), wa = g && g.group && g.group['WhatsApp link'];
-  html += '<div class="note" style="margin-top:10px">📝 Send the session notes (PDF) to the group.</div><div class="actions">' +
+  if (!r.noNotes) html += '<div class="note" style="margin-top:10px">📝 Send the session notes (PDF) to the group.</div><div class="actions">' +
     (wa ? '<button onclick="window.open(\'' + esc(wa) + '\',\'_blank\')">💬 Open the group</button>' : '') +
     '<button class="primary" onclick="notesDone(\'' + esc(r.sessionId) + '\', false, this)">✓ Notes sent</button></div><div class="sub">Not now? It stays in To do until you tick it.</div>';
   sheet('Logged ' + r.sessionId, html);
@@ -2152,6 +2160,24 @@ function recDone(o, undo) {
     if (refreshView) refreshView();
   } });
 }
+// A session with no notes / no recording worth sending (or there is after all): out of To do, shown on its card.
+function sessSends(sessionId, ch) {
+  call('setSessionSends', Object.assign({ sessionId: sessionId }, ch), function () {}, { optimistic: function () {
+    patchLocal(function () {
+      (cached('sessionLog') || []).forEach(function (l) {
+        if (l.sessionId !== sessionId) return;
+        if (ch.noNotes !== undefined && l.notes && (l.notes === 'not sent' || l.notes === 'none')) l.notes = ch.noNotes ? 'none' : 'not sent';
+        if (ch.noRecording !== undefined) l.noRecording = ch.noRecording;
+      });
+      var t = cached('todo'); if (!t) return;
+      if (ch.noNotes && t.notes) t.notes = t.notes.filter(function (x) { return x.sessionId !== sessionId; });
+      if (ch.noRecording && t.recordings) t.recordings = t.recordings.filter(function (x) { return x.sessionId !== sessionId; });
+    });
+    notice(ch.noNotes ? 'No notes for this session.' : ch.noRecording ? 'No recording to send for this session.' : 'Back in To do shortly.');
+    if (refreshView) refreshView();
+  } });
+}
+
 // From a held session's card. j: the absent student.
 function recFromLog(k, j, undo) {
   var l = SESS_ROWS[k].s, a = l.recs[j];
@@ -2904,7 +2930,7 @@ function showTodo() {
     if (d.notes && d.notes.length) parts.push('<h2>Session notes to send</h2>' + d.notes.map(function (n, k) {
       return '<div class="card"><div class="item"><span><b>' + esc(n.group) + '</b><div class="sub">' + esc(fmtDate(n.day)) + (n.title ? ' · ' + esc(n.title) : '') + '</div></span></div>' +
         '<div class="actions">' + (n.link ? '<button onclick="window.open(\'' + esc(n.link) + '\',\'_blank\')">💬 Open the group</button>' : '') +
-        '<button class="primary" onclick="notesDone(\'' + esc(n.sessionId) + '\')">✓ Sent</button></div></div>';
+        '<button class="primary" onclick="notesDone(\'' + esc(n.sessionId) + '\')">✓ Sent</button><button class="secondary" onclick="sessSends(\'' + esc(n.sessionId) + '\', { noNotes: true })">No notes</button></div></div>';
     }).join(''));
     if (d.joins.length) parts.push('<h2>Joining forms to review</h2>' + d.joins.map(function (j, i) {
       return '<div class="card nav-row" onclick="newStudentForm(TODO.joins[' + i + '])"><span><b>' + esc(j.name) + '</b><div class="sub">' + esc(j.group) + ' · filled ' + esc(fmtDate(j.filledAt)) + '</div></span><span>Review ›</span></div>';
@@ -2915,7 +2941,8 @@ function showTodo() {
     }).join(''));
     if (d.recordings && d.recordings.length) parts.push('<h2>Recordings to send</h2>' + d.recordings.map(function (r, i) {
       return '<div class="card"><div class="item"><span><b>' + esc(r.first) + '</b> missed ' + esc(r.group) + '<div class="sub">' + esc(fmtDate(r.date)) + '</div></span></div>' +
-        (r.links.length ? '<div class="actions"><button class="primary" onclick="sendRec(' + i + ')">💬 Send the recording</button></div>' : '<div class="sub">Meet hasn\'t saved the recording yet.</div>') + '</div>';
+        '<div class="actions">' + (r.links.length ? '<button class="primary" onclick="sendRec(' + i + ')">💬 Send the recording</button>' : '<span class="sub">Meet hasn\'t saved the recording yet.</span>') +
+        '<button class="secondary" onclick="sessSends(\'' + esc(r.sessionId) + '\', { noRecording: true })">Not worth sending</button></div></div>';
     }).join(''));
     var qz = d.quizzes || { marks: [], home: [] };
     var qg = qz.groups || [];
