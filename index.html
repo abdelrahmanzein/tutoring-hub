@@ -292,7 +292,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['setSessionSends', 'recordingSent', 'quizGroupTold', 'quizReminderSent', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['quizAhead', 'setSessionSends', 'recordingSent', 'quizGroupTold', 'quizReminderSent', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['removeFromSession', 'undoLastMove', 'leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -1802,6 +1802,7 @@ function sessionCard(s) {
       (s.status === 'Upcoming' ? '' : '<button class="secondary" onclick="notHeldForm(' + i + ')">Didn\'t happen</button>')) +
     '</div>' + (s.status === 'Logged' || s.status === 'Did not happen' ? '' : '<div class="chips" style="justify-content:flex-end;margin-top:8px">' +
       '<a class="chip act" href="#" onclick="planQuizForm(' + i + ');return false">📝 ' + (s.quiz ? 'Edit the quiz' : 'Plan a quiz') + '</a>' +
+      (s.quiz && s.quiz.status === 'Planned' ? '<a class="chip act" href="#" onclick="quizAheadForm(' + i + ');return false">🏠 At home' + (Object.keys(s.quiz.ahead || {}).length ? ' (' + Object.keys(s.quiz.ahead).length + ')' : '') + '</a>' : '') +
       (s.status === 'Upcoming' ? '<a class="chip act danger" href="#" onclick="notHeldForm(' + i + ');return false">🚫 Cancel this session</a>' : '') + '</div>') + '</div>';
 }
 
@@ -2283,6 +2284,30 @@ function quizToggle() {
   var st = document.getElementById('st'); if (on && st.value === 'Group Session') st.value = 'Quiz Session'; else if (!on && st.value === 'Quiz Session') st.value = 'Group Session';
 }
 function noHwToggle() { document.getElementById('snhb').style.display = document.getElementById('snoh').checked ? 'none' : ''; }
+
+// Before the sitting: tick who takes the planned quiz at home (known absence, a technical problem). Their parents'
+// messages go to To do now; the group's quiz link opens early for them only. Someone already sent it stays ticked.
+function quizAheadForm(i) {
+  var s = WEEK[i], had = s.quiz.ahead || {};
+  sheet('🏠 At home · ' + s.quiz.topic, '<div class="sub">They take it at home instead of with the group. Their parents get the quiz from To do' +
+      (s.quiz.link ? '' : ' (<b>add the quiz file first</b>: 📝 Edit the quiz)') + ', and the quiz link opens for them now.</div>' +
+    '<div class="card">' + s.students.map(function (p) {
+      var st = had[p.id];
+      return '<label class="row" style="justify-content:flex-start;gap:10px"><input type="checkbox" class="qah" value="' + esc(p.id) + '"' + (st ? ' checked' : '') + (st === 'sent' ? ' disabled' : '') + '>' +
+        esc(p.name) + (st === 'sent' ? ' <span class="sub">· sent to the parent</span>' : '') + '</label>';
+    }).join('') + '</div>' +
+    '<button class="primary" style="width:100%" onclick="hold(this);saveQuizAhead(' + i + ')">Save</button>');
+}
+function saveQuizAhead(i) {
+  var s = WEEK[i], ids = [].slice.call(document.querySelectorAll('.qah')).filter(function (x) { return x.checked; }).map(function (x) { return x.value; });
+  call('quizAhead', { sessionId: s.sessionId, group: s.group, ids: ids }, function () {
+    closeSheet();
+    var ah = {}; ids.forEach(function (id) { ah[id] = (s.quiz.ahead || {})[id] || 'to send'; }); s.quiz.ahead = ah;
+    patchLocal(function () { var w = cached('week'); if (w) w.forEach(function (x) { if (x.sessionId === s.sessionId && x.quiz) x.quiz.ahead = ah; }); });
+    redrawSessionCards();
+    notice(ids.length ? 'Saved. The parents\' messages are in To do.' : 'Saved.');
+  });
+}
 
 // "Plan a quiz" on a session card: shows on the card and in the reminder.
 function planQuizForm(i) {
@@ -2950,8 +2975,8 @@ function showTodo() {
       return '<div class="card"><div class="item"><span><b>' + esc(g.group) + '</b> takes the ' + esc(g.topic) + ' quiz at home<div class="sub">The instructions and upload link to the group (no quiz file) · due ' + esc(fmtDate(g.due)) + '</div></span></div>' +
         '<div class="actions"><button class="primary" onclick="quizTellGroup(' + k + ')">💬 Send to the group</button></div></div>';
     }).join('') + qz.home.map(function (h, k) {
-      return '<div class="card"><div class="item"><span><b>' + esc(h.name) + '</b> ' + (h.planned ? 'takes' : 'missed') + ' the ' + esc(h.topic) + ' quiz<div class="sub">' + esc(h.group) + ' · due ' + esc(fmtDate(h.due)) + (h.phone ? '' : ' · no parent WhatsApp: you pick the chat') + '</div></span></div>' +
-        '<div class="actions"><button class="primary" onclick="quizSendHome(' + k + ')">💬 Send to the parent</button></div></div>';
+      return '<div class="card"><div class="item"><span><b>' + esc(h.name) + '</b> ' + (h.ahead ? 'takes the ' + esc(h.topic) + ' quiz at home (before the sitting)' : (h.planned ? 'takes' : 'missed') + ' the ' + esc(h.topic) + ' quiz') + '<div class="sub">' + esc(h.group) + ' · due ' + esc(fmtDate(h.due)) + (h.phone ? '' : ' · no parent WhatsApp: you pick the chat') + '</div></span></div>' +
+        (h.noFile ? '<div class="sub miss">Add the quiz file first (the session card → 📝 Edit the quiz).</div>' : '<div class="actions"><button class="primary" onclick="quizSendHome(' + k + ')">💬 Send to the parent</button></div>') + '</div>';
     }).join(''));
     if ((qz.overdue || []).length) parts.push('<h2>Quizzes not uploaded</h2>' + qz.overdue.map(function (h, k) {
       return '<div class="card"><div class="item"><span><b>' + esc(h.name) + '</b> · ' + esc(h.topic) + '<div class="sub">' + esc(h.group) + ' · was due ' + esc(fmtDate(h.due)) + (h.reminders ? ' · reminded before' : '') + '</div></span></div>' +
