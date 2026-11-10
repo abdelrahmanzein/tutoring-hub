@@ -2931,9 +2931,19 @@ function showTodo() {
     var newPros = (cached('prospects') || []).filter(function (p) { return p['Stage'] === 'New'; });
     if (newPros.length) parts.push('<h2>New enquiries</h2>' + newPros.map(function (p) {
       return '<div class="card nav-row" onclick="todoProspect(\'' + esc(p['Prospect ID']) + '\')"><span><b>' + esc(p['Student name']) + '</b><div class="sub">' +
-        esc([p['Course'] && p['Level'] ? p['Course'] + ' ' + p['Level'] : '', p['Batch'] ? 'May ' + p['Batch'] : '', p['Country']].filter(String).join(' · ')) +
+        esc([p['Course'] && p['Level'] ? p['Course'] + ' ' + p['Level'] : '', examLabel(p), joinsLabel(p), p['Country']].filter(String).join(' · ')) +
         (/Enquiry form/.test(p['Notes'] || '') ? ' · via the form' : '') + '</div></span><span>Review ›</span></div>';
     }).join(''));
+    // Waiting list (next school year's students): once their batch has a group, book the trials; from 1 June, plan the groups.
+    var wl = (cached('prospects') || []).filter(function (p) { return p['Stage'] === 'Waiting list' && ((p.groupsReady || []).length || p.planDue); });
+    if (wl.length) {
+      var wb = {}; wl.forEach(function (p) { var k = (p.joinBatch || p['Batch']) + ' ' + (p['Level'] || ''); (wb[k] = wb[k] || []).push(p); });
+      parts.push('<h2>Waiting list</h2>' + Object.keys(wb).sort().map(function (k) {
+        var arr = wb[k], ready = arr[0].groupsReady || [];
+        return '<div class="card nav-row" onclick="showStudents()"><span><b>Groups for May ' + esc(k.split(' ')[0]) + ' · AA ' + esc(k.split(' ')[1]) + ': ' + arr.length + ' waiting</b><div class="sub">' +
+          (ready.length ? 'Groups ready (' + esc(ready.join(', ')) + '): book their trials' : 'Plan the groups for ' + esc(arr[0].startText || 'the new year') + ' (Groups → New group)') + '</div></span><span>›</span></div>';
+      }).join(''));
+    }
     // Homework folders that couldn't be made when a session was logged: make them now (the title can be corrected).
     if (d.foldersFailed && d.foldersFailed.length) parts.push('<h2>Homework folders not created</h2>' + d.foldersFailed.map(function (f, k) {
       return '<div class="card"><b>' + esc(f.group) + '</b> <span class="sub">' + esc(fmtDate(f.date)) + '</span><div class="sub">Google couldn\'t make the folder when you logged it' + (f.why ? ' (' + esc(f.why) + ')' : '') + '.</div>' +
@@ -3551,7 +3561,10 @@ function assignTutor(id, tutorId, off) {
   <script>
 // ---------- Prospects: interest → details → trial → decision → joining form → joined ----------
 var PROS = [];
-var STAGE_TAG = { 'New': 'warn', 'Details sent': '', 'Trial booked': 'warn', 'Trial done': 'owe', 'Joining form sent': '', 'Joined': 'good', 'Closed': '' };
+// "May 2029" / "Nov 2029" (November exams: southern hemisphere), and the May batch whose groups they join if different.
+function examLabel(p) { return p['Batch'] ? (p['Exam session'] === 'November' ? 'Nov ' : 'May ') + p['Batch'] : ''; }
+function joinsLabel(p) { var j = p['Joins batch'] || p['Batch']; return j && (String(j) !== String(p['Batch']) || p['Exam session'] === 'November') ? 'joins May ' + j + ' groups' : ''; }
+var STAGE_TAG = { 'New': 'warn', 'Details sent': '', 'Waiting list': '', 'Trial booked': 'warn', 'Trial done': 'owe', 'Joining form sent': '', 'Joined': 'good', 'Closed': '' };
 
 // The prospects card at the top of Students.
 function drawProspects() {
@@ -3559,15 +3572,34 @@ function drawProspects() {
     PROS = list;
     var box = document.getElementById('pros');
     if (!box) return;
-    var open = list.filter(function (p) { return !/^(Joined|Closed)$/.test(p['Stage']); });
+    var open = list.filter(function (p) { return !/^(Joined|Closed|Waiting list)$/.test(p['Stage']); });
+    var waiting = list.filter(function (p) { return p['Stage'] === 'Waiting list'; });
     box.innerHTML = '<div class="card"><div class="item"><b>Prospects' + (open.length ? ' (' + open.length + ')' : '') + '</b><button class="small" style="width:auto" onclick="enquiryLink()">🔗 Enquiry form</button></div>' +
-      open.map(function (p) {
-        var i = PROS.indexOf(p);
-        return '<div class="item" style="margin-top:8px;cursor:pointer" onclick="showProspect(' + i + ')"><span><b>' + esc(p['Student name']) + '</b><div class="sub">' +
-          esc([p['Course'] && p['Level'] ? p['Course'] + ' ' + p['Level'] : '', p['Batch'], p['Country']].filter(String).join(' · ')) +
-          (p['Trial date'] ? ' · trial ' + esc(fmtDate(String(p['Trial date']).slice(0, 10))) : '') + '</div></span><span class="tag ' + (STAGE_TAG[p['Stage']] || '') + '">' + esc(p['Stage']) + '</span></div>';
-      }).join('') + '</div>';
+      open.map(prospectRow).join('') + '</div>' + waitingCard(waiting);
   }, { part: true });
+}
+function prospectRow(p) {
+  var i = PROS.indexOf(p);
+  return '<div class="item" style="margin-top:8px;cursor:pointer" onclick="showProspect(' + i + ')"><span><b>' + esc(p['Student name']) + '</b><div class="sub">' +
+          esc([p['Course'] && p['Level'] ? p['Course'] + ' ' + p['Level'] : '', examLabel(p), joinsLabel(p), p['Country']].filter(String).join(' · ')) +
+          (p['Trial date'] ? ' · trial ' + esc(fmtDate(String(p['Trial date']).slice(0, 10))) : '') + '</div></span><span class="tag ' + (STAGE_TAG[p['Stage']] || '') + '">' + esc(p['Stage']) + '</span></div>';
+}
+
+// The waiting list (students who start the diploma next school year), per exam year and level: how many, where they
+// live (for group times) and their schools, then each student.
+function waitingCard(list) {
+  if (!list.length) return '';
+  var by = {};
+  list.forEach(function (p) { var k = (p.joinBatch || p['Joins batch'] || p['Batch'] || '?') + ' ' + (p['Level'] || '?'); (by[k] = by[k] || []).push(p); });
+  var count = function (arr, f) { var c = {}; arr.forEach(function (p) { var v = p[f] || '?'; c[v] = (c[v] || 0) + 1; }); return Object.keys(c).sort(function (a, b) { return c[b] - c[a]; }).map(function (k) { return esc(k) + (c[k] > 1 ? ' ' + c[k] : ''); }).join(', '); };
+  return '<div class="card"><b>Waiting list (' + list.length + ')</b><div class="sub">Students who start the diploma next school year. Create their groups in Groups → New group, then book each trial here.</div>' +
+    Object.keys(by).sort().map(function (k) {
+      var arr = by[k], b = k.split(' ')[0], ready = arr[0].groupsReady || [];
+      return '<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:6px"><div class="item"><b>Groups for May ' + esc(b) + ' · AA ' + esc(k.split(' ')[1]) + ' · ' + arr.length + '</b>' +
+        (ready.length ? '<span class="tag good">' + esc(ready.join(', ')) + '</span>' : '<span class="tag">No group yet</span>') + '</div>' +
+        '<div class="sub">Exams: ' + countExams(arr) + '</div><div class="sub">Countries: ' + count(arr, 'Country') + '</div><div class="sub">Schools: ' + count(arr, 'School') + '</div>' +
+        arr.map(prospectRow).join('') + '</div>';
+    }).join('') + '</div>';
 }
 
 // Opens a prospect from anywhere (e.g. To do).
@@ -3609,12 +3641,21 @@ function showProspect(i) {
   // Everything they filled in on the form.
   var row = function (k, v) { return v ? '<dt>' + k + '</dt><dd>' + v + '</dd>' : ''; };
   var tel = function (n) { var d = String(n || '').replace(/[^0-9]/g, ''); return n ? '<a href="https://wa.me/' + d + '" target="_blank">' + esc(n) + '</a>' : ''; };
-  var body = '<dl>' + row('Course', esc(p['Course'] + ' ' + p['Level'])) + row('Exams', p['Batch'] ? 'May ' + esc(p['Batch']) : '') + row('School', esc(p['School'] || '')) +
+  var body = '<dl>' + row('Course', esc(p['Course'] + ' ' + p['Level'])) + row('Exams', esc(examLabel(p).replace(/^Nov /, 'November ')) + (p['Exam session'] === 'November' ? ' <span class="sub">(November session)</span>' : '')) + row('School', esc(p['School'] || '')) +
     row('Country', esc(p['Country'] || '')) + row('Started IB', esc(p['Started IB'] || '')) +
     row('Parent', esc((p['Parent name'] || '') + (p['Parent relation'] ? ' (' + p['Parent relation'] + ')' : ''))) + row('Parent WhatsApp', tel(p['Parent WhatsApp'])) +
     row('Student WhatsApp', tel(p['Student WhatsApp'])) + row('Contact', esc(p['Contact'] || '')) + row('Enquired', esc(fmtDate(String(p['Created'] || '').slice(0, 10)))) +
     row('Notes', esc(p['Notes'] || '')) + '</dl>' + syllabusBox(p);
-  if (st === 'New' || st === 'Details sent') {
+  if ((st === 'New' || st === 'Details sent') && p.nextYear) {
+    // Starts the diploma next school year: tell them they're on the waiting list (no trial until their groups exist).
+    body += waitingInfo(p) + (m.waiting ? '<details><summary class="sub">Waiting-list message</summary><div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(m.waiting) + '</div></details>' +
+      wa('waiting', '💬 Send: on the waiting list', 'Waiting list') : '') +
+      '<button class="secondary" style="width:100%;margin-top:6px" onclick="toWaitingList(' + i + ')">Add to the waiting list without a message</button>';
+    if ((p.groupsReady || []).length) body += '<div class="sub" style="margin-top:14px">Or book the trial now</div>' + trialPicker(p) + '<button style="width:100%;margin-top:6px" onclick="bookTrial(' + i + ')">Book trial</button>';
+  } else if (st === 'Waiting list') {
+    body += waitingInfo(p) + '<div class="sub" style="margin-top:14px">Book the trial</div>' + trialPicker(p) + '<button style="width:100%;margin-top:6px" onclick="bookTrial(' + i + ')">Book trial</button>' +
+      (m.waiting ? '<details style="margin-top:10px"><summary class="sub">Waiting-list message</summary><div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(m.waiting) + '</div>' + wa('waiting', '💬 Send it again') + '</details>' : '');
+  } else if (st === 'New' || st === 'Details sent') {
     // The details (fees, how sessions work, payment) are shown to them on the enquiry form after they send it.
     body += '<div class="sub" style="margin-top:14px">Book the trial</div>' + trialPicker(p) + '<button style="width:100%;margin-top:6px" onclick="bookTrial(' + i + ')">Book trial</button>';
   } else if (st === 'Trial booked') {
@@ -3627,8 +3668,40 @@ function showProspect(i) {
   } else if (st === 'Joining form sent') {
     body += '<div class="sub" style="margin-top:8px">Waiting for the joining form. It shows in To do when it\'s filled.</div>';
   } else body += '<div class="sub" style="margin-top:8px">' + esc(st) + (p['Reason'] ? ': ' + esc(p['Reason']) : '') + '</div>';
-  if (!/^(Joined|Closed)$/.test(st)) body += '<button class="secondary" style="width:100%;margin-top:14px" onclick="decide(' + i + ',false)">Close (not interested)</button>';
+  if (!/^(Joined|Closed)$/.test(st)) body += joinsPicker(i) + '<button class="secondary" style="width:100%;margin-top:14px" onclick="decide(' + i + ',false)">Close (not interested)</button>';
   sheet(p['Student name'] + ' · ' + st, body);
+}
+
+function countExams(arr) { var c = {}; arr.forEach(function (p) { var x = examLabel(p) || '?'; c[x] = (c[x] || 0) + 1; }); return Object.keys(c).sort().map(function (k) { return esc(k) + ' ' + c[k]; }).join(', '); }
+
+// Which May groups a prospect joins: by default the May exams of their own exam year (November students too); any
+// other year can be picked (flexible, not a rule).
+function joinsPicker(i) {
+  var p = PROS[i], b = Number(p['Batch']) || new Date().getFullYear() + 1, cur = String(p['Joins batch'] || p['Batch'] || '');
+  var opts = [b - 1, b, b + 1].map(function (y) { return [String(y), 'May ' + y + ' groups' + (String(y) === String(p['Batch']) ? ' (same year)' : '')]; });
+  return '<div class="sub" style="margin-top:12px">Joins the groups of</div><div class="filters" style="margin:4px 0 0">' + sel('pj', cur, opts) +
+    '<button class="small" style="width:auto" onclick="setJoins(' + i + ')">Save</button></div>';
+}
+function setJoins(i) {
+  var p = PROS[i], v = document.getElementById('pj').value, keep = v === String(p['Batch']) ? '' : v;
+  call('updateProspect', { id: p['Prospect ID'], changes: { 'Joins batch': keep } }, function () {}, { optimistic: function () {
+    patchLocal(function () { var l = cached('prospects'); if (l) l.forEach(function (x) { if (x['Prospect ID'] === p['Prospect ID']) { x['Joins batch'] = keep; x.joinBatch = v; } }); });
+    closeSheet(); notice('Saved: joins the May ' + v + ' groups. The waiting list updates in about a minute.'); if (refreshView === showTodo) showTodo(); else showStudents();
+  } });
+}
+
+// Where a waiting-list student stands: when the diploma starts and whether their batch has groups yet.
+function waitingInfo(p) {
+  var ready = p.groupsReady || [];
+  return '<div class="card" style="margin-top:10px">⏳ Starts the diploma in <b>' + esc(p.startText || 'the next school year') + '</b>. ' +
+    (ready.length ? 'Groups ready: <b>' + esc(ready.join(', ')) + '</b>.' : 'No May ' + esc(p.joinBatch || p['Batch']) + ' group yet: create it in Groups → New group (May–August), then book the trial.') + '</div>';
+}
+function toWaitingList(i) {
+  var p = PROS[i];
+  call('updateProspect', { id: p['Prospect ID'], changes: { 'Stage': 'Waiting list' } }, function () {}, { optimistic: function () {
+    patchLocal(function () { var l = cached('prospects'); if (l) l.forEach(function (x) { if (x['Prospect ID'] === p['Prospect ID']) x['Stage'] = 'Waiting list'; }); });
+    closeSheet(); if (refreshView === showTodo) showTodo(); else showStudents();
+  } });
 }
 
 // Group + a date from that group's upcoming sessions.
@@ -3649,7 +3722,7 @@ function bookTrial(i) {
 
 // Opens WhatsApp with a ready message, and moves the stage on if given.
 function prospectSend(i, kind, next) {
-  var p = PROS[i], what = kind === 'trial' ? 'Trial invitation' : 'Details';
+  var p = PROS[i], what = kind === 'trial' ? 'Trial invitation' : kind === 'waiting' ? 'Waiting list' : 'Details';
   waSend(p.phone, p.messages[kind], what, { prospectId: p['Prospect ID'], label: what + ' · ' + p['Student name'] }, function () {
     if (next && p['Stage'] !== next) call('updateProspect', { id: p['Prospect ID'], changes: { 'Stage': next } }, function () {}, { optimistic: function () {
       patchLocal(function () { var l = cached('prospects'); if (l) l.forEach(function (x) { if (x['Prospect ID'] === p['Prospect ID']) x['Stage'] = next; }); });

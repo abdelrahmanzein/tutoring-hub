@@ -149,7 +149,9 @@ function draw(f) {
       field('country', 'بلد الإقامة', 'Country of residence', select('country', f.countries.map(function (c) { return [c.name, c.flag + ' ' + c.name]; }).concat([['Other', '🌍 Other']]))) +
       field('city', 'المدينة', 'City', null, 'So session times are shown in your local time.') +
       field('level', 'المستوى في مادة AA', 'Level in Analysis and Approaches (AA)', '<div class="seg" id="lvl"><button type="button" data-v="SL">SL</button><button type="button" data-v="HL">HL</button></div>') +
-      field('batch', 'سنة الامتحانات النهائية', 'Final exams in', select('batch', f.batches.map(function (b) { return [b, 'May ' + b + ' / مايو ' + b]; }))) +
+      field('batch', 'سنة الامتحانات النهائية', 'Final exams in', select('batch', (f.exams || f.batches.map(function (b) { return { batch: b, session: 'May' }; })).map(function (e) {
+        var nov = e.session === 'November';
+        return [e.batch + '|' + e.session, (nov ? 'November ' : 'May ') + e.batch + ' / ' + (nov ? 'نوفمبر ' : 'مايو ') + e.batch]; }))) +
       field('studentWhatsApp', 'رقم واتساب الطالب (اختياري)', 'Student\'s WhatsApp (optional)', phone('studentWhatsApp')) +
     '</div>' +
     '<div class="card"><h2><span>Parent</span><span class="ar">ولي الأمر</span></h2>' +
@@ -157,7 +159,7 @@ function draw(f) {
       field('parentRelation', 'صلة القرابة', 'Relation', select('parentRelation', [['Mother', 'Mother / الأم'], ['Father', 'Father / الأب'], ['Other', 'Other / غير ذلك']])) +
       field('parentWhatsApp', 'رقم واتساب ولي الأمر', 'Parent\'s WhatsApp', phone('parentWhatsApp')) +
     '</div>' +
-    '<div class="card"><h2><span>The syllabus</span><span class="ar">المنهج</span></h2>' +
+    '<div class="card" id="sylcard"><h2><span>The syllabus</span><span class="ar">المنهج</span></h2>' +
       '<p class="sub" style="margin:0"><b>To be filled in by the student</b>, who knows best what was covered at school and what feels hard.</p>' +
       '<p class="sub ar" style="margin:4px 0 0"><b>يملأ الطالب هذا الجزء بنفسه</b>، فهو الأعلم بما دُرس في المدرسة وما يجد فيه صعوبة.</p>' +
       field('started', 'هل بدأ الطالب منهج البكالوريا في المدرسة؟', 'Has the student started the IB course at school?', '<div class="seg" id="started"><button type="button" data-v="yes">Yes / نعم</button><button type="button" data-v="no">Not yet / ليس بعد</button></div>') +
@@ -176,6 +178,16 @@ function draw(f) {
   ['studentWhatsApp', 'parentWhatsApp'].forEach(function (id) { document.getElementById(id + 'Code').onchange = function () { this.dataset.touched = '1'; }; });
   document.getElementById('country').onchange = showCity;
   showCity();
+  // Students who start the diploma next school year (e.g. exams in May 2029, seen in Nov 2026) skip the syllabus part.
+  var syncBatch = function () {
+    var ns = notStarted(document.getElementById('batch').value);
+    document.getElementById('sylcard').style.display = ns ? 'none' : '';
+    if (ns) STARTED = 'no';
+    else if (STARTED === 'no' && !document.querySelector('#started .on')) STARTED = '';
+    drawChecklist();
+  };
+  document.getElementById('batch').onchange = syncBatch;
+  syncBatch();
   ['lvl', 'started'].forEach(function (id) {
     document.getElementById(id).onclick = function (e) {
       if (e.target.tagName !== 'BUTTON') return;
@@ -188,6 +200,9 @@ function draw(f) {
 
 // The syllabus checklist: tap a subtopic to cycle ⬜ not taken yet → ✅ taken at school → ⚠️ taken, but finding it hard.
 var LVL = '', STARTED = '', ST = {};
+// The exam session picked ("2029|November"), with notStarted (skip the syllabus) and waiting (waiting list).
+function exam(v) { var p = String(v || '').split('|'); return (F.exams || []).filter(function (e) { return e.batch === p[0] && e.session === p[1]; })[0] || { batch: p[0], session: p[1] || 'May' }; }
+function notStarted(v) { return !!v && !!exam(v).notStarted; }
 var TOPICS = { '1': 'Topic 1 — Number and algebra', '2': 'Topic 2 — Functions', '3': 'Topic 3 — Geometry and trigonometry', '4': 'Topic 4 — Statistics and probability', '5': 'Topic 5 — Calculus' };
 var ICON = { '': '⬜', taken: '✅', hard: '⚠️' }, NEXT = { '': 'taken', taken: 'hard', hard: '' };
 function rowsFor(t) { return F.syllabus.filter(function (r) { return r[0].split(' ')[1].split('.')[0] === t && (LVL === 'HL' || r[0].indexOf('AHL') !== 0); }); }
@@ -211,6 +226,7 @@ function markTopic(t, to) { rowsFor(t).forEach(function (r) { if (!to) delete ST
 function send() {
   var a = {};
   ['who', 'name', 'school', 'country', 'city', 'batch', 'parentName', 'parentRelation', 'heard', 'question', 'website'].forEach(function (id) { a[id] = document.getElementById(id).value.trim(); });
+  var ex = exam(a.batch); a.batch = ex.batch || ''; a.session = ex.session || 'May'; a.examValue = document.getElementById('batch').value;
   a.level = LVL; a.started = STARTED;
   a.syllabus = {}; if (STARTED === 'yes') Object.keys(ST).forEach(function (k) { if (ST[k] && (LVL === 'HL' || k.indexOf('AHL') !== 0)) a.syllabus[k] = ST[k]; });
   if (document.getElementById('f-city').style.display === 'none') a.city = '';
@@ -241,6 +257,7 @@ function feeText(r, en) {
 function thanks() {
   var a = SENT, en = TLANG === 'en', eg = a.country === 'Egypt', region = eg ? 'Egypt' : 'Abroad';
   var g = feeFor(region, a.batch), one = feeFor(region, '1-on-1');
+  var ex = exam(a.examValue), wait = !!ex.waiting, start = ex.start || Number(a.batch) - 2, nov = a.session === 'November';
   var taken = 0, hard = 0; Object.keys(a.syllabus || {}).forEach(function (k) { if (a.syllabus[k] === 'taken') taken++; if (a.syllabus[k] === 'hard') hard++; });
   var li = function (list) { return '<ul style="margin:6px 0 0;padding-inline-start:20px">' + list.map(function (x) { return '<li style="margin:4px 0">' + x + '</li>'; }).join('') + '</ul>'; };
   var row = function (k, v) { return '<div class="row" style="display:flex;justify-content:space-between;gap:10px"><span class="sub">' + k + '</span><b style="text-align:end">' + v + '</b></div>'; };
@@ -250,13 +267,15 @@ function thanks() {
     '<div style="display:flex;justify-content:space-between;align-items:center"><div class="brand">' + (en ? "Mr Zein's Tutoring Groups" : 'مجموعات الأستاذ زين') + '</div>' +
     '<button type="button" class="chipb" style="color:var(--text)" onclick="TLANG=TLANG===\'en\'?\'ar\':\'en\';thanks()">' + (en ? 'العربية' : 'English') + '</button></div>' +
     '<div class="card" style="background:#f0fdf4;border-color:#15803d;color:#14532d"><b>' + (en ? '✅ Thank you, we have your details.' : '✅ شكرًا لكم، تم استلام بياناتكم.') + '</b><div style="margin-top:4px;font-size:14px">' +
-      (en ? 'Mr Zein will look at ' + (a.started === 'yes' ? 'the syllabus checklist' : 'your details') + ' and get back to you on WhatsApp with the best way to start: joining a group directly, or with some 1-on-1 support first or alongside.'
+      (wait ? (en ? 'The student\'s group starts with the new school year, in August and September ' + start + '. You are on the waiting list: Mr Zein will get in touch over the summer with the group times and fees, to arrange a trial session.'
+          : 'تبدأ المجموعة المناسبة للطالب مع بداية العام الدراسي، في أغسطس وسبتمبر ' + arNum(start) + '. سُجّلت بيانات حضراتكم في قائمة الانتظار، وسيتواصل الأستاذ زين مع حضراتكم خلال الصيف بمواعيد المجموعات ورسومها، لترتيب الحصة التجريبية.') :
+      en ? 'Mr Zein will look at ' + (a.started === 'yes' ? 'the syllabus checklist' : 'your details') + ' and get back to you on WhatsApp with the best way to start: joining a group directly, or with some 1-on-1 support first or alongside.'
           : 'سيطّلع الأستاذ زين على ' + (a.started === 'yes' ? 'قائمة موضوعات المنهج' : 'البيانات') + '، ويتواصل مع حضراتكم عبر واتساب لاقتراح أنسب طريقة للبدء: الانضمام إلى مجموعة مباشرة، أو مع بعض الحصص الفردية قبل ذلك أو بالتوازي معه.') + '</div></div>' +
     h2(en ? 'What you sent' : 'البيانات المرسلة') + '<div class="card">' +
       row(en ? 'Student' : 'الطالب', esc(a.name)) +
       row(en ? 'Course' : 'المادة', '<span dir="ltr">Mathematics: Analysis and Approaches ' + esc(a.level) + '</span>') +
-      row(en ? 'Final exams' : 'الامتحانات النهائية', (en ? 'May ' : 'مايو ') + (en ? a.batch : arNum(a.batch))) +
-      row(en ? 'Syllabus checklist' : 'قائمة المنهج', a.started === 'yes' ? (en ? '✅ ' + taken + ' taken · ⚠️ ' + hard + ' hard' : '✅ ' + arNum(taken) + ' دُرست · ⚠️ ' + arNum(hard) + ' فيها صعوبة') : (en ? 'Not started yet' : 'لم يبدأ بعد')) + '</div>' +
+      row(en ? 'Final exams' : 'الامتحانات النهائية', (en ? (nov ? 'November ' : 'May ') : (nov ? 'نوفمبر ' : 'مايو ')) + (en ? a.batch : arNum(a.batch))) +
+      (notStarted(a.examValue) ? '' : row(en ? 'Syllabus checklist' : 'قائمة المنهج', a.started === 'yes' ? (en ? '✅ ' + taken + ' taken · ⚠️ ' + hard + ' hard' : '✅ ' + arNum(taken) + ' دُرست · ⚠️ ' + arNum(hard) + ' فيها صعوبة') : (en ? 'Not started yet' : 'لم يبدأ بعد'))) + '</div>' +
     h2(en ? 'Group sessions' : 'الحصص الجماعية') + '<div class="card"><div style="font-size:22px;font-weight:700;color:var(--accent)">' +
       (g ? feeText(g, en) + ' <span class="sub" style="font-size:14px;font-weight:400">' + (en ? 'per session' : 'للحصة') + '</span>' : (en ? 'Fee to be confirmed' : 'تُحدَّد الرسوم لاحقًا')) + '</div>' +
       li(en ? ['Small groups, online on Google Meet', 'One session a week, 1 to 1.5 hours', 'Cameras and mics always on', 'Notes shared as a PDF after each session', 'Homework due 11:59 PM Cairo time the night before the next session', 'If a student misses a session, it is recorded for them and the fee still applies']
