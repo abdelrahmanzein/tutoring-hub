@@ -598,8 +598,12 @@ function savingMark(delta, done) {
 function refreshFromServer() {
   loadSnapshots();
   setRefreshing(true);
-  google.script.run.withSuccessHandler(function () { setRefreshing(false); loadSnapshots(); })
-    .withFailureHandler(function () { setRefreshing(false); showAge(true); }).api(TOKEN, 'publishNow', {});
+  // Step 1: the screen on view (a few seconds), drawn at once. Step 2: everything else (family pages excepted).
+  google.script.run.withSuccessHandler(function () {
+    loadSnapshots();
+    google.script.run.withSuccessHandler(function () { setRefreshing(false); loadSnapshots(); })
+      .withFailureHandler(function () { setRefreshing(false); }).api(TOKEN, 'publishNow', { rest: true });
+  }).withFailureHandler(function () { setRefreshing(false); showAge(true); }).api(TOKEN, 'publishNow', { tab: current || '' });
   google.script.run.withSuccessHandler(function () { loadSnapshots(); }).withFailureHandler(function () {}).api(TOKEN, 'refreshLive', {});
 }
 
