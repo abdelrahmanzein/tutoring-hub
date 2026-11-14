@@ -1892,8 +1892,8 @@ function dueLabel(v) {
 }
 
 // Homework status on a student chip (live from Drive when the screen opens).
-var HW_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Not yet': '⏳', 'Open questions': '❓', 'No open questions': '✅' };
-var HW_CLASS = { 'On time': 'ok', 'Late': 'late', 'Missing': 'miss', 'Not yet': 'wait', 'Open questions': 'late', 'No open questions': 'ok' };
+var HW_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Not yet': '⏳', 'Check': '🔍', 'Open questions': '❓', 'No open questions': '✅' };
+var HW_CLASS = { 'On time': 'ok', 'Late': 'late', 'Missing': 'miss', 'Not yet': 'wait', 'Check': 'late', 'Open questions': 'late', 'No open questions': 'ok' };
 
 // Colour of each session status label.
 var STATUS_TAG = { 'Upcoming': '', 'In progress': 'warn', 'Needs review': 'owe', 'Logged': 'good', 'Did not happen': '' };
@@ -2055,7 +2055,7 @@ function meetLine(m) {
 }
 
 // A student's status now for the homework due at this session (the first choice: kept unless you pick another).
-var HW_WORDS = { 'On time': 'On time', 'Late': 'Late', 'Missing': 'Not submitted', 'Excused': 'Excused', 'Not yet': 'Nothing uploaded yet', 'Not due yet': 'Nothing uploaded yet' };
+var HW_WORDS = { 'On time': 'On time', 'Late': 'Late', 'Missing': 'Not submitted', 'Excused': 'Excused', 'Not yet': 'Nothing uploaded yet', 'Not due yet': 'Nothing uploaded yet', 'Check': 'Check: an upload in the folder is from an account the app doesn\'t know (To do → Who uploaded this?)' };
 function hwNow(id) {
   var x = SESS_HW && SESS_HW.statuses && SESS_HW.statuses[id];
   if (!x || !x.status) return 'Now: nothing uploaded yet';
@@ -2683,7 +2683,7 @@ function groupSessSave(i) {
 }
 
 // The group's homework, newest first: tap one for each student's status and its Drive folder.
-var HW_COUNT_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Excused': '🙏', 'Not yet': '⏳' };
+var HW_COUNT_ICON = { 'On time': '✅', 'Late': '⏰', 'Missing': '❌', 'Check': '🔍', 'Excused': '🙏', 'Not yet': '⏳' };
 // Quiz submissions: the open quiz with who has submitted (tap to open the PDF) and Close; otherwise Open now. Plus the
 // group's permanent quiz link, sent once to the group and pinned there.
 function quizSubBox(d) {
@@ -2738,7 +2738,7 @@ function assignmentsBox(d) {
       var c = {};
       a.students.forEach(function (s) { if (s.status) c[s.status] = (c[s.status] || 0) + 1; });
       return '<details style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px"><summary><b>' + esc(a.number) + '. ' + esc(a.title) + '</b>' +
-        '<div class="sub">' + (a.due ? 'due ' + esc(fmtDate(String(a.due).slice(0, 10))) + ' · ' : '') + ['On time', 'Late', 'Missing', 'Excused', 'Not yet'].filter(function (k) { return c[k]; })
+        '<div class="sub">' + (a.due ? 'due ' + esc(fmtDate(String(a.due).slice(0, 10))) + ' · ' : '') + ['On time', 'Late', 'Missing', 'Check', 'Excused', 'Not yet'].filter(function (k) { return c[k]; })
           .map(function (k) { return HW_COUNT_ICON[k] + ' ' + c[k]; }).join('  ') + '</div></summary>' +
         '<div class="chips">' + a.students.map(function (s) {
           return '<button class="chip hw-' + (HW_CLASS[s.status] || 'none') + '" onclick="groupHw(' + i + ',\'' + esc(s.id) + '\')">' + (HW_ICON[s.status] || '') + ' ' + esc(s.name) + (s.manual ? ' ✎' : '') + '</button>';
@@ -2765,6 +2765,8 @@ function saveHwFolder(g) {
 function groupHw(i, id) {
   var a = GROUP.assignments[i], s = a.students.filter(function (x) { return x.id === id; })[0];
   sheet(s.name + ' · ' + a.number + '. ' + a.title, '<div class="sub">' + (s.status ? 'Now: ' + esc(s.status) + (s.manual ? ' (set by hand)' : '') : 'No record yet') + '</div>' +
+    (s.status === 'Check' && !s.manual ? '<div class="sub" style="margin-top:6px">🔍 Nothing matched to ' + esc(s.name) + ', but this folder has an upload from an account the app doesn\'t know. It may be theirs: To do → Who uploaded this?</div>' : '') +
+    (a.url ? '<div class="chips"><a class="chip folder-chip" href="' + esc(a.url) + '" target="_blank">🗂️ Folder</a></div>' : '') +
     (s.file ? '<div class="chips"><a class="chip act" href="' + esc(s.file) + '" target="_blank">📄 Open their upload</a></div>' : '') +
     '<div class="actions">' + [['On time', 'On time'], ['Late', 'Late'], ['Missing', 'Not submitted'], ['Excused', 'Excused']].map(function (o) {
       return '<button onclick="groupHwSet(' + i + ',\'' + esc(id) + '\',\'' + o[0] + '\')">' + o[1] + '</button>'; }).join('') +
@@ -3003,16 +3005,18 @@ function showTodo() {
     }).join(''));
     parts.push('<div id="todo-pay"></div>');
     parts.push('<div id="todo-up"></div>');
-    if (d.homework.length) parts.push('<h2>Homework not submitted</h2>' + d.homework.map(function (h, hi) {
-      return '<div class="card"><b>' + esc(h.group) + '</b><div class="sub">' + esc(h.title) + ' · was due ' + esc(fmtDate(String(h.due).slice(0, 10))) +
-        '</div><div class="chips">' + (h.link ? '<a class="chip folder-chip" href="' + esc(h.link) + '" target="_blank">🗂️ Submissions</a>' : '') +
-        h.missing.map(function (p, pi) { return '<button class="chip hw-miss" onclick="missingSheet(' + hi + ',' + pi + ')">❌ ' + esc(p.name) + '</button>'; }).join('') + '</div></div>';
-    }).join(''));
+    // Before "Homework not submitted": answering "who uploaded this?" clears the 🔍 Check students there.
     if (d.uploads.length) parts.push('<h2>Who uploaded this?</h2>' + d.uploads.map(function (u, i) {
       var members = d.people.filter(function (p) { return p.groups.indexOf(u.group) >= 0; });
       return '<div class="card"><div><b>' + esc(u.owner || 'unknown account') + '</b></div><div class="sub">' + esc(u.assignment) + ' · ' + esc(u.created) + '</div><div class="chips"><a class="chip act" href="' + esc(u.url) + '" target="_blank">📄 ' + esc(u.file) + '</a></div>' +
-        (u.owner ? '<div class="filters" style="margin:6px 0 0">' + sel('up' + i, '', [['', 'Which ' + esc(u.group) + ' student?']].concat(members.map(function (p) { return [p.id, p.name]; }))) +
-          '<button onclick="hold(this);assignUpload(' + i + ')">Save</button></div>' : '') + '</div>';
+        (u.suggest ? '<div style="margin-top:6px">Probably <b>' + esc(u.suggestName) + '</b> (the only one in the group with nothing matched). Open the file to be sure.</div>' : '') +
+        (u.owner ? '<div class="filters" style="margin:6px 0 0">' + sel('up' + i, u.suggest || '', [['', 'Which ' + esc(u.group) + ' student?']].concat(members.map(function (p) { return [p.id, p.name]; }))) +
+          '<button' + (u.suggest ? ' class="primary"' : '') + ' onclick="hold(this);assignUpload(' + i + ')">' + (u.suggest ? 'Yes, save' : 'Save') + '</button></div>' : '') + '</div>';
+    }).join(''));
+    if (d.homework.length) parts.push('<h2>Homework not submitted</h2>' + d.homework.map(function (h, hi) {
+      return '<div class="card"><b>' + esc(h.group) + '</b><div class="sub">' + esc(h.title) + ' · was due ' + esc(fmtDate(String(h.due).slice(0, 10))) +
+        '</div><div class="chips">' + (h.link ? '<a class="chip folder-chip" href="' + esc(h.link) + '" target="_blank">🗂️ Submissions</a>' : '') +
+        h.missing.map(function (p, pi) { return '<button class="chip ' + (p.check ? 'hw-late' : 'hw-miss') + '" onclick="missingSheet(' + hi + ',' + pi + ')">' + (p.check ? '🔍 ' : '❌ ') + esc(p.name) + '</button>'; }).join('') + '</div></div>';
     }).join(''));
     document.getElementById('main').innerHTML = parts.join('') + (parts.length > 2 ? '' : '<div class="card sub no-fold">Nothing else waiting. 🎉</div>') +
       '<div class="card sub no-fold" style="margin-top:14px">Homework is checked every night at 00:30' + (d.scannedAt ? ' (last: ' + esc(fmtDate(d.scannedAt.slice(0, 10))) + ' ' + esc(new Date(d.scannedAt).toTimeString().slice(0, 5)) + ')' : '') + '.' +
@@ -3060,7 +3064,7 @@ function hwReminder(i) {
 // A student who hasn't submitted: set the status by hand, or send them a nudge.
 function missingSheet(hi, pi) {
   var h = TODO.homework[hi], p = h.missing[pi];
-  sheet(p.name + ' · ' + h.title, '<div class="sub">Not in the folder (was due ' + esc(fmtDate(String(h.due).slice(0, 10))) + ').</div>' +
+  sheet(p.name + ' · ' + h.title, '<div class="sub">' + (p.check ? '🔍 Nothing matched to ' + esc(p.first) + ', but the folder has an upload from an account the app doesn\'t know: it may be theirs (see Who uploaded this?)' : 'Not in the folder') + ' (was due ' + esc(fmtDate(String(h.due).slice(0, 10))) + ').</div>' +
     '<div class="sub" style="margin-top:10px">Already done it (e.g. sent on WhatsApp)?</div>' +
     '<div class="actions"><button onclick="hold(this);setMissing(' + hi + ',' + pi + ',\'On time\')">Mark on time</button><button onclick="hold(this);setMissing(' + hi + ',' + pi + ',\'Late\')">Mark late</button><button class="secondary" onclick="hold(this);setMissing(' + hi + ',' + pi + ',\'Excused\')">Excused</button></div>' +
     '<div class="sub" style="margin-top:14px">Or remind ' + esc(p.first) + ':</div>' +
