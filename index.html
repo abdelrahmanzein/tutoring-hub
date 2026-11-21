@@ -1341,13 +1341,7 @@ function newStudentForm(join) {
     var groupOpts = [['', 'Pick a group']].concat(f.groups.map(function (g) { return [g.group, g.group]; }));
     document.getElementById('main').innerHTML = '<button class="back" onclick="showStudents()">‹ Cancel</button><h2>New student</h2>' +
       (join ? '<div class="card sub">From ' + esc(join.answers.parentName) + '\'s joining form (' + esc(fmtDate(join.filledAt)) + '). Check everything, set the payment type and rate, then add.</div>' :
-      '<div class="card"><b>Send the parent a joining form</b><div class="sub">They fill in names (English and Arabic), school, country and phone numbers. The payment type follows the country; the Google account is learnt from Meet. You set these:</div>' +
-        '<div class="chips"><a class="chip act" href="#" onclick="openInApp(JOIN_PREVIEW, \'What the parent sees\');return false">👀 See what the parent sees</a></div>' +
-        field('jg', 'Group', sel('jg', '', groupOpts)) +
-        field('js', 'In the group since (first session, e.g. the trial)', '<input id="js" type="date" value="' + today() + '">') +
-        field('jt', 'Trial session to charge (optional)', '<input id="jt" type="date">') +
-        '<button class="primary" style="width:100%;margin-top:10px" onclick="hold(this);createJoin()">Create form link</button></div>' +
-      '<h2>Or fill it in yourself</h2>') +
+      '<div class="card sub">New students normally join from Prospects: tap Continues after their trial. Use this only for someone who never filled the enquiry form.</div>') +
       '<div class="card"><b>Student</b>' + field('nf', 'First name') + field('nl', 'Last name') + field('naf', 'Arabic first name') + field('nal', 'Arabic last name') +
       field('ng', 'Gender', sel('ng', '', [['', '–'], ['F', 'F'], ['M', 'M']])) + field('nsch', 'School') +
       field('nc', 'Country', '<input id="nc" list="ncl"><datalist id="ncl">' + f.countries.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</datalist>') +
