@@ -1475,13 +1475,17 @@ function saveNewStudent(confirmSimilar) {
       return;
     }
     showProfile(r.added); notice('Added. They are in the group from ' + fmtDate(args.since) + '.');
-    if (r.welcome) {
-      WELCOME = Object.assign({ id: r.added }, r.welcome);
-      sheet('Welcome message', '<div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(r.welcome.text) + '</div>' +
-        '<button class="primary" style="width:100%" onclick="waSend(WELCOME.phone, WELCOME.text, \'Welcome\', { studentId: WELCOME.id, close: true })">💬 Send on WhatsApp</button>' +
-        '<div class="sub" style="margin-top:6px">Add them to the group\'s WhatsApp yourself.</div>');
-    }
+    showWelcome(r);
   });
+}
+
+// The welcome message for a student just added (from the form, or from a prospect who continues).
+function showWelcome(r) {
+  if (!r || !r.welcome) return;
+  WELCOME = Object.assign({ id: r.added }, r.welcome);
+  sheet('Welcome message', '<div class="card" style="white-space:pre-wrap;font-size:13px">' + esc(r.welcome.text) + '</div>' +
+    '<button class="primary" style="width:100%" onclick="waSend(WELCOME.phone, WELCOME.text, \'Welcome\', { studentId: WELCOME.id, close: true })">💬 Send on WhatsApp</button>' +
+    '<div class="sub" style="margin-top:6px">Add them to the group\'s WhatsApp yourself.</div>');
 }
 
 // The parent page link in a short message (Arabic, then English), shown first, then sent on WhatsApp to the parent.
@@ -3674,7 +3678,8 @@ function showProspect(i) {
   } else if (st === 'Trial done') {
     body += '<div class="actions"><button class="primary" onclick="decide(' + i + ',true)">Continues ✓</button><button class="secondary" onclick="decide(' + i + ',false)">Not continuing</button></div>';
   } else if (st === 'Joining form sent') {
-    body += '<div class="sub" style="margin-top:8px">Waiting for the joining form. It shows in To do when it\'s filled.</div>';
+    body += '<div class="sub" style="margin-top:8px">Joining form sent the old way. You don\'t need it: add them now from their enquiry details.</div>' +
+      '<button class="primary" style="width:100%;margin-top:8px" onclick="decide(' + i + ',true)">Add to ' + esc(p['Group']) + ' now</button>';
   } else body += '<div class="sub" style="margin-top:8px">' + esc(st) + (p['Reason'] ? ': ' + esc(p['Reason']) : '') + '</div>';
   if (!/^(Joined|Closed)$/.test(st)) body += joinsPicker(i) + '<button class="secondary" style="width:100%;margin-top:14px" onclick="decide(' + i + ',false)">Close (not interested)</button>';
   sheet(p['Student name'] + ' · ' + st, body);
@@ -3749,8 +3754,12 @@ function decide(i, continues) {
   }
   closeSheet();
   hold(null);
-  notice('Creating the joining form…');
-  call('prospectContinues', { id: p['Prospect ID'] }, function (r) { showStudents(); showJoinLink(r); });
+  notice('Adding ' + p['Student name'] + ' to ' + p['Group'] + '…');
+  call('prospectContinues', { id: p['Prospect ID'] }, function (r) {
+    showProfile(r.added);
+    notice('Added to ' + p['Group'] + ' from ' + fmtDate(r.since) + '; the trial is charged.' + (r.similar && r.similar.length ? ' Same name already in the app: ' + r.similar.join(', ') + '.' : ''));
+    showWelcome(r);
+  });
 }
 function closeProspect(i) {
   var p = PROS[i], reason = document.getElementById('pr').value;
