@@ -862,7 +862,7 @@ var EDIT_FIELDS = [
   ['Status', ['Active', 'Trial', 'Alumni', 'Left']], ['Status date', null, 'date'], ['Status reason'],
   ['Rate', null, 'number'], ['Currency', ['EGP', 'USD']],
   ['Payment type', ['EGP, every 4 sessions', 'USD rate paid as EGP, every 4 sessions', 'USD in 8-session blocks']],
-  ['Billing contact', ['Parent', 'Student']], ['Parent name'], ['Parent relation'], ['Parent WhatsApp'], ['Student WhatsApp'],
+  ['Billing contact', ['Parent', 'Student']], ['Parent name'], ['Parent relation'], ['Parent WhatsApp'], ['Student WhatsApp'], ['Student email'],
   ['Notes'], ['Note to parents']
 ];
 
@@ -1600,7 +1600,7 @@ function showProfile(id) {
       ['Course', i['Course'] + ' ' + i['Level'] + ' · batch ' + i['Batch']], ['School', i['School'] || '-'], ['Country', i['Country']],
       ['Rate', i['Rate'] + ' ' + i['Currency'] + ' (locked)'], ['Payment', i['Payment type']], ['Billing contact', i['Billing contact']],
       ['Parent', (i['Parent name'] || '-') + (i['Parent relation'] ? ' (' + i['Parent relation'] + ')' : '')],
-      ['Parent WhatsApp', wa(i['Parent WhatsApp'])], ['Student WhatsApp', wa(i['Student WhatsApp'])],
+      ['Parent WhatsApp', wa(i['Parent WhatsApp'])], ['Student WhatsApp', wa(i['Student WhatsApp'])], ['Student email', esc(i['Student email'] || '-')],
       ['Status', i['Status'] + (i['Status date'] ? ' since ' + fmtDate(i['Status date']) : '')], ['Notes', i['Notes'] || '-']
     ];
     document.getElementById('main').innerHTML = testBar(m.testMode) +
@@ -2491,7 +2491,7 @@ function showQuiz(id) {
       '<div class="sub" style="margin-top:6px">Marks</div><div>' + (q.max ? '<b>Graded out of ' + esc(q.max) + '</b>' + (q.available && q.available !== q.max ? ' · ' + esc(q.available) + ' available (the rest is bonus)' : '') : '<span class="miss">Not set yet</span>') + '</div>' +
       '<div class="sub" style="margin-top:6px">Instructions for taking it at home</div><div style="white-space:pre-wrap">' + esc(q.instructions || '–') + '</div>' +
       '<div class="chips">' + (q.link ? '<a class="chip act" href="' + esc(q.link) + '" target="_blank">📄 The quiz</a>' : '') +
-      '<a class="chip act" href="#" onclick="reflectionFolders(\'' + esc(q.id) + '\');return false">📂 Reflection folder</a></div><div id="qrefl"></div></div>' +
+      (q.status === 'Planned' ? '' : '<a class="chip act" href="#" onclick="handBack(\'' + esc(q.id) + '\');return false">📤 Hand back</a>') + '</div></div>' +
     (q.status === 'Planned' ? '' : '<button class="primary" style="width:100%" onclick="quizMarksFromScreen(\'' + esc(q.id) + '\')">Enter or change marks (' + esc(q.group) + ')</button>') +
     '<h2>Whole batch (' + esc(q.batch) + ')</h2><div class="card">' +
       (q.stats ? '<div class="row"><span>Marks in</span><span>' + q.stats.n + '</span></div><div class="row"><span>Mean (marks capped at ' + esc(q.max) + ')</span><span>' + q.stats.mean + '</span></div>' +
@@ -2564,25 +2564,41 @@ function quizRemove(j) {
   } });
 }
 
-// "📂 Reflection folder": an un-numbered folder in each group's Assignments (the homework check ignores it) where
-// students upload their quiz reflection; each group's link with a ready message for the group chat.
-var REFL = [];
-function reflectionFolders(id) {
-  var box = document.getElementById('qrefl');
-  box.innerHTML = '<div class="sub" style="margin-top:6px">Making the folders…</div>';
-  call('quizReflectionFolders', { quizId: id }, function (list) {
-    REFL = list;
-    if (!document.getElementById('qrefl')) return;
-    document.getElementById('qrefl').innerHTML = list.map(function (f, k) {
-      return '<div class="item" style="margin-top:8px"><span><b>' + esc(f.group) + '</b><div class="sub">' + esc(f.error || f.name) + '</div></span></div>' + (f.url ?
-        '<div class="chips"><a class="chip act" href="' + esc(f.url) + '" target="_blank">🗂️ Open</a><a class="chip act" href="#" onclick="sendReflection(' + k + ');return false">💬 Send to group</a></div>' : '');
-    }).join('');
-  }, { part: true });
+// "📤 Hand back": each student's marked PDF (from the quiz's Marked folder) by email, reflections opened on the
+// group's quiz link, and the message for the group. Repeatable: only those not emailed yet get it.
+var HB = null;
+function handBack(id) {
+  sheet('📤 Hand back', '<div id="hb" class="sub">Looking for the marked papers…</div>');
+  call('handBackPreview', { quizId: id }, drawHandBack, { part: true });
 }
-function sendReflection(k) {
-  var f = REFL[k];
-  groupSend(f.group, '📝 Quiz reflection: please re-solve by hand every question where you lost marks, checking your work against the markscheme after each question, then upload it here:\n' + f.url, 'Quiz reflection folder (group)');
+function drawHandBack(p) {
+  HB = p;
+  var box = document.getElementById('hb');
+  if (!box) return;
+  var row = function (r) {
+    var st = r.mark === '' ? '<span class="sub">no mark: not handed back</span>' : !r.file ? '<span class="miss">no marked PDF in Marked</span>' :
+      !r.email ? '<span class="miss">no email: add it in their profile (Edit › Student email)</span>' :
+      r.emailed ? '<span class="ok">✉️ emailed ' + esc(fmtDate(r.emailed.slice(0, 10))) + '</span>' : '<span>ready to email · ' + esc(r.email) + '</span>';
+    var refl = r.reflectionAt ? '<div><a href="' + esc(r.reflection) + '" target="_blank" class="' + (r.late ? 'late' : 'ok') + '">📝 reflection ' + esc(fmtDate(r.reflectionAt.slice(0, 10))) + (r.late ? ' (late)' : '') + '</a></div>' :
+      r.emailed ? '<div class="sub">no reflection yet</div>' : '';
+    return '<div class="item"><span><b>' + esc(r.name) + '</b>' + (r.mark !== '' ? ' <span class="sub">' + esc(r.mark) + (p.max ? '/' + esc(p.max) : '') + '</span>' : '') +
+      '<div>' + st + (r.file ? ' · <a href="' + esc(r.file) + '" target="_blank">PDF</a>' : '') + '</div>' + refl + '</span></div>';
+  };
+  box.className = '';
+  box.innerHTML = (p.failed && p.failed.length ? '<div class="miss">Not sent: ' + esc(p.failed.join('; ')) + '</div>' : '') +
+    (p.sent && p.sent.length ? '<div class="ok">Emailed: ' + esc(p.sent.join(', ')) + '</div>' : '') +
+    p.rows.map(row).join('') +
+    '<div class="sub" style="margin-top:8px">Reflection due: ' + esc(p.dueText) + (p.reflections ? ' · uploads ' + esc(p.reflections.toLowerCase()) : '') + '</div>' +
+    '<div class="actions">' + (p.ready ? '<button class="primary" onclick="handBackSend()">✉️ Email ' + p.ready + ' paper' + (p.ready > 1 ? 's' : '') + '</button>' : '') +
+      (p.handedBack ? '<button onclick="groupSend(HB.group, HB.message, \'Quiz hand back (group)\')">💬 Message the group</button>' : '') +
+      (p.reflections === 'Open' ? '<button class="secondary" onclick="setRefl(false)">Close reflections</button>' : p.reflections === 'Closed' ? '<button class="secondary" onclick="setRefl(true)">Reopen reflections</button>' : '') + '</div>' +
+    (p.ready ? '<details style="margin-top:8px"><summary class="sub">What the email says</summary><div style="white-space:pre-wrap;font-size:14px">Each student gets their own PDF only, from your Gmail. Reflections open on the group\'s quiz link once sent.</div></details>' : '');
 }
+function handBackSend() {
+  var b = event && event.target; if (b) { b.disabled = true; b.textContent = 'Sending…'; }
+  call('handBackSend', { quizId: HB.quizId }, drawHandBack, { part: true });
+}
+function setRefl(open) { call('setReflections', { quizId: HB.quizId, open: open }, drawHandBack, { part: true }); }
 </script>
 
   <script>
