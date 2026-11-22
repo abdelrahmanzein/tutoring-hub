@@ -3062,7 +3062,9 @@ function showTodo() {
     document.getElementById('main').innerHTML = parts.join('') + (parts.length > 2 ? '' : '<div class="card sub no-fold">Nothing else waiting. 🎉</div>') +
       '<div class="card sub no-fold" style="margin-top:14px">Homework is checked every night at 00:30' + (d.scannedAt ? ' (last: ' + esc(fmtDate(d.scannedAt.slice(0, 10))) + ' ' + esc(new Date(d.scannedAt).toTimeString().slice(0, 5)) + ')' : '') + '.' +
       (d.fullScan ? '<div style="margin-top:6px">' + (d.fullScan.done ? 'Last full check of all homework: ' + esc(fmtDate(d.fullScan.done.slice(0, 10))) + ' ' + esc(new Date(d.fullScan.done).toTimeString().slice(0, 5)) + '.'
-        : '⏳ Checking all homework: ' + (d.fullScan.total - d.fullScan.left.length) + ' of ' + d.fullScan.total + ' groups done (tap Refresh for progress).') + '</div>' : '') +
+        : (Date.now() - new Date(d.fullScan.at || d.fullScan.started).getTime() > 20 * 60e3
+          ? '⚠️ Checking all homework stopped at ' + (d.fullScan.total - d.fullScan.left.length) + ' of ' + d.fullScan.total + ' groups. Tap Check all homework to start again.'
+          : '⏳ Checking all homework: ' + (d.fullScan.total - d.fullScan.left.length) + ' of ' + d.fullScan.total + ' groups done, ' + ((d.fullScan.doneIds || []).length) + ' homework checked (tap Refresh for progress).')) + '</div>' : '') +
       '<div class="actions"><button onclick="hold(this,\'Checking Drive…\');scanNow()">Check homework now</button>' +
       '<button class="secondary" onclick="hold(this,\'Starting…\');scanAll()">Check all homework</button></div>' +
       '<div class="sub" style="margin-top:4px">"Now" checks the recent homework (a few minutes). "All" goes through every homework of every group, old ones included, in the background.</div></div>';
