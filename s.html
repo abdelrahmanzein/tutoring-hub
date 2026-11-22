@@ -57,7 +57,7 @@
 <body>
 <main id="main"><p class="sub">Loading…</p></main>
 <script>
-var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 10;
+var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 11;
 var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^0-9a-f]/g, '');
 var P = null, TAB = 'fin', FROM = '', TO = ymd(new Date()), RANGE = 'last8', LANG = 'en';
 try { LANG = localStorage.getItem('lang') === 'ar' ? 'ar' : 'en'; } catch (e) {}
@@ -65,7 +65,7 @@ try { LANG = localStorage.getItem('lang') === 'ar' ? 'ar' : 'en'; } catch (e) {}
 // ---------- words: English (default) and Arabic ----------
 var T = {
   en: { brand: "Mr Zein's Tutoring Groups", fin: 'Financials', perf: 'Performance', due: 'Amount due', by: 'by', how: 'How to pay', insta: 'Pay with InstaPay', last: 'Last payment',
-    covers: 'What this amount covers', session: 'Session', status: 'Status', fee: 'Fee', total: 'Total', tagDue: 'Due', tagDown: 'Down payment', notYet: 'not held yet', attended: 'Attended', absent: 'Absent',
+    covers: 'What this amount covers', session: 'Session', status: 'Status', fee: 'Fee', total: 'Total', tagDue: 'Due', tagDown: 'Down payment', notYet: 'not held yet', attended: 'Attended', absent: 'Absent', quizHome: 'Quiz, taken at home',
     soonReq: 'The payment request with the date comes shortly.', transfer: 'Noted that the transfer is on its way. Thank you.', onWay: function (a, d) { return 'Transfer of ' + a + ' on its way' + (d ? ' (noted ' + d + ')' : '') + '. Thank you.'; }, left: 'Left to pay after it arrives', coversTaken: 'It covers all the sessions taken; the rest goes towards the next sessions.', onWayTitle: 'Transfer on its way',
     nothing: 'Nothing to pay now', ahead: function (n) { return n + ' session' + (n > 1 ? 's' : '') + ' already paid in advance.'; },
     since: function (n, e) { return n + ' session' + (n > 1 ? 's' : '') + ' since the last payment; a payment request comes after ' + e + ' sessions.'; },
@@ -83,16 +83,17 @@ var T = {
     keyFin: ['<span class="pill due">Due</span> A session already taken and not paid yet.',
       '<span class="pill ahead">Down payment</span> the next sessions, paid in advance (for families paying in blocks). They are not dated, since sessions can move.',
       '<span class="pill due">Due</span> <span class="miss">Absent</span> The student missed that session: the recording was sent, and the session is charged.',
+      '<span class="pill due">Due</span> <span class="ok">Quiz, taken at home</span> No class that day: the student sat the quiz at home. A quiz is charged like a session, for preparing and marking it.',
       '<b>Amount due</b> What to pay, by the date shown. <b>Last payment</b> The most recent payment received.'],
     key: ['<span class="ok">On time</span> Joined when the session started.', '<span class="late">Late, 6 min</span> (example) Joined more than 2 minutes after the start; the minutes are shown.',
-      '<span class="miss">Absent</span> Missed the session: the recording is sent and the session is charged.', '<span class="ok">Attended</span> Present, from before join times were recorded.',
+      '<span class="miss">Absent</span> Missed the session: the recording is sent and the session is charged.', '<span class="ok">Attended</span> Present, from before join times were recorded.', '<span class="ok">Quiz, taken at home</span> No class that day: the quiz was sat at home. Not counted in attendance.',
       '<b>Participation</b> (from the session\'s transcript, compared with the rest of the group): Very active = well above the group\'s average · Active = about average · Occasional = a few times · Quiet = hardly spoke · <span class="sub">–</span> = not measured that session.',
       '<b>Homework on this lesson</b> (the homework set on what was taught in that session, shown as e.g. 4. Integration <span class="ok">On time</span>): <span class="ok">On time</span> uploaded by 11:59 PM (Cairo) the night before the next session. <span class="late">Late</span> uploaded after that, within 7 days. <span class="miss">Missing</span> not uploaded, or uploaded more than 7 days late. <span class="ok">Excused</span> agreed with Mr Zein.',
       '<b>Quizzes</b> (shown as e.g. <b>30/40</b> <span class="sub">Level 6 of 7</span>): the quiz mark, and where it falls among all the students who took the same quiz (7 is the highest; not an official IB grade). <span class="sub">Level coming soon</span> until everyone has taken it.',
       '🟢 most of the time · 🟡 often · 🔴 needs attention.'],
     v: {}, invalid: 'This link is not valid.', incomplete: 'This link is not complete.', offline: 'Could not load the page. Please check the internet and try again.' },
   ar: { brand: 'مجموعات الأستاذ زين', fin: 'الموقف المالي', perf: 'الأداء', due: 'المبلغ المستحق', by: 'بحد أقصى يوم', how: 'طريقة الدفع', insta: 'الدفع عبر إنستاباي', last: 'آخر دفعة',
-    covers: 'ما يشمله هذا المبلغ', session: 'الحصة', status: 'الحالة', fee: 'الرسوم', total: 'الإجمالي', tagDue: 'مستحق', tagDown: 'دفعة مقدمة', notYet: 'لم تُعقد بعد', attended: 'حضر', absent: 'غائب',
+    covers: 'ما يشمله هذا المبلغ', session: 'الحصة', status: 'الحالة', fee: 'الرسوم', total: 'الإجمالي', tagDue: 'مستحق', tagDown: 'دفعة مقدمة', notYet: 'لم تُعقد بعد', attended: 'حضر', absent: 'غائب', quizHome: 'اختبار أُدّي في المنزل',
     soonReq: 'يصلكم طلب الدفع وموعده قريبًا.', transfer: 'تم العلم بأن التحويل في الطريق، شكرًا لحضراتكم.', onWay: function (a, d) { return 'تحويل بقيمة ' + a + ' في الطريق' + (d ? ' (بتاريخ ' + d + ')' : '') + '، شكرًا لحضراتكم.'; }, left: 'المتبقي بعد وصوله', coversTaken: 'يغطي جميع الحصص التي تمت، ويُحتسب الباقي من الحصص القادمة.', onWayTitle: 'تحويل في الطريق',
     nothing: 'لا يوجد مبلغ مستحق الآن', ahead: function (k) { return sessAr(k) + ' مدفوعة مقدمًا.'; },
     since: function (k, e) { return sessAr(k) + ' منذ آخر دفعة، ويصل طلب الدفع بعد ' + sessAr(e) + '.'; },
@@ -110,9 +111,10 @@ var T = {
     keyFin: ['<span class="pill due">مستحق</span> حصة تمت ولم تُدفع بعد.',
       '<span class="pill ahead">دفعة مقدمة</span> الحصص القادمة، تُدفع مقدمًا (للأسر التي تدفع على دفعات)، دون تواريخ لأن مواعيد الحصص قد تتغير.',
       '<span class="pill due">مستحق</span> <span class="miss">غائب</span> لم يحضر الطالب تلك الحصة، وأُرسل له التسجيل وتُحتسب الحصة.',
+      '<span class="pill due">مستحق</span> <span class="ok">اختبار أُدّي في المنزل</span> لم تُعقد حصة في ذلك اليوم، وأدّى الطالب الاختبار في المنزل. يُحتسب الاختبار كحصة، مقابل إعداده وتصحيحه.',
       '<b>المبلغ المستحق</b> ما يُدفع بحد أقصى في الموعد الموضح. <b>آخر دفعة</b> أحدث دفعة تم استلامها.'],
     key: ['<span class="ok">في الموعد</span> دخل عند بدء الحصة.', '<span class="late">متأخر ٦ دقائق</span> (مثال) دخل بعد بدء الحصة بأكثر من دقيقتين، مع عدد الدقائق.',
-      '<span class="miss">غائب</span> لم يحضر الحصة، ويُرسل له التسجيل وتُحتسب الحصة.', '<span class="ok">حضر</span> حاضر، من قبل بدء تسجيل وقت الدخول.',
+      '<span class="miss">غائب</span> لم يحضر الحصة، ويُرسل له التسجيل وتُحتسب الحصة.', '<span class="ok">حضر</span> حاضر، من قبل بدء تسجيل وقت الدخول.', '<span class="ok">اختبار أُدّي في المنزل</span> لم تُعقد حصة في ذلك اليوم، وأُدّي الاختبار في المنزل. لا يدخل في حساب الحضور.',
       '<b>المشاركة</b> (من نص الحصة، مقارنةً ببقية المجموعة): نشِط جدًا = أعلى بكثير من متوسط المجموعة · نشِط = في حدود المتوسط · أحيانًا = بضع مرات · هادئ = نادرًا ما شارك · <span class="sub">–</span> = لم تُقَس في تلك الحصة.',
       '<b>واجب هذا الدرس</b> (الواجب المطلوب على ما شُرح في تلك الحصة، ويظهر مثلًا هكذا: 4. Integration <span class="ok">في الموعد</span>): <span class="ok">في الموعد</span> رُفع الواجب قبل الساعة ١١:٥٩ مساءً (بتوقيت القاهرة) في الليلة السابقة للحصة التالية. <span class="late">متأخر</span> رُفع بعد ذلك خلال ٧ أيام. <span class="miss">لم يُسلَّم</span> لم يُرفع، أو رُفع بعد أكثر من ٧ أيام من موعده. <span class="ok">معفى</span> بالاتفاق مع الأستاذ زين.',
       '<b>الاختبارات</b> (تظهر مثلًا هكذا: <b>٣٠/٤٠</b> <span class="sub">المستوى ٦ من ٧</span>): درجة الاختبار، وموقعها بين جميع الطلاب الذين أدّوا الاختبار نفسه (٧ هو الأعلى، وليس درجة IB رسمية). <span class="sub">يظهر المستوى قريبًا</span> حتى يؤدي الجميع الاختبار.',
@@ -158,7 +160,7 @@ function financials(p) {
       rows.filter(function (r) { return r.kind === 'due'; }).map(function (r) {
         var hist = (p.history || []).filter(function (x) { return x.date === r.date; })[0];
         return '<tr class="due"><td>' + (r.date ? esc(day(r.date)) : '–') + '</td><td><span class="pill due">' + t('tagDue') + '</span>' +
-          (r.oneOnOne ? ' <span class="sub">' + t('oneOnOne') + '</span>' : hist ? ' <span class="' + (hist.attended ? 'ok' : 'miss') + '">' + (hist.attended ? t('attended') : t('absent')) + '</span>' : '') + '</td><td class="num">' + money(r.amount, c) + '</td></tr>';
+          (r.oneOnOne ? ' <span class="sub">' + t('oneOnOne') + '</span>' : hist && hist.quizHome ? ' <span class="ok">' + t('quizHome') + '</span>' : hist ? ' <span class="' + (hist.attended ? 'ok' : 'miss') + '">' + (hist.attended ? t('attended') : t('absent')) + '</span>' : '') + '</td><td class="num">' + money(r.amount, c) + '</td></tr>';
       }).join('') +
       // The down payment is one line: the next sessions, without dates (sessions move; a session held but not yet recorded counts among them).
       (ahead ? '<tr class="ahead"><td><span class="pill ahead">' + t('tagDown') + '</span></td><td>' + t('nextN')(ahead) + '</td><td class="num">' +
@@ -187,6 +189,7 @@ function setRange(k) {
   draw();
 }
 function attCell(r) {
+  if (r.quizHome) return '<span class="ok">' + t('quizHome') + '</span>';
   if (r.attended === undefined) return '<span class="sub">–</span>';
   if (!r.attended) return '<span class="miss">' + t('absent') + '</span>';
   return r.lateUnknown ? '<span class="ok">' + t('attended') + '</span>' : r.late ? '<span class="late">' + t('lateMin')(n(r.late)) + '</span>' : '<span class="ok">' + t('onTime') + '</span>';
@@ -201,7 +204,7 @@ function summary(list) {
     var x = a / b, dot = x >= 0.85 ? '🟢' : x >= 0.6 ? '🟡' : '🔴';
     return '<div class="row"><span>' + dot + ' ' + label + (note ? '<div class="sub">' + note + '</div>' : '') + '</span><span>' + n(a) + ' ' + t('of') + ' ' + n(b) + '</span></div>';
   };
-  return '<div class="card">' + line(t('sAtt'), came.length, list.length) + line(t('sTime'), onTime.length, timed.length, timed.length < came.length ? t('timed')(timed.length) : '') +
+  return '<div class="card">' + line(t('sAtt'), came.length, list.filter(function (r) { return !r.quizHome; }).length) + line(t('sTime'), onTime.length, timed.length, timed.length < came.length ? t('timed')(timed.length) : '') +
     line(t('sHw'), hwOk.length, hw.length) + (early ? '<div class="sub" style="margin-top:6px">' + t('early')(early) + '</div>' : '') + '</div>';
 }
 // Score bars: one bar per quiz (the mark as a share of the total), the mark on top, the level underneath.
