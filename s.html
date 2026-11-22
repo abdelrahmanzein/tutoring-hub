@@ -57,7 +57,7 @@
 <body>
 <main id="main"><p class="sub">Loading…</p></main>
 <script>
-var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 12;
+var READ = 'https://tutoring-hub.abdelrahmanzein.workers.dev', PAGE_V = 13;
 var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^0-9a-f]/g, '');
 var P = null, TAB = 'fin', FROM = '', TO = ymd(new Date()), RANGE = 'last8', LANG = 'en';
 try { LANG = localStorage.getItem('lang') === 'ar' ? 'ar' : 'en'; } catch (e) {}
@@ -69,6 +69,7 @@ var T = {
     soonReq: 'The payment request with the date comes shortly.', transfer: 'Noted that the transfer is on its way. Thank you.', onWay: function (a, d) { return 'Transfer of ' + a + ' on its way' + (d ? ' (noted ' + d + ')' : '') + '. Thank you.'; }, left: 'Left to pay after it arrives', coversTaken: 'It covers all the sessions taken; the rest goes towards the next sessions.', onWayTitle: 'Transfer on its way',
     nothing: 'Nothing to pay now', ahead: function (n) { return n + ' session' + (n > 1 ? 's' : '') + ' already paid in advance.'; },
     since: function (n, e) { return n + ' session' + (n > 1 ? 's' : '') + ' since the last payment; a payment request comes after ' + e + ' sessions.'; },
+    sinceWorth: function (n, so, at, e) { return n + ' session' + (n > 1 ? 's' : '') + ' since the last payment, ' + so + ' so far. A payment request comes once it reaches ' + at + ' (the fee of ' + e + ' group sessions).'; },
     egp: function (n, f) { return n + ' session' + (n > 1 ? 's' : '') + ' taken since the last payment, ' + f + ' each. Shown in yellow below.'; },
     usdEgp: function (e) { return 'Paid in Egyptian pounds at the rate on the transfer day' + (e ? ' (about ' + e + ' today)' : '') + '.'; },
     usd: function (n, a, f) { return n + ' session' + (n > 1 ? 's' : '') + ' taken (yellow)' + (a ? ' + a down payment for the next ' + a + ' sessions (blue)' : '') + ', ' + f + ' each.'; },
@@ -97,6 +98,7 @@ var T = {
     soonReq: 'يصلكم طلب الدفع وموعده قريبًا.', transfer: 'تم العلم بأن التحويل في الطريق، شكرًا لحضراتكم.', onWay: function (a, d) { return 'تحويل بقيمة ' + a + ' في الطريق' + (d ? ' (بتاريخ ' + d + ')' : '') + '، شكرًا لحضراتكم.'; }, left: 'المتبقي بعد وصوله', coversTaken: 'يغطي جميع الحصص التي تمت، ويُحتسب الباقي من الحصص القادمة.', onWayTitle: 'تحويل في الطريق',
     nothing: 'لا يوجد مبلغ مستحق الآن', ahead: function (k) { return sessAr(k) + ' مدفوعة مقدمًا.'; },
     since: function (k, e) { return sessAr(k) + ' منذ آخر دفعة، ويصل طلب الدفع بعد ' + sessAr(e) + '.'; },
+    sinceWorth: function (k, so, at, e) { return sessAr(k) + ' منذ آخر دفعة، بقيمة ' + so + ' حتى الآن، ويصل طلب الدفع عند بلوغ ' + at + ' (رسوم ' + sessAr(e) + ' جماعية).'; },
     egp: function (k, f) { return sessAr(k) + ' منذ آخر دفعة، ' + f + ' للحصة، موضحة باللون الأصفر بالأسفل.'; },
     usdEgp: function (e) { return 'يُدفع بما يعادله بالجنيه المصري يوم التحويل' + (e ? ' (حوالي ' + e + ' اليوم)' : '') + '.'; },
     usd: function (k, a, f) { return sessAr(k) + ' تمت (بالأصفر)' + (a ? ' + دفعة مقدمة لـ' + sessAr(a) + ' قادمة (بالأزرق)' : '') + '، ' + f + ' للحصة.'; },
@@ -168,7 +170,11 @@ function financials(p) {
       '<tr class="total"><td>' + t('total') + '</td><td></td><td class="num">' + money(p.due.amount, c) + '</td></tr></tbody></table></div>';
   } else {
     h += '<div class="card clear"><div class="big">' + t('nothing') + '</div>' + (p.aheadSessions ? '<div>' + t('ahead')(p.aheadSessions) + '</div>' : '') +
-      (p.sessionsSinceLastPayment ? '<div class="sub">' + t('since')(p.sessionsSinceLastPayment, p.every || 4) + '</div>' : '') + '</div>';
+      // The request comes once what's owed is worth 4 group sessions: with cheaper 1-on-1s among them, the count alone
+      // would mislead, so the amount so far and the amount that triggers it are shown.
+      (p.sessionsSinceLastPayment ? '<div class="sub">' + (p.groupFee && p.sessionsSinceLastPayment >= (p.every || 4)
+        ? t('sinceWorth')(p.sessionsSinceLastPayment, money(p.owedSoFar, p.currency), money(p.groupFee * (p.every || 4), p.currency), p.every || 4)
+        : t('since')(p.sessionsSinceLastPayment, p.every || 4)) + '</div>' : '') + '</div>';
   }
   if (p.lastPayment) h += '<div class="card"><div class="row"><span>' + t('last') + '</span><span>' + money(p.lastPayment.amount, c) + ' · ' + esc(d(p.lastPayment.date)) + '</span></div></div>';
   return h;
