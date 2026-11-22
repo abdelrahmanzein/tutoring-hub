@@ -2579,7 +2579,9 @@ function drawHandBack(p) {
     var st = r.mark === '' ? '<span class="sub">no mark: not handed back</span>' : !r.file ? '<span class="miss">no marked PDF in Marked</span>' :
       !r.email ? '<span class="miss">no email</span>' + (r.suggest ? '<div class="chips"><a class="chip act" href="#" onclick="hbEmail(\'' + esc(r.id) + '\', \'' + esc(r.suggest) + '\');return false">✅ Use ' + esc(r.suggest) + ' (their homework uploads)</a></div>' : '') +
         '<div class="chips"><a class="chip act" href="#" onclick="hbAsk(\'' + esc(r.id) + '\');return false">💬 Ask for their email</a><a class="chip act" href="#" onclick="hbType(\'' + esc(r.id) + '\');return false">✏️ Type it</a></div>' :
-      r.emailed ? '<span class="ok">✉️ emailed ' + esc(fmtDate(r.emailed.slice(0, 10))) + '</span>' : '<span>ready to email · ' + esc(r.email) + '</span>';
+      r.emailed ? '<span class="ok">✉️ emailed ' + esc(fmtDate(r.emailed.slice(0, 10))) + '</span>' :
+      '<label><input type="checkbox" class="hbpick" value="' + esc(r.id) + '"' + (r.before ? '' : ' checked') + ' onchange="hbCount()"> email to ' + esc(r.email) + '</label>' +
+        (r.before ? '<div class="sub">marked before email hand back: tick only if they haven\'t had it</div>' : '');
     var refl = r.reflectionAt ? '<div><a href="' + esc(r.reflection) + '" target="_blank" class="' + (r.late ? 'late' : 'ok') + '">📝 reflection ' + esc(fmtDate(r.reflectionAt.slice(0, 10))) + (r.late ? ' (late)' : '') + '</a></div>' :
       r.emailed ? '<div class="sub">no reflection yet</div>' : '';
     return '<div class="item"><span><b>' + esc(r.name) + '</b>' + (r.mark !== '' ? ' <span class="sub">' + esc(r.mark) + (p.max ? '/' + esc(p.max) : '') + '</span>' : '') +
@@ -2590,14 +2592,19 @@ function drawHandBack(p) {
     (p.sent && p.sent.length ? '<div class="ok">Emailed: ' + esc(p.sent.join(', ')) + '</div>' : '') +
     p.rows.map(row).join('') +
     '<div class="sub" style="margin-top:8px">Reflection due: ' + esc(p.dueText) + (p.reflections ? ' · uploads ' + esc(p.reflections.toLowerCase()) : '') + '</div>' +
-    '<div class="actions">' + (p.ready ? '<button class="primary" onclick="handBackSend()">✉️ Email ' + p.ready + ' paper' + (p.ready > 1 ? 's' : '') + '</button>' : '') +
+    '<div class="actions">' + (p.ready ? '<button class="primary" id="hbgo" onclick="handBackSend()">✉️ Email</button>' : '') +
       (p.handedBack ? '<button onclick="groupSend(HB.group, HB.message, \'Quiz hand back (group)\')">💬 Message the group</button>' : '') +
       (p.reflections === 'Open' ? '<button class="secondary" onclick="setRefl(false)">Close reflections</button>' : p.reflections === 'Closed' ? '<button class="secondary" onclick="setRefl(true)">Reopen reflections</button>' : '') + '</div>' +
     (p.ready ? '<details style="margin-top:8px"><summary class="sub">What the email says</summary><div style="white-space:pre-wrap;font-size:14px">Each student gets their own PDF only, from your Gmail. Reflections open on the group\'s quiz link once sent.</div></details>' : '');
+  hbCount();
 }
+// The ticked students (the button says how many).
+function hbIds() { return [].slice.call(document.querySelectorAll('.hbpick')).filter(function (x) { return x.checked; }).map(function (x) { return x.value; }); }
+function hbCount() { var b = document.getElementById('hbgo'), n = hbIds().length; if (b) { b.textContent = '✉️ Email ' + n + ' paper' + (n === 1 ? '' : 's'); b.disabled = !n; } }
 function handBackSend() {
-  var b = event && event.target; if (b) { b.disabled = true; b.textContent = 'Sending…'; }
-  call('handBackSend', { quizId: HB.quizId }, drawHandBack, { part: true });
+  var ids = hbIds(); if (!ids.length) return;
+  var b = document.getElementById('hbgo'); if (b) { b.disabled = true; b.textContent = 'Sending…'; }
+  call('handBackSend', { quizId: HB.quizId, ids: ids }, drawHandBack, { part: true });
 }
 function hbEmail(id, email) { call('setStudentEmail', { quizId: HB.quizId, id: id, email: email }, drawHandBack, { part: true }); }
 function hbType(id) { var e = prompt('Student email'); if (e) hbEmail(id, e.trim()); }
