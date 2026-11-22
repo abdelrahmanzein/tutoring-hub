@@ -108,7 +108,10 @@ function draw() {
   if (!P.valid) { m.innerHTML = head('Quiz') + '<div class="card">This link is not valid.</div>'; return; }
   if (!P.quiz) { m.innerHTML = head(P.group) + '<div class="card" style="text-align:center"><div style="font-size:34px">🕓</div><b>No quiz is open right now</b><div class="sub">This page opens for submissions when your next quiz starts.</div></div>'; return; }
   var refl = P.quiz.kind === 'reflection';
-  m.innerHTML = head(title(), P.group + (refl ? (P.quiz.due ? ' · due ' + P.quiz.due : '') : ' · open now')) +
+  // A quiz and a reflection open at the same time: choose which one you're uploading.
+  var pickKind = (P.items || []).length > 1 ? '<div class="names" style="margin-top:10px">' + P.items.map(function (it, k) {
+    return '<button class="' + (it.quiz.id === P.quiz.id && it.quiz.kind === P.quiz.kind ? 'on' : '') + '" onclick="choose(' + k + ')">' + (it.quiz.kind === 'reflection' ? '📝 Reflection: ' : '📄 Quiz: ') + esc(it.quiz.topic) + '</button>'; }).join('') + '</div>' : '';
+  m.innerHTML = head(title(), P.group + (refl ? (P.quiz.due ? ' · due ' + P.quiz.due : '') : ' · open now')) + pickKind +
     '<h2>1. Your name</h2><div class="names">' + P.names.map(function (n) {
       return '<button class="' + (WHO === n.id ? 'on' : '') + '" onclick="WHO=\'' + esc(n.id) + '\';draw()">' + esc(n.name) + '</button>'; }).join('') + '</div>' +
     '<h2>2. Your ' + (refl ? 'reflection' : 'quiz') + ' (one PDF)</h2><div class="card"><label class="file"><input type="file" accept="application/pdf,.pdf" onchange="pick(this)">' +
@@ -116,6 +119,7 @@ function draw() {
     '<button class="btn" id="go" onclick="send()"' + (WHO && FILE ? '' : ' disabled') + '>Submit</button><div class="err" id="err"></div>' +
     '<div class="sub" style="margin-top:8px">Only Mr Zein can see what you submit. You can submit again while it is open; the latest PDF counts.</div></div>';
 }
+function choose(k) { P.quiz = P.items[k].quiz; P.names = P.items[k].names; if (!P.names.some(function (n) { return n.id === WHO; })) WHO = ''; draw(); }
 function pick(el) {
   var f = el.files && el.files[0];
   if (!f) return;
