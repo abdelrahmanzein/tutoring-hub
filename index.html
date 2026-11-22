@@ -2577,7 +2577,8 @@ function drawHandBack(p) {
   if (!box) return;
   var row = function (r) {
     var st = r.mark === '' ? '<span class="sub">no mark: not handed back</span>' : !r.file ? '<span class="miss">no marked PDF in Marked</span>' :
-      !r.email ? '<span class="miss">no email: add it in their profile (Edit › Student email)</span>' :
+      !r.email ? '<span class="miss">no email</span>' + (r.suggest ? '<div class="chips"><a class="chip act" href="#" onclick="hbEmail(\'' + esc(r.id) + '\', \'' + esc(r.suggest) + '\');return false">✅ Use ' + esc(r.suggest) + ' (their homework uploads)</a></div>' : '') +
+        '<div class="chips"><a class="chip act" href="#" onclick="hbAsk(\'' + esc(r.id) + '\');return false">💬 Ask for their email</a><a class="chip act" href="#" onclick="hbType(\'' + esc(r.id) + '\');return false">✏️ Type it</a></div>' :
       r.emailed ? '<span class="ok">✉️ emailed ' + esc(fmtDate(r.emailed.slice(0, 10))) + '</span>' : '<span>ready to email · ' + esc(r.email) + '</span>';
     var refl = r.reflectionAt ? '<div><a href="' + esc(r.reflection) + '" target="_blank" class="' + (r.late ? 'late' : 'ok') + '">📝 reflection ' + esc(fmtDate(r.reflectionAt.slice(0, 10))) + (r.late ? ' (late)' : '') + '</a></div>' :
       r.emailed ? '<div class="sub">no reflection yet</div>' : '';
@@ -2597,6 +2598,12 @@ function drawHandBack(p) {
 function handBackSend() {
   var b = event && event.target; if (b) { b.disabled = true; b.textContent = 'Sending…'; }
   call('handBackSend', { quizId: HB.quizId }, drawHandBack, { part: true });
+}
+function hbEmail(id, email) { call('setStudentEmail', { quizId: HB.quizId, id: id, email: email }, drawHandBack, { part: true }); }
+function hbType(id) { var e = prompt('Student email'); if (e) hbEmail(id, e.trim()); }
+function hbAsk(id) {
+  var r = HB.rows.filter(function (x) { return x.id === id; })[0];
+  waSend(r.phone, r.ask, 'Asking for student email', { studentId: id, label: 'Asking ' + r.name + ' for their email' });
 }
 function setRefl(open) { call('setReflections', { quizId: HB.quizId, open: open }, drawHandBack, { part: true }); }
 </script>
