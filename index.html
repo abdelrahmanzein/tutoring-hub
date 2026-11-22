@@ -292,7 +292,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['handBackPreview', 'handBackSend', 'setReflections', 'setStudentEmail', 'quizWait', 'reflectionReminded', 'quizAhead', 'setSessionSends', 'recordingSent', 'quizGroupTold', 'quizReminderSent', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['scanHomeworkAll', 'scanStudentHomework', 'handBackPreview', 'handBackSend', 'setReflections', 'setStudentEmail', 'quizWait', 'reflectionReminded', 'quizAhead', 'setSessionSends', 'recordingSent', 'quizGroupTold', 'quizReminderSent', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['removeFromSession', 'undoLastMove', 'leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -1608,7 +1608,7 @@ function showProfile(id) {
       '<div class="profile-head"><div class="pname"><span class="cur ' + esc(st.currency) + '">' + esc(st.currency) + '</span> ' + esc(st.name) + '</div>' +
       '<div class="parabic">' + esc(i['Arabic first name'] + ' ' + i['Arabic last name']) + '</div>' +
       '<div class="sub">' + esc(group) + ' · ' + esc(st.paymentType) + '</div></div>' +
-      '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button><button onclick="moveFromProfile(\'' + esc(id) + '\')">Move group</button>' +
+      '<div class="actions"><button class="primary" onclick="paymentForm(\'' + esc(id) + '\')">Record payment</button><button onclick="editStudent(\'' + esc(id) + '\')">Edit</button><button onclick="checkStudentHw(this, \'' + esc(id) + '\')">🔍 Check homework</button><button onclick="moveFromProfile(\'' + esc(id) + '\')">Move group</button>' +
         ((p.detail.memberships || []).filter(function (m) { return !m['Until'] && /^Moved from /.test(m['Note'] || ''); }).map(function (m) {
           return '<button class="secondary" onclick="undoMove(\'' + esc(id) + '\', \'' + esc(m['Group']) + '\', \'' + esc(String(m['Note']).replace('Moved from ', '')) + '\')">↩️ Undo last move</button>'; })[0] || '') +
         (p.detail.livePage ? '<button onclick="openInApp(\'' + esc(p.detail.livePage) + '\', \'What the family sees\')">Parent page</button><button onclick="sendParentPage(\'' + esc(id) + '\')">💬 Send page</button><button class="secondary" onclick="resetLink(\'' + esc(id) + '\')">🔄 Reset page link</button>' : '') +
@@ -1646,6 +1646,12 @@ function ledgerRows(list, id) {
       '<span class="' + (e['Amount'] < 0 ? 'neg' : 'pos') + '">' + amt(e['Amount'], e['Currency']) + '</span>',
       '<button class="small" onclick="toggleEntry(\'' + esc(e['Entry ID']) + '\',' + (gone ? 'false' : 'true') + ',\'' + esc(id) + '\')" title="' + (gone ? 'Restore' : 'Delete') + '" style="width:auto;padding:2px 5px">' + (gone ? '↩️' : '🗑') + '</button>'];
   }), { wrap: [1], num: [2], rowClass: function (i) { return list[i]['Deleted'] ? 'gone' : ''; } }).replace(/^<div class="card tbl-wrap">/, '<div class="tbl-wrap" style="padding:0">');
+}
+
+// A student's page › "Check homework": all their group's homework, checked now (about a minute), then the page reloads.
+function checkStudentHw(b, id) {
+  hold(b, 'Checking Drive…');
+  call('scanStudentHomework', { id: id }, function (r) { notice(r.report.split('\n')[0]); showStudent(id); });
 }
 </script>
 
@@ -3055,7 +3061,11 @@ function showTodo() {
     }).join(''));
     document.getElementById('main').innerHTML = parts.join('') + (parts.length > 2 ? '' : '<div class="card sub no-fold">Nothing else waiting. 🎉</div>') +
       '<div class="card sub no-fold" style="margin-top:14px">Homework is checked every night at 00:30' + (d.scannedAt ? ' (last: ' + esc(fmtDate(d.scannedAt.slice(0, 10))) + ' ' + esc(new Date(d.scannedAt).toTimeString().slice(0, 5)) + ')' : '') + '.' +
-      '<div class="actions"><button onclick="hold(this,\'Checking Drive…\');scanNow()">Check homework now</button></div></div>';
+      (d.fullScan ? '<div style="margin-top:6px">' + (d.fullScan.done ? 'Last full check of all homework: ' + esc(fmtDate(d.fullScan.done.slice(0, 10))) + ' ' + esc(new Date(d.fullScan.done).toTimeString().slice(0, 5)) + '.'
+        : '⏳ Checking all homework: ' + (d.fullScan.total - d.fullScan.left.length) + ' of ' + d.fullScan.total + ' groups done (tap Refresh for progress).') + '</div>' : '') +
+      '<div class="actions"><button onclick="hold(this,\'Checking Drive…\');scanNow()">Check homework now</button>' +
+      '<button class="secondary" onclick="hold(this,\'Starting…\');scanAll()">Check all homework</button></div>' +
+      '<div class="sub" style="margin-top:4px">"Now" checks the recent homework (a few minutes). "All" goes through every homework of every group, old ones included, in the background.</div></div>';
     drawUpcomingHomework();
     drawPayments();
   });
@@ -3235,6 +3245,7 @@ function todoNotHeld(sessionId) {
   notHeldForm(i);
 }
 
+function scanAll() { call('scanHomeworkAll', {}, function (r) { notice(r.report); showTodo(); }); }
 function scanNow() {
   call('scanHomework', {}, function (r) { notice(r.report); var b = document.querySelector('button[disabled]'); if (b) b.textContent = 'Checking in the background…'; });
 }
