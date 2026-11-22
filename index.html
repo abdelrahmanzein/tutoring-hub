@@ -292,7 +292,7 @@ function goBack() { BACK.fn(); }
 // anything changed. Anything that changes data (save, delete, payment) always goes to the server first, and the
 // server re-checks the live data before acting, so nothing is ever saved from stale numbers.
 var CACHE = {}, VIEW = 0, INFLIGHT = 0, FRESH_UNTIL = 0;
-var WRITES = ['quizAhead', 'setSessionSends', 'recordingSent', 'quizGroupTold', 'quizReminderSent', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
+var WRITES = ['handBackPreview', 'handBackSend', 'setReflections', 'setStudentEmail', 'quizWait', 'reflectionReminded', 'quizAhead', 'setSessionSends', 'recordingSent', 'quizGroupTold', 'quizReminderSent', 'setLessonTitle', 'createHomeworkFolder', 'retryHomeworkFolder', 'saveTutor', 'assignTutor', 'confirmCover', 'removeFromSession', 'undoLastMove', 'quizRemoveStudent', 'notesSent', 'resetLivePage', 'planQuiz', 'saveQuizMarks', 'quizSentHome', 'publishQuizLevels', 'addTutor', 'bookCover', 'payTutorFee', 'approveCoverComment', 'shareRecording', 'logMessage', 'createGroup', 'archiveGroup', 'updateAttendance', 'updateSetting', 'addRate', 'updateTemplate', 'leaveStudent', 'addProspect', 'updateProspect', 'prospectContinues', 'statementSent', 'reminderSent', 'transferSent', 'cancelStatement', 'markNotHeld', 'assignUpload', 'scanHomework', 'setHomework', 'updateGroup', 'setPastPapers', 'moveStudent', 'joinCreate', 'joinCancel', 'assignMeetPerson', 'addStudent', 'logSession', 'undoSession', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount', 'recordPayment', 'addAdjustment', 'setEntryDeleted'];
 var STALE_WRITES = ['removeFromSession', 'undoLastMove', 'leaveStudent', 'recordPayment', 'addAdjustment', 'setEntryDeleted', 'logSession', 'undoSession', 'addStudent', 'moveStudent', 'updateStudent', 'undoStudentEdit', 'addAccount', 'confirmAccount'];
 var NO_CACHE = WRITES.concat(['nextHomework', 'tutors', 'adminData', 'sessionDetail', 'health', 'todo', 'joinList', 'meetDraft', 'previewPayment', 'rate', 'prefetch', 'studentHistory']);
 
@@ -3022,14 +3022,21 @@ function showTodo() {
       return '<div class="card"><div class="item"><span><b>' + esc(h.name) + '</b> ' + (h.ahead ? 'takes the ' + esc(h.topic) + ' quiz at home (before the sitting)' : (h.planned ? 'takes' : 'missed') + ' the ' + esc(h.topic) + ' quiz') + '<div class="sub">' + esc(h.group) + ' · due ' + esc(fmtDate(h.due)) + (h.phone ? '' : ' · no parent WhatsApp: you pick the chat') + '</div></span></div>' +
         (h.noFile ? '<div class="sub miss">Add the quiz file first (the session card → 📝 Edit the quiz).</div>' : '<div class="actions"><button class="primary" onclick="quizSendHome(' + k + ')">💬 Send to the parent</button></div>') + '</div>';
     }).join(''));
-    if ((qz.overdue || []).length) parts.push('<h2>Quizzes not uploaded</h2>' + qz.overdue.map(function (h, k) {
-      return '<div class="card"><div class="item"><span><b>' + esc(h.name) + '</b> · ' + esc(h.topic) + '<div class="sub">' + esc(h.group) + ' · was due ' + esc(fmtDate(h.due)) + (h.reminders ? ' · reminded before' : '') + '</div></span></div>' +
-        '<div class="actions"><button class="primary" onclick="quizRemind(' + k + ')">💬 Remind the parent</button></div></div>';
-    }).join(''));
-    if (qz.marks.length) parts.push('<h2>Quiz marks to enter</h2>' + qz.marks.map(function (q, k) {
-      var left = q.students ? q.students.filter(function (p) { return p.mark === '' || p.mark === undefined; }).length : q.missing;
-      return '<div class="card nav-row" onclick="' + (q.students ? 'quizMarksForm(' + k + ')' : '') + '"><span><b>📝 ' + esc(q.topic) + '</b><div class="sub">' + esc(q.group) + ' · ' + esc(fmtDate(String(q.date).slice(0, 10))) +
-        ' · ' + left + ' mark' + (left === 1 ? '' : 's') + ' to enter</div></span><span>Enter ›</span></div>';
+    // Assessments: each quiz still in progress, with only what needs you now.
+    var as = qz.assess || [];
+    if (as.length) parts.push('<h2>Assessments</h2>' + as.map(function (q, k) {
+      var tag = q.noPaper.length ? ['No paper', 'warn'] : q.toMark.length ? ['To mark', ''] : q.handBack ? ['Hand back', 'good'] : ['Reflections', ''];
+      return '<div class="card"><div class="item"><span><b>📝 ' + esc(q.topic) + '</b><div class="sub">' + esc(q.group) + '</div></span><span class="tag ' + tag[1] + '">' + tag[0] + '</span></div>' +
+        (q.toMark.length ? '<div style="margin-top:6px">' + q.toMark.length + ' paper' + (q.toMark.length > 1 ? 's' : '') + ' to mark: ' + esc(q.toMark.join(', ')) + '<div class="sub">Ask Claude to mark ' + (q.toMark.length > 1 ? 'them' : 'it') + '.</div></div>' : '') +
+        (q.handBack ? '<div class="item" style="margin-top:6px"><span>' + q.handBack + ' marked paper' + (q.handBack > 1 ? 's' : '') + ' to hand back</span><button class="small" onclick="handBack(\'' + esc(q.quizId) + '\')">📤 Hand back</button></div>' : '') +
+        q.noPaper.map(function (p, i) {
+          return '<div style="margin-top:8px"><b>' + esc(p.name) + '</b> <span class="sub">no paper · due ' + esc(fmtDate(p.due)) + ' (' + p.days + ' day' + (p.days === 1 ? '' : 's') + ' ago)' + (p.reminded ? ' · reminded ' + esc(fmtDate(p.reminded.slice(0, 10))) : '') + '</span>' +
+            '<div class="chips">' + (p.remindNow ? '<a class="chip act" href="#" onclick="asRemind(' + k + ',' + i + ');return false">💬 Remind the parent</a>' : '') +
+            '<a class="chip act" href="#" onclick="asWait(' + k + ',' + i + ');return false">⏳ Wait</a><a class="chip act danger" href="#" onclick="asLeave(' + k + ',' + i + ');return false">Leave out</a></div></div>';
+        }).join('') +
+        q.reflections.map(function (p, i) {
+          return '<div class="item" style="margin-top:8px"><span><b>' + esc(p.name) + '</b> <span class="sub">no reflection yet (past due)</span></span><button class="small" onclick="asRefl(' + k + ',' + i + ')">💬 Remind</button></div>';
+        }).join('') + '</div>';
     }).join(''));
     parts.push('<div id="todo-pay"></div>');
     parts.push('<div id="todo-up"></div>');
@@ -3051,6 +3058,41 @@ function showTodo() {
       '<div class="actions"><button onclick="hold(this,\'Checking Drive…\');scanNow()">Check homework now</button></div></div>';
     drawUpcomingHomework();
     drawPayments();
+  });
+}
+
+// Assessments card actions. A student with no paper: remind the parent, wait (a new date, or on hold), or leave them
+// out of the quiz (no mark, no zero, no level; they don't appear on it at all).
+function asRemind(k, i) {
+  var q = TODO.quizzes.assess[k], p = q.noPaper[i];
+  waSend(p.phone, p.message, 'Quiz reminder', { studentId: p.id, label: 'Quiz reminder · ' + p.name + ' · ' + q.topic }, function () {
+    call('quizReminderSent', { quizId: q.quizId, id: p.id }, function () {}, { optimistic: function () {}, quiet: true });
+    p.remindNow = false; p.reminded = today(); showTodo();
+  });
+}
+function asWait(k, i) {
+  var q = TODO.quizzes.assess[k], p = q.noPaper[i];
+  sheet('⏳ Wait for ' + p.name, '<div class="sub">' + esc(q.topic) + ' · ' + esc(q.group) + '</div>' +
+    '<label class="sub" style="display:block;margin-top:10px">New due date (they show here again the day after)<input type="date" id="aswait"></label>' +
+    '<div class="actions"><button class="primary" onclick="asWaitSave(' + k + ',' + i + ', document.getElementById(\'aswait\').value)">Wait until then</button>' +
+    '<button onclick="asWaitSave(' + k + ',' + i + ', \'\')">On hold (no date)</button></div>' +
+    '<div class="sub" style="margin-top:8px">On hold: they stay out of To do until you enter their mark or change it on the quiz.</div>');
+}
+function asWaitSave(k, i, until) {
+  var q = TODO.quizzes.assess[k], p = q.noPaper[i];
+  document.querySelectorAll('.sheet-bg').forEach(function (x) { x.remove(); });
+  call('quizWait', { quizId: q.quizId, id: p.id, until: until }, function () { showTodo(); });
+}
+function asLeave(k, i) {
+  var q = TODO.quizzes.assess[k], p = q.noPaper[i];
+  if (!confirm('Leave ' + p.name + ' out of ' + q.topic + '? No mark, no zero and no level: the quiz won\'t appear for them at all.')) return;
+  call('quizRemoveStudent', { quizId: q.quizId, id: p.id }, function () { showTodo(); });
+}
+function asRefl(k, i) {
+  var q = TODO.quizzes.assess[k], p = q.reflections[i];
+  waSend(p.phone, p.message, 'Reflection reminder', { studentId: p.id, label: 'Reflection reminder · ' + p.name + ' · ' + q.topic }, function () {
+    call('reflectionReminded', { quizId: q.quizId, id: p.id }, function () {}, { optimistic: function () {}, quiet: true });
+    q.reflections.splice(i, 1); showTodo();
   });
 }
 
